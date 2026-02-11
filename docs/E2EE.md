@@ -8,23 +8,35 @@
 
 ## Philosophy
 
-**E2EE is not optional in Hearth. It's the default.**
+**DMs are always encrypted. Channels are your choice.**
 
-Every private conversation is encrypted end-to-end. The server **never** sees plaintext content. This isn't a premium feature or an afterthought — it's the foundation of how Hearth works.
+Private conversations deserve privacy by default. But communities need history and search. Hearth gives you both.
 
-> *"If we can read your messages, so can hackers, governments, and bad actors. We chose not to have that capability."*
+> *"Your DMs are yours. Always encrypted. Period."*
 
 ---
 
 ## Scope
 
-| Channel Type | E2EE | Notes |
-|--------------|------|-------|
-| Direct Messages | ✅ **Always On** | Cannot be disabled |
-| Group DMs | ✅ **Always On** | All members have keys |
-| Server Channels | ✅ **Default On** | Can be disabled per-channel by admin |
-| Voice/Video | ✅ **Always On** | SRTP with E2EE key exchange |
-| Voice (future) | ⚠️ Planned | SRTP with E2EE key exchange |
+| Channel Type | E2EE | Default | New Member History |
+|--------------|------|---------|-------------------|
+| **Direct Messages** | ✅ Always | On | N/A (1:1) |
+| **Group DMs** | ⚙️ Optional | Off | ✅ When E2EE off |
+| **Server Channels** | ⚙️ Optional | Off | ✅ When E2EE off |
+| **Voice/Video (DM)** | ✅ Always | On | N/A (real-time) |
+| **Voice Channels** | ⚙️ Optional | Off | N/A (real-time) |
+
+### Why This Split?
+
+**DMs are always encrypted:**
+- Privacy matters most in private conversations
+- No "new member" problem — it's always 1:1
+- Users expect DMs to be truly private
+
+**Channels/Groups are optional:**
+- Communities need searchable, archivable history
+- New members should see past discussions to get context
+- Admins can enable E2EE for sensitive channels (e.g., #hr-private)
 
 ---
 
