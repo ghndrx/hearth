@@ -63,16 +63,26 @@ Hearth is an open-source, self-hosted real-time communication platform that give
 
 ## 🚀 Quick Start
 
+### Docker Compose (Recommended)
 ```bash
-# Docker (recommended)
-docker run -d \
-  -p 8080:8080 \
-  -v hearth-data:/data \
-  ghcr.io/ghndrx/hearth:latest
-
-# Or with docker-compose
-curl -O https://raw.githubusercontent.com/ghndrx/hearth/main/docker-compose.yml
+mkdir hearth && cd hearth
+curl -O https://raw.githubusercontent.com/ghndrx/hearth/main/deploy/docker-compose/docker-compose.yml
+curl -O https://raw.githubusercontent.com/ghndrx/hearth/main/deploy/docker-compose/.env.example
+cp .env.example .env
+echo "SECRET_KEY=$(openssl rand -base64 32)" >> .env
 docker-compose up -d
+```
+
+### Helm (Kubernetes)
+```bash
+helm repo add hearth https://ghndrx.github.io/hearth
+helm install hearth hearth/hearth --set ingress.enabled=true
+```
+
+### Systemd (Bare Metal)
+```bash
+curl -sSL https://raw.githubusercontent.com/ghndrx/hearth/main/deploy/systemd/install.sh | sudo bash
+sudo systemctl start hearth
 ```
 
 Visit `http://localhost:8080` and create your first server.

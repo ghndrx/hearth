@@ -1,0 +1,175 @@
+# Default values for Hearth
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/ghndrx/hearth
+  pullPolicy: IfNotPresent
+  tag: ""  # Defaults to Chart appVersion
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Hearth configuration
+config:
+  publicUrl: "http://localhost:8080"
+  logLevel: "info"
+  logFormat: "json"
+  
+  registration:
+    enabled: true
+    inviteOnly: false
+  
+  limits:
+    maxServersPerUser: 100
+    maxUploadSizeMB: 25
+
+# Secret key for JWT signing (required)
+# Create with: kubectl create secret generic hearth-secret --from-literal=secret-key=$(openssl rand -base64 32)
+existingSecret: ""
+secretKey: "secret-key"
+
+# Database configuration
+database:
+  # Embedded SQLite (for testing only, not recommended for production)
+  sqlite:
+    enabled: false
+  
+  # External database
+  external:
+    enabled: false
+    url: ""  # postgres://user:pass@host:5432/hearth
+
+# PostgreSQL subchart
+postgresql:
+  enabled: true
+  auth:
+    username: hearth
+    database: hearth
+    existingSecret: ""
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# Redis subchart
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+
+# Storage configuration
+storage:
+  # Local persistent volume
+  local:
+    enabled: true
+    size: 50Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  
+  # S3-compatible storage
+  s3:
+    enabled: false
+    endpoint: ""
+    bucket: "hearth"
+    region: "us-east-1"
+    existingSecret: ""
+    accessKeyKey: "access-key"
+    secretKeyKey: "secret-key"
+
+# Voice/Video configuration
+voice:
+  enabled: true
+  turn:
+    enabled: true
+    port: 3478
+    external:
+      enabled: false
+      servers: []
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  
+  # NodePort for voice (if not using external TURN)
+  voice:
+    enabled: true
+    type: NodePort
+    port: 3478
+    nodePort: 30478
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Resource limits
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Pod configuration
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podAnnotations: {}
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+# Probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
