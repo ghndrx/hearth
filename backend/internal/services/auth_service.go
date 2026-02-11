@@ -2,21 +2,13 @@ package services
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
 	"hearth/internal/auth"
 	"hearth/internal/models"
-)
-
-var (
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrEmailTaken         = errors.New("email already registered")
-	ErrUsernameTaken      = errors.New("username already taken")
-	ErrRegistrationClosed = errors.New("registration is currently closed")
-	ErrInviteRequired     = errors.New("an invite is required to register")
 )
 
 // AuthService handles authentication
@@ -47,11 +39,10 @@ func NewAuthService(
 
 // RegisterRequest represents a registration request
 type RegisterRequest struct {
-	Email       string
-	Username    string
-	DisplayName string
-	Password    string
-	InviteCode  string
+	Email      string
+	Username   string
+	Password   string
+	InviteCode string
 }
 
 // TokenResponse represents authentication tokens
@@ -100,19 +91,20 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 		return nil, nil, err
 	}
 	
+	// Generate discriminator (random 4-digit number)
+	id := uuid.New()
+	discriminator := fmt.Sprintf("%04d", (int(id[0])<<8|int(id[1]))%10000)
+	
 	// Create user
 	user := &models.User{
-		ID:           uuid.New(),
-		Username:     req.Username,
-		DisplayName:  req.DisplayName,
-		Email:        req.Email,
-		PasswordHash: passwordHash,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}
-	
-	if user.DisplayName == "" {
-		user.DisplayName = user.Username
+		ID:            uuid.New(),
+		Username:      req.Username,
+		Discriminator: discriminator,
+		Email:         req.Email,
+		PasswordHash:  passwordHash,
+		Status:        models.StatusOffline,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 	
 	if err := s.userRepo.Create(ctx, user); err != nil {

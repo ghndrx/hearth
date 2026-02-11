@@ -7,8 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/lib/pq"
-	
+
 	"hearth/internal/models"
 )
 
@@ -22,13 +21,13 @@ func NewMessageRepository(db *sqlx.DB) *MessageRepository {
 
 func (r *MessageRepository) Create(ctx context.Context, message *models.Message) error {
 	query := `
-		INSERT INTO messages (id, channel_id, author_id, content, encrypted, reply_to, pinned, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO messages (id, channel_id, server_id, author_id, content, encrypted_content, type, reply_to_id, pinned, tts, flags, created_at, edited_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		message.ID, message.ChannelID, message.AuthorID, message.Content,
-		message.Encrypted, message.ReplyTo, message.Pinned,
-		message.CreatedAt, message.UpdatedAt,
+		message.ID, message.ChannelID, message.ServerID, message.AuthorID, message.Content,
+		message.EncryptedContent, message.Type, message.ReplyToID, message.Pinned,
+		message.TTS, message.Flags, message.CreatedAt, message.EditedAt,
 	)
 	if err != nil {
 		return err
@@ -69,7 +68,7 @@ func (r *MessageRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 	}
 	
 	// Load attachments
-	var attachments []*models.Attachment
+	var attachments []models.Attachment
 	_ = r.db.SelectContext(ctx, &attachments, `SELECT * FROM attachments WHERE message_id = $1`, id)
 	message.Attachments = attachments
 	
@@ -78,11 +77,11 @@ func (r *MessageRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 
 func (r *MessageRepository) Update(ctx context.Context, message *models.Message) error {
 	query := `
-		UPDATE messages SET content = $2, pinned = $3, edited_at = $4, updated_at = $5
+		UPDATE messages SET content = $2, pinned = $3, edited_at = $4, flags = $5
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		message.ID, message.Content, message.Pinned, message.EditedAt, message.UpdatedAt,
+		message.ID, message.Content, message.Pinned, message.EditedAt, message.Flags,
 	)
 	return err
 }
@@ -135,13 +134,13 @@ func (r *MessageRepository) GetChannelMessages(ctx context.Context, channelID uu
 			messageIDs[i] = m.ID
 		}
 		
-		var attachments []*models.Attachment
+		var attachments []models.Attachment
 		query, args, _ := sqlx.In(`SELECT * FROM attachments WHERE message_id IN (?)`, messageIDs)
 		query = r.db.Rebind(query)
 		_ = r.db.SelectContext(ctx, &attachments, query, args...)
 		
 		// Map attachments to messages
-		attMap := make(map[uuid.UUID][]*models.Attachment)
+		attMap := make(map[uuid.UUID][]models.Attachment)
 		for _, att := range attachments {
 			attMap[att.MessageID] = append(attMap[att.MessageID], att)
 		}

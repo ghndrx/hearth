@@ -3,14 +3,9 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
-	"net/http"
-	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-
-	"hearth/internal/models"
 )
 
 // WebhookHandlers handles webhook-related HTTP requests
@@ -23,225 +18,188 @@ func NewWebhookHandlers() *WebhookHandlers {
 	return &WebhookHandlers{}
 }
 
-// CreateWebhookRequest represents a webhook creation request
-type CreateWebhookRequest struct {
-	Name   string `json:"name"`
-	Avatar string `json:"avatar,omitempty"` // Base64 image data
-}
-
 // WebhookResponse represents a webhook in API responses
 type WebhookResponse struct {
 	ID        string  `json:"id"`
-	Type      int     `json:"type"` // 1 = incoming, 2 = channel follower
-	ServerID  string  `json:"guild_id,omitempty"`
-	ChannelID string  `json:"channel_id"`
-	CreatorID *string `json:"user,omitempty"`
 	Name      string  `json:"name"`
-	Avatar    *string `json:"avatar,omitempty"`
+	ChannelID string  `json:"channel_id"`
+	ServerID  string  `json:"guild_id"`
 	Token     string  `json:"token,omitempty"`
-	URL       string  `json:"url,omitempty"`
+	AvatarURL *string `json:"avatar,omitempty"`
+	Type      int     `json:"type"`
 }
 
-// CreateWebhook creates a new webhook for a channel
-func (h *WebhookHandlers) CreateWebhook(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	channelID, err := uuid.Parse(chi.URLParam(r, "channelID"))
+// CreateWebhook creates a new webhook
+func (h *WebhookHandlers) CreateWebhook(c *fiber.Ctx) error {
+	channelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid channel ID")
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid channel ID",
+		})
 	}
 
-	var req CreateWebhookRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
+	var req struct {
+		Name   string  `json:"name"`
+		Avatar *string `json:"avatar,omitempty"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
-	if req.Name == "" {
-		respondError(w, http.StatusBadRequest, "Name is required")
-		return
-	}
-	if len(req.Name) > 80 {
-		respondError(w, http.StatusBadRequest, "Name must be 80 characters or less")
-		return
+	if req.Name == "" || len(req.Name) > 80 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Name must be between 1 and 80 characters",
+		})
 	}
 
-	// Generate secure token
-	token, err := generateWebhookToken()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to generate token")
-		return
+	// Generate webhook token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to generate token",
+		})
 	}
-
-	webhook := &models.Webhook{
-		ID:        uuid.New(),
-		ChannelID: channelID,
-		CreatorID: &userID,
-		Name:      req.Name,
-		Token:     token,
-		CreatedAt: time.Now(),
-	}
+	token := hex.EncodeToString(tokenBytes)
 
 	// TODO: Save webhook to database
-	_ = webhook
 
-	response := WebhookResponse{
-		ID:        webhook.ID.String(),
-		Type:      1,
-		ChannelID: channelID.String(),
+	return c.Status(fiber.StatusCreated).JSON(WebhookResponse{
+		ID:        uuid.New().String(),
 		Name:      req.Name,
+		ChannelID: channelID.String(),
+		ServerID:  "", // Would come from channel lookup
 		Token:     token,
-		URL:       buildWebhookURL(webhook.ID, token),
-	}
-
-	respondJSON(w, http.StatusOK, response)
+		AvatarURL: req.Avatar,
+		Type:      1, // Incoming webhook
+	})
 }
 
-// GetChannelWebhooks gets all webhooks for a channel
-func (h *WebhookHandlers) GetChannelWebhooks(w http.ResponseWriter, r *http.Request) {
-	_ = getUserID(r)
-	channelID, err := uuid.Parse(chi.URLParam(r, "channelID"))
+// GetChannelWebhooks returns all webhooks for a channel
+func (h *WebhookHandlers) GetChannelWebhooks(c *fiber.Ctx) error {
+	_, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid channel ID")
-		return
-	}
-
-	// TODO: Get webhooks from database
-	_ = channelID
-
-	respondJSON(w, http.StatusOK, []WebhookResponse{})
-}
-
-// GetServerWebhooks gets all webhooks for a server
-func (h *WebhookHandlers) GetServerWebhooks(w http.ResponseWriter, r *http.Request) {
-	_ = getUserID(r)
-	serverID, err := uuid.Parse(chi.URLParam(r, "serverID"))
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid server ID")
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid channel ID",
+		})
 	}
 
 	// TODO: Get webhooks from database
-	_ = serverID
-
-	respondJSON(w, http.StatusOK, []WebhookResponse{})
+	return c.JSON([]WebhookResponse{})
 }
 
-// GetWebhook gets a single webhook
-func (h *WebhookHandlers) GetWebhook(w http.ResponseWriter, r *http.Request) {
-	_ = getUserID(r)
-	webhookID, err := uuid.Parse(chi.URLParam(r, "webhookID"))
+// GetServerWebhooks returns all webhooks for a server
+func (h *WebhookHandlers) GetServerWebhooks(c *fiber.Ctx) error {
+	_, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid webhook ID")
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid server ID",
+		})
+	}
+
+	// TODO: Get webhooks from database
+	return c.JSON([]WebhookResponse{})
+}
+
+// GetWebhook returns a specific webhook
+func (h *WebhookHandlers) GetWebhook(c *fiber.Ctx) error {
+	_, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
 	}
 
 	// TODO: Get webhook from database
-	_ = webhookID
-
-	respondError(w, http.StatusNotFound, "Webhook not found")
-}
-
-// GetWebhookWithToken gets a webhook without auth (using token)
-func (h *WebhookHandlers) GetWebhookWithToken(w http.ResponseWriter, r *http.Request) {
-	webhookID, err := uuid.Parse(chi.URLParam(r, "webhookID"))
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid webhook ID")
-		return
-	}
-	token := chi.URLParam(r, "token")
-
-	// TODO: Validate token and get webhook
-	_, _ = webhookID, token
-
-	respondError(w, http.StatusNotFound, "Webhook not found")
+	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+		"error": "Webhook not found",
+	})
 }
 
 // UpdateWebhook updates a webhook
-func (h *WebhookHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
-	_ = getUserID(r)
-	webhookID, err := uuid.Parse(chi.URLParam(r, "webhookID"))
+func (h *WebhookHandlers) UpdateWebhook(c *fiber.Ctx) error {
+	_, err := uuid.Parse(c.Params("webhookID"))
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid webhook ID")
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
 	}
 
-	var req CreateWebhookRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
+	var req struct {
+		Name      *string `json:"name,omitempty"`
+		Avatar    *string `json:"avatar,omitempty"`
+		ChannelID *string `json:"channel_id,omitempty"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
 	// TODO: Update webhook in database
-	_ = webhookID
-
-	respondError(w, http.StatusNotFound, "Webhook not found")
+	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+		"error": "Webhook not found",
+	})
 }
 
 // DeleteWebhook deletes a webhook
-func (h *WebhookHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
-	_ = getUserID(r)
-	webhookID, err := uuid.Parse(chi.URLParam(r, "webhookID"))
+func (h *WebhookHandlers) DeleteWebhook(c *fiber.Ctx) error {
+	_, err := uuid.Parse(c.Params("webhookID"))
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid webhook ID")
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
 	}
 
 	// TODO: Delete webhook from database
-	_ = webhookID
-
-	w.WriteHeader(http.StatusNoContent)
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// ExecuteWebhook executes a webhook (sends a message)
-func (h *WebhookHandlers) ExecuteWebhook(w http.ResponseWriter, r *http.Request) {
-	webhookID, err := uuid.Parse(chi.URLParam(r, "webhookID"))
+// ExecuteWebhook executes a webhook (send a message)
+func (h *WebhookHandlers) ExecuteWebhook(c *fiber.Ctx) error {
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid webhook ID")
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
 	}
-	token := chi.URLParam(r, "token")
+	token := c.Params("token")
+	if token == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid webhook token",
+		})
+	}
 
 	var req struct {
-		Content   string         `json:"content"`
-		Username  string         `json:"username,omitempty"`
-		AvatarURL string         `json:"avatar_url,omitempty"`
-		TTS       bool           `json:"tts"`
-		Embeds    []models.Embed `json:"embeds,omitempty"`
+		Content   string  `json:"content,omitempty"`
+		Username  *string `json:"username,omitempty"`
+		AvatarURL *string `json:"avatar_url,omitempty"`
+		TTS       bool    `json:"tts"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	if req.Content == "" && len(req.Embeds) == 0 {
-		respondError(w, http.StatusBadRequest, "Message must have content or embeds")
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
 
-	// TODO: Validate token, create message
-	_, _ = webhookID, token
-
-	// Query param: wait=true returns the message
-	wait := r.URL.Query().Get("wait") == "true"
-	if wait {
-		respondJSON(w, http.StatusOK, MessageResponse{})
-	} else {
-		w.WriteHeader(http.StatusNoContent)
+	if req.Content == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Content is required",
+		})
 	}
-}
 
-// Helper functions
+	// TODO: Verify webhook token and send message
+	_ = webhookID
 
-func generateWebhookToken() (string, error) {
-	bytes := make([]byte, 34)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+	// Return 204 if wait=false (default), or message if wait=true
+	if c.Query("wait") == "true" {
+		return c.JSON(fiber.Map{
+			"id":         uuid.New().String(),
+			"content":    req.Content,
+			"webhook_id": webhookID.String(),
+		})
 	}
-	return hex.EncodeToString(bytes), nil
-}
 
-func buildWebhookURL(id uuid.UUID, token string) string {
-	// TODO: Use config for base URL
-	return "https://api.hearth.example/webhooks/" + id.String() + "/" + token
+	return c.SendStatus(fiber.StatusNoContent)
 }

@@ -83,10 +83,12 @@ type RoleRepository interface {
 	GetByServerID(ctx context.Context, serverID uuid.UUID) ([]*models.Role, error)
 	Update(ctx context.Context, role *models.Role) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	UpdatePositions(ctx context.Context, serverID uuid.UUID, positions map[uuid.UUID]int) error
 	
-	// Member roles
-	AddToMember(ctx context.Context, memberID, roleID uuid.UUID) error
-	RemoveFromMember(ctx context.Context, memberID, roleID uuid.UUID) error
+	// Member role operations
+	AddRoleToMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error
+	RemoveRoleFromMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error
+	GetMemberRoles(ctx context.Context, serverID, userID uuid.UUID) ([]*models.Role, error)
 }
 
 // QuotaService defines quota checking

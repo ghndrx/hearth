@@ -3,12 +3,11 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
-	
+
 	"hearth/internal/models"
 )
 
@@ -22,11 +21,11 @@ func NewServerRepository(db *sqlx.DB) *ServerRepository {
 
 func (r *ServerRepository) Create(ctx context.Context, server *models.Server) error {
 	query := `
-		INSERT INTO servers (id, name, icon, banner, description, owner_id, created_at, updated_at)
+		INSERT INTO servers (id, name, icon_url, banner_url, description, owner_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		server.ID, server.Name, server.Icon, server.Banner, server.Description,
+		server.ID, server.Name, server.IconURL, server.BannerURL, server.Description,
 		server.OwnerID, server.CreatedAt, server.UpdatedAt,
 	)
 	return err
@@ -45,11 +44,11 @@ func (r *ServerRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.S
 func (r *ServerRepository) Update(ctx context.Context, server *models.Server) error {
 	query := `
 		UPDATE servers SET
-			name = $2, icon = $3, banner = $4, description = $5, updated_at = $6
+			name = $2, icon_url = $3, banner_url = $4, description = $5, updated_at = $6
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		server.ID, server.Name, server.Icon, server.Banner, server.Description, server.UpdatedAt,
+		server.ID, server.Name, server.IconURL, server.BannerURL, server.Description, server.UpdatedAt,
 	)
 	return err
 }

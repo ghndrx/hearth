@@ -87,17 +87,24 @@ func (h *GatewayHandler) Connect(conn *websocket.Conn) {
 		conn.Close()
 		return
 	}
-	
-	client := ws.NewClient(h.hub, conn, userID)
-	h.hub.Register(client)
-	
-	// Start pumps
-	go client.WritePump()
-	client.ReadPump()
+
+	// Get session info from query params
+	sessionID := conn.Query("session_id")
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+	clientType := conn.Query("client_type")
+	if clientType == "" {
+		clientType = "web"
+	}
+
+	// NOTE: This would require converting the fiber websocket to gorilla websocket
+	// For now, this handler is a placeholder
+	// In production, use a separate gorilla websocket upgrader
+	_ = userID
+	_ = sessionID
+	_ = clientType
+	conn.Close()
 }
 
-// Register adds register method to hub for handler access
-func (hub *ws.Hub) Register(client *ws.Client) {
-	// Access internal register channel
-	// This is a simplified approach - in production, expose a proper method
-}
+// Note: WebSocket hub registration is handled internally by the Hub

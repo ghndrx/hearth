@@ -9,13 +9,6 @@ import (
 	"hearth/internal/models"
 )
 
-var (
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUsernameTaken      = errors.New("username already taken")
-	ErrEmailTaken         = errors.New("email already registered")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-)
-
 // UserRepository defines the interface for user data access
 type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
@@ -108,20 +101,17 @@ func (s *UserService) UpdateUser(ctx context.Context, id uuid.UUID, updates *mod
 	}
 	
 	// Apply updates
-	if updates.DisplayName != nil {
-		user.DisplayName = *updates.DisplayName
+	if updates.AvatarURL != nil {
+		user.AvatarURL = updates.AvatarURL
 	}
-	if updates.Avatar != nil {
-		user.Avatar = *updates.Avatar
-	}
-	if updates.Banner != nil {
-		user.Banner = *updates.Banner
+	if updates.BannerURL != nil {
+		user.BannerURL = updates.BannerURL
 	}
 	if updates.Bio != nil {
-		user.Bio = *updates.Bio
+		user.Bio = updates.Bio
 	}
-	if updates.Pronouns != nil {
-		user.Pronouns = *updates.Pronouns
+	if updates.CustomStatus != nil {
+		user.CustomStatus = updates.CustomStatus
 	}
 	
 	user.UpdatedAt = time.Now()

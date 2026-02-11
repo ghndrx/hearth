@@ -134,13 +134,13 @@ func (h *AuthHandler) OAuthCallback(c *fiber.Ctx) error {
 
 // UserResponse represents a user in API responses
 type UserResponse struct {
-	ID          uuid.UUID  `json:"id"`
-	Username    string     `json:"username"`
-	DisplayName string     `json:"display_name"`
-	Avatar      string     `json:"avatar,omitempty"`
-	Banner      string     `json:"banner,omitempty"`
-	Bio         string     `json:"bio,omitempty"`
-	Pronouns    string     `json:"pronouns,omitempty"`
-	Bot         bool       `json:"bot"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID            uuid.UUID `json:"id"`
+	Username      string    `json:"username"`
+	Discriminator string    `json:"discriminator"`
+	AvatarURL     *string   `json:"avatar_url,omitempty"`
+	BannerURL     *string   `json:"banner_url,omitempty"`
+	Bio           *string   `json:"bio,omitempty"`
+	CustomStatus  *string   `json:"custom_status,omitempty"`
+	Flags         int64     `json:"flags"`
+	CreatedAt     time.Time `json:"created_at"`
 }

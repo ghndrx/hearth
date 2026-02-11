@@ -11,14 +11,6 @@ import (
 	"hearth/internal/models"
 )
 
-var (
-	ErrInviteNotFound    = errors.New("invite not found")
-	ErrInviteExpired     = errors.New("invite has expired")
-	ErrInviteMaxUses     = errors.New("invite has reached maximum uses")
-	ErrAlreadyMember     = errors.New("already a member of this server")
-	ErrBannedFromServer  = errors.New("you are banned from this server")
-)
-
 // InviteRepository defines invite data operations
 type InviteRepository interface {
 	Create(ctx context.Context, invite *models.Invite) error
@@ -163,10 +155,10 @@ func (s *InviteService) UseInvite(ctx context.Context, code string, userID uuid.
 
 	// Add member
 	member := &models.Member{
-		ServerID:  invite.ServerID,
-		UserID:    userID,
-		JoinedAt:  time.Now(),
-		Temporary: invite.Temporary,
+		ServerID: invite.ServerID,
+		UserID:   userID,
+		JoinedAt: time.Now(),
+		Pending:  invite.Temporary, // Temporary invites create pending members
 	}
 
 	if err := s.serverRepo.AddMember(ctx, member); err != nil {
@@ -254,8 +246,8 @@ func (s *InviteService) BanMember(ctx context.Context, serverID, userID, moderat
 	ban := &models.Ban{
 		ServerID:  serverID,
 		UserID:    userID,
-		Reason:    reason,
-		BannedBy:  moderatorID,
+		Reason:    &reason,
+		BannedBy:  &moderatorID,
 		CreatedAt: time.Now(),
 	}
 

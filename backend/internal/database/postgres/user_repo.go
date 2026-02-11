@@ -21,13 +21,13 @@ func NewUserRepository(db *sqlx.DB) *UserRepository {
 
 func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	query := `
-		INSERT INTO users (id, username, display_name, email, password_hash, avatar, banner, bio, pronouns, bot, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO users (id, username, discriminator, email, password_hash, avatar_url, banner_url, bio, status, mfa_enabled, verified, flags, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		user.ID, user.Username, user.DisplayName, user.Email, user.PasswordHash,
-		user.Avatar, user.Banner, user.Bio, user.Pronouns, user.Bot,
-		user.CreatedAt, user.UpdatedAt,
+		user.ID, user.Username, user.Discriminator, user.Email, user.PasswordHash,
+		user.AvatarURL, user.BannerURL, user.Bio, user.Status, user.MFAEnabled,
+		user.Verified, user.Flags, user.CreatedAt, user.UpdatedAt,
 	)
 	return err
 }
@@ -65,13 +65,15 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
 		UPDATE users SET
-			username = $2, display_name = $3, email = $4, password_hash = $5,
-			avatar = $6, banner = $7, bio = $8, pronouns = $9, updated_at = $10
+			username = $2, discriminator = $3, email = $4, password_hash = $5,
+			avatar_url = $6, banner_url = $7, bio = $8, status = $9, 
+			custom_status = $10, mfa_enabled = $11, verified = $12, flags = $13, updated_at = $14
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		user.ID, user.Username, user.DisplayName, user.Email, user.PasswordHash,
-		user.Avatar, user.Banner, user.Bio, user.Pronouns, user.UpdatedAt,
+		user.ID, user.Username, user.Discriminator, user.Email, user.PasswordHash,
+		user.AvatarURL, user.BannerURL, user.Bio, user.Status, user.CustomStatus,
+		user.MFAEnabled, user.Verified, user.Flags, user.UpdatedAt,
 	)
 	return err
 }

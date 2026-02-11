@@ -10,25 +10,8 @@ import (
 )
 
 var (
-	ErrRoleNotFound      = errors.New("role not found")
 	ErrCannotDeleteDefault = errors.New("cannot delete the default role")
-	ErrRoleHierarchy     = errors.New("cannot modify role higher than your highest role")
 )
-
-// RoleRepository defines role data operations
-type RoleRepository interface {
-	Create(ctx context.Context, role *models.Role) error
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Role, error)
-	GetByServerID(ctx context.Context, serverID uuid.UUID) ([]*models.Role, error)
-	Update(ctx context.Context, role *models.Role) error
-	Delete(ctx context.Context, id uuid.UUID) error
-	UpdatePositions(ctx context.Context, serverID uuid.UUID, positions map[uuid.UUID]int) error
-	
-	// Member role operations
-	AddRoleToMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error
-	RemoveRoleFromMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error
-	GetMemberRoles(ctx context.Context, serverID, userID uuid.UUID) ([]*models.Role, error)
-}
 
 // RoleService handles role-related business logic
 type RoleService struct {
@@ -310,7 +293,7 @@ func (s *RoleService) ComputeMemberPermissions(ctx context.Context, serverID, us
 	}
 
 	// Administrator grants all permissions
-	if permissions&models.PermissionAdministrator != 0 {
+	if permissions&models.PermAdministrator != 0 {
 		return models.PermissionAll, nil
 	}
 

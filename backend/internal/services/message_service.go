@@ -2,21 +2,10 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"hearth/internal/models"
-)
-
-var (
-	ErrMessageNotFound    = errors.New("message not found")
-	ErrNotMessageAuthor   = errors.New("not message author")
-	ErrChannelNotFound    = errors.New("channel not found")
-	ErrNoPermission       = errors.New("no permission to send messages")
-	ErrMessageTooLong     = errors.New("message exceeds maximum length")
-	ErrRateLimited        = errors.New("you are sending messages too quickly")
-	ErrEmptyMessage       = errors.New("message cannot be empty")
 )
 
 // MessageRepository defines the interface for message data access
@@ -130,38 +119,57 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 		}
 	}
 	
+	// Convert attachments
+	var msgAttachments []models.Attachment
+	for _, att := range attachments {
+		if att != nil {
+			msgAttachments = append(msgAttachments, *att)
+		}
+	}
+	
 	// Create message
 	message := &models.Message{
 		ID:          uuid.New(),
 		ChannelID:   channelID,
+		ServerID:    channel.ServerID,
 		AuthorID:    authorID,
 		Content:     content,
-		Attachments: attachments,
-		ReplyTo:     replyTo,
+		Type:        models.MessageTypeDefault,
+		Attachments: msgAttachments,
+		ReplyToID:   replyTo,
 		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+	}
+	
+	// Set reply type if replying
+	if replyTo != nil {
+		message.Type = models.MessageTypeReply
 	}
 	
 	// Handle E2EE for DM channels
+	isEncrypted := false
 	if channel.Type == models.ChannelTypeDM || channel.Type == models.ChannelTypeGroupDM {
 		if channel.E2EEEnabled {
 			// Content should already be encrypted by client
 			// We just verify the format
 			if !s.e2eeService.ValidateEncryptedPayload(content) {
-				return nil, errors.New("invalid encrypted message format")
+				return nil, ErrNoPermission
 			}
-			message.Encrypted = true
+			message.EncryptedContent = content
+			message.Content = "" // Clear plaintext
+			isEncrypted = true
 		}
 	} else if channel.E2EEEnabled {
 		// Server channel with E2EE enabled
 		if !s.e2eeService.ValidateEncryptedPayload(content) {
-			return nil, errors.New("invalid encrypted message format")
+			return nil, ErrNoPermission
 		}
-		message.Encrypted = true
+		message.EncryptedContent = content
+		message.Content = ""
+		isEncrypted = true
 	}
 	
 	// Parse mentions from content (if not encrypted)
-	if !message.Encrypted {
+	if !isEncrypted {
 		message.Mentions = parseMentions(content)
 	}
 	
@@ -198,10 +206,9 @@ func (s *MessageService) EditMessage(ctx context.Context, messageID uuid.UUID, a
 	
 	message.Content = newContent
 	message.EditedAt = timePtr(time.Now())
-	message.UpdatedAt = time.Now()
 	
-	// Re-parse mentions if not encrypted
-	if !message.Encrypted {
+	// Re-parse mentions if not encrypted (EncryptedContent is empty for non-encrypted)
+	if message.EncryptedContent == "" {
 		message.Mentions = parseMentions(newContent)
 	}
 	
@@ -295,7 +302,6 @@ func (s *MessageService) PinMessage(ctx context.Context, messageID uuid.UUID, re
 	// TODO: Check MANAGE_MESSAGES permission
 	
 	message.Pinned = true
-	message.UpdatedAt = time.Now()
 	
 	if err := s.repo.Update(ctx, message); err != nil {
 		return err

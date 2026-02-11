@@ -49,8 +49,9 @@ func (s *PresenceService) UpdatePresence(
 		UpdatedAt:    time.Now(),
 	}
 
-	// Store in cache
-	if err := s.cache.SetPresence(ctx, userID, string(status), presenceTTL); err != nil {
+	// Store in cache using generic Get/Set
+	key := "presence:" + userID.String()
+	if err := s.cache.Set(ctx, key, []byte(status), presenceTTL); err != nil {
 		return err
 	}
 
@@ -62,17 +63,18 @@ func (s *PresenceService) UpdatePresence(
 
 // GetPresence gets a user's presence
 func (s *PresenceService) GetPresence(ctx context.Context, userID uuid.UUID) (*models.Presence, error) {
-	status, err := s.cache.GetPresence(ctx, userID)
+	key := "presence:" + userID.String()
+	data, err := s.cache.Get(ctx, key)
 	if err != nil {
 		return &models.Presence{
 			UserID: userID,
-			Status: models.PresenceOffline,
+			Status: models.StatusOffline,
 		}, nil
 	}
 
 	return &models.Presence{
 		UserID: userID,
-		Status: models.PresenceStatus(status),
+		Status: models.PresenceStatus(data),
 	}, nil
 }
 
@@ -91,19 +93,21 @@ func (s *PresenceService) GetBulkPresence(ctx context.Context, userIDs []uuid.UU
 // Heartbeat updates the user's last seen time
 func (s *PresenceService) Heartbeat(ctx context.Context, userID uuid.UUID) error {
 	// Extend presence TTL
-	status, _ := s.cache.GetPresence(ctx, userID)
+	key := "presence:" + userID.String()
+	data, _ := s.cache.Get(ctx, key)
+	status := string(data)
 	if status == "" {
-		status = string(models.PresenceOnline)
+		status = string(models.StatusOnline)
 	}
 
-	return s.cache.SetPresence(ctx, userID, status, presenceTTL)
+	return s.cache.Set(ctx, key, []byte(status), presenceTTL)
 }
 
 // SetOffline marks a user as offline
 func (s *PresenceService) SetOffline(ctx context.Context, userID uuid.UUID) error {
 	presence := &models.Presence{
 		UserID: userID,
-		Status: models.PresenceOffline,
+		Status: models.StatusOffline,
 	}
 
 	// Remove from cache (will return offline on next get)

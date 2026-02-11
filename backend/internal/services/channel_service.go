@@ -2,17 +2,10 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"hearth/internal/models"
-)
-
-var (
-	ErrChannelNotFound  = errors.New("channel not found")
-	ErrNotChannelMember = errors.New("not a member of this channel")
-	ErrCannotDeleteDM   = errors.New("cannot delete DM channel")
 )
 
 // ChannelService handles channel-related business logic

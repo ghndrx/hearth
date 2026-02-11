@@ -10,14 +10,7 @@ import (
 )
 
 var (
-	ErrServerNotFound     = errors.New("server not found")
-	ErrNotServerOwner     = errors.New("not server owner")
-	ErrNotServerMember    = errors.New("not a member of this server")
-	ErrAlreadyMember      = errors.New("already a member of this server")
-	ErrInviteNotFound     = errors.New("invite not found")
-	ErrInviteExpired      = errors.New("invite has expired")
-	ErrMaxServersReached  = errors.New("maximum servers reached")
-	ErrBannedFromServer   = errors.New("banned from this server")
+	ErrMaxServersReached = errors.New("maximum servers reached")
 )
 
 // ServerRepository defines the interface for server data access
@@ -100,10 +93,14 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 	}
 	
 	// Create server
+	var iconURL *string
+	if icon != "" {
+		iconURL = &icon
+	}
 	server := &models.Server{
 		ID:        uuid.New(),
 		Name:      name,
-		Icon:      icon,
+		IconURL:   iconURL,
 		OwnerID:   ownerID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -113,12 +110,12 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 		return nil, err
 	}
 	
-	// Create @everyone role
+	// Create @everyone role (color 0x99AAB5 = 10066613 in decimal)
 	everyoneRole := &models.Role{
 		ID:          uuid.New(),
 		ServerID:    server.ID,
 		Name:        "@everyone",
-		Color:       "#99AAB5",
+		Color:       0x99AAB5,
 		Position:    0,
 		Permissions: models.DefaultPermissions,
 		IsDefault:   true,
@@ -158,7 +155,7 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 	member := &models.Member{
 		UserID:   ownerID,
 		ServerID: server.ID,
-		Nickname: "",
+		Nickname: nil,
 		JoinedAt: time.Now(),
 		Roles:    []uuid.UUID{everyoneRole.ID},
 	}
@@ -210,14 +207,14 @@ func (s *ServerService) UpdateServer(ctx context.Context, id uuid.UUID, requeste
 	if updates.Name != nil {
 		server.Name = *updates.Name
 	}
-	if updates.Icon != nil {
-		server.Icon = *updates.Icon
+	if updates.IconURL != nil {
+		server.IconURL = updates.IconURL
 	}
-	if updates.Banner != nil {
-		server.Banner = *updates.Banner
+	if updates.BannerURL != nil {
+		server.BannerURL = updates.BannerURL
 	}
 	if updates.Description != nil {
-		server.Description = *updates.Description
+		server.Description = updates.Description
 	}
 	
 	server.UpdatedAt = time.Now()
@@ -343,9 +340,9 @@ func (s *ServerService) JoinServer(ctx context.Context, userID uuid.UUID, invite
 	_ = s.repo.IncrementInviteUses(ctx, inviteCode)
 	
 	s.eventBus.Publish("server.member_joined", &MemberJoinedEvent{
-		ServerID: invite.ServerID,
-		UserID:   userID,
-		Member:   member,
+		ServerID:   invite.ServerID,
+		UserID:     userID,
+		InviteCode: inviteCode,
 	})
 	
 	return server, nil
@@ -430,11 +427,15 @@ func (s *ServerService) BanMember(ctx context.Context, serverID, requesterID, ta
 	_ = s.repo.RemoveMember(ctx, serverID, targetID)
 	
 	// Add ban
+	var banReason *string
+	if reason != "" {
+		banReason = &reason
+	}
 	ban := &models.Ban{
 		ServerID:  serverID,
 		UserID:    targetID,
-		Reason:    reason,
-		BannedBy:  requesterID,
+		Reason:    banReason,
+		BannedBy:  &requesterID,
 		CreatedAt: time.Now(),
 	}
 	
@@ -445,10 +446,10 @@ func (s *ServerService) BanMember(ctx context.Context, serverID, requesterID, ta
 	// TODO: Delete messages from last N days if deleteDays > 0
 	
 	s.eventBus.Publish("server.member_banned", &MemberBannedEvent{
-		ServerID: serverID,
-		UserID:   targetID,
-		BannedBy: requesterID,
-		Reason:   reason,
+		ServerID:    serverID,
+		UserID:      targetID,
+		ModeratorID: requesterID,
+		Reason:      reason,
 	})
 	
 	return nil
@@ -465,7 +466,10 @@ func (s *ServerService) CreateInvite(ctx context.Context, serverID, channelID, c
 	// TODO: Check CREATE_INVITE permission
 	
 	// Generate invite code
-	code := generateInviteCode()
+	code, err := generateInviteCode()
+	if err != nil {
+		return nil, err
+	}
 	
 	var expiresAt *time.Time
 	if expiresIn != nil {
@@ -491,16 +495,6 @@ func (s *ServerService) CreateInvite(ctx context.Context, serverID, channelID, c
 	return invite, nil
 }
 
-// Helper to generate invite codes
-func generateInviteCode() string {
-	const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
-	code := make([]byte, 8)
-	for i := range code {
-		code[i] = chars[uuid.New()[i]%byte(len(chars))]
-	}
-	return string(code)
-}
-
 // Events
 
 type ServerCreatedEvent struct {
@@ -517,12 +511,6 @@ type ServerDeletedEvent struct {
 	OwnerID  uuid.UUID
 }
 
-type MemberJoinedEvent struct {
-	ServerID uuid.UUID
-	UserID   uuid.UUID
-	Member   *models.Member
-}
-
 type MemberLeftEvent struct {
 	ServerID uuid.UUID
 	UserID   uuid.UUID
@@ -532,12 +520,5 @@ type MemberKickedEvent struct {
 	ServerID uuid.UUID
 	UserID   uuid.UUID
 	KickedBy uuid.UUID
-	Reason   string
-}
-
-type MemberBannedEvent struct {
-	ServerID uuid.UUID
-	UserID   uuid.UUID
-	BannedBy uuid.UUID
 	Reason   string
 }
