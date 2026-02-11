@@ -1,7 +1,6 @@
 package websocket
 
 import (
-	"context"
 	"encoding/json"
 	"sync"
 	"time"
@@ -22,20 +21,20 @@ type Client struct {
 	ID       string
 	UserID   uuid.UUID
 	Username string
-	
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	
+
+	hub  *Hub
+	conn *websocket.Conn
+	send chan []byte
+
 	// Subscriptions
 	servers  map[uuid.UUID]bool
 	channels map[uuid.UUID]bool
 	mu       sync.RWMutex
-	
+
 	// Session info
 	SessionID  string
 	ClientType string // "desktop", "web", "mobile"
-	
+
 	// Heartbeat
 	lastHeartbeat time.Time
 	sequence      int64
@@ -164,10 +163,6 @@ func (c *Client) handleMessage(data []byte) {
 		c.handleIdentify(&msg)
 	case OpResume:
 		c.handleResume(&msg)
-	case OpRequestGuildMembers:
-		c.handleRequestMembers(&msg)
-	case OpVoiceStateUpdate:
-		c.handleVoiceStateUpdate(&msg)
 	case OpPresenceUpdate:
 		c.handlePresenceUpdate(&msg)
 	default:
@@ -183,93 +178,31 @@ func (c *Client) handleHeartbeat(msg *Message) {
 }
 
 func (c *Client) handleIdentify(msg *Message) {
-	// Already identified via HTTP upgrade, send READY
+	// Send READY event
 	c.sendReady()
 }
 
 func (c *Client) handleResume(msg *Message) {
 	// Resume session - replay missed events
-	var data struct {
-		Token     string `json:"token"`
-		SessionID string `json:"session_id"`
-		Sequence  int64  `json:"seq"`
-	}
-	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		c.sendError("Invalid resume data")
-		return
-	}
-
-	// TODO: Implement session resume with event replay
 	c.Send(&Message{
 		Op:   OpDispatch,
 		Type: "RESUMED",
 	})
 }
 
-func (c *Client) handleRequestMembers(msg *Message) {
-	var data struct {
-		GuildID   uuid.UUID `json:"guild_id"`
-		Query     string    `json:"query"`
-		Limit     int       `json:"limit"`
-		Presences bool      `json:"presences"`
-		UserIDs   []string  `json:"user_ids"`
-	}
-	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		return
-	}
-
-	// TODO: Fetch and send members
-}
-
-func (c *Client) handleVoiceStateUpdate(msg *Message) {
-	var data struct {
-		GuildID   *uuid.UUID `json:"guild_id"`
-		ChannelID *uuid.UUID `json:"channel_id"`
-		SelfMute  bool       `json:"self_mute"`
-		SelfDeaf  bool       `json:"self_deaf"`
-	}
-	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		return
-	}
-
-	// TODO: Update voice state
-}
-
 func (c *Client) handlePresenceUpdate(msg *Message) {
-	var data struct {
-		Status string `json:"status"`
-		AFK    bool   `json:"afk"`
-	}
-	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		return
-	}
-
-	c.hub.presenceService.UpdatePresence(context.Background(), c.UserID, data.Status, nil, c.ClientType)
+	// Handle presence update
+	// Will be integrated with presence service
 }
 
 func (c *Client) sendReady() {
-	// Gather initial state
-	ctx := context.Background()
-	
-	// Get user's servers
-	servers, _ := c.hub.serverService.GetUserServers(ctx, c.UserID)
-	
-	serverIDs := make([]uuid.UUID, len(servers))
-	for i, s := range servers {
-		serverIDs[i] = s.ID
-		c.SubscribeServer(s.ID)
-	}
-
-	// Get DM channels
-	dmChannels, _ := c.hub.channelService.GetUserDMs(ctx, c.UserID)
-
 	readyData := map[string]interface{}{
-		"v":              10,
-		"user":           c.hub.getUserData(ctx, c.UserID),
-		"guilds":         servers,
-		"private_channels": dmChannels,
-		"session_id":     c.SessionID,
-		"resume_gateway_url": c.hub.resumeURL,
+		"v":          10,
+		"session_id": c.SessionID,
+		"user": map[string]interface{}{
+			"id":       c.UserID.String(),
+			"username": c.Username,
+		},
 	}
 
 	data, _ := json.Marshal(readyData)
@@ -297,6 +230,7 @@ func (c *Client) SubscribeServer(serverID uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.servers[serverID] = true
+	c.hub.SubscribeServer(c, serverID)
 }
 
 func (c *Client) UnsubscribeServer(serverID uuid.UUID) {
@@ -309,12 +243,14 @@ func (c *Client) SubscribeChannel(channelID uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.channels[channelID] = true
+	c.hub.SubscribeChannel(c, channelID)
 }
 
 func (c *Client) UnsubscribeChannel(channelID uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.channels, channelID)
+	c.hub.UnsubscribeChannel(c, channelID)
 }
 
 func (c *Client) IsSubscribedToServer(serverID uuid.UUID) bool {

@@ -113,21 +113,41 @@ type Ban struct {
 
 // Invite represents a server invite
 type Invite struct {
-	Code        string     `json:"code" db:"code"`
-	ServerID    uuid.UUID  `json:"server_id" db:"server_id"`
-	ChannelID   *uuid.UUID `json:"channel_id,omitempty" db:"channel_id"`
-	InviterID   *uuid.UUID `json:"inviter_id,omitempty" db:"inviter_id"`
-	MaxUses     *int       `json:"max_uses,omitempty" db:"max_uses"`
-	Uses        int        `json:"uses" db:"uses"`
-	MaxAge      *int       `json:"max_age,omitempty" db:"max_age"` // seconds, nil = never
-	Temporary   bool       `json:"temporary" db:"temporary"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	Code      string     `json:"code" db:"code"`
+	ServerID  uuid.UUID  `json:"server_id" db:"server_id"`
+	ChannelID uuid.UUID  `json:"channel_id" db:"channel_id"`
+	CreatorID uuid.UUID  `json:"creator_id" db:"creator_id"`
+	MaxUses   int        `json:"max_uses" db:"max_uses"`
+	Uses      int        `json:"uses" db:"uses"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	Temporary bool       `json:"temporary" db:"temporary"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 
 	// Populated from joins
 	Server  *Server     `json:"server,omitempty"`
 	Channel *Channel    `json:"channel,omitempty"`
-	Inviter *PublicUser `json:"inviter,omitempty"`
+	Creator *PublicUser `json:"creator,omitempty"`
+}
+
+// IsExpired checks if the invite has expired
+func (i *Invite) IsExpired() bool {
+	if i.ExpiresAt == nil {
+		return false
+	}
+	return time.Now().After(*i.ExpiresAt)
+}
+
+// IsMaxUsesReached checks if the invite has reached max uses
+func (i *Invite) IsMaxUsesReached() bool {
+	if i.MaxUses == 0 {
+		return false
+	}
+	return i.Uses >= i.MaxUses
+}
+
+// IsValid checks if the invite can be used
+func (i *Invite) IsValid() bool {
+	return !i.IsExpired() && !i.IsMaxUsesReached()
 }
 
 // CreateInviteRequest is the input for creating an invite

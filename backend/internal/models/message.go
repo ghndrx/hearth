@@ -24,28 +24,30 @@ const (
 
 // Message represents a chat message
 type Message struct {
-	ID              uuid.UUID   `json:"id" db:"id"`
-	ChannelID       uuid.UUID   `json:"channel_id" db:"channel_id"`
-	AuthorID        uuid.UUID   `json:"author_id" db:"author_id"`
-	Content         string      `json:"content" db:"content"`
-	Type            MessageType `json:"type" db:"type"`
-	ReplyToID       *uuid.UUID  `json:"reply_to_id,omitempty" db:"reply_to_id"`
-	ThreadID        *uuid.UUID  `json:"thread_id,omitempty" db:"thread_id"`
-	Pinned          bool        `json:"pinned" db:"pinned"`
-	TTS             bool        `json:"tts" db:"tts"`
-	MentionEveryone bool        `json:"mention_everyone" db:"mention_everyone"`
-	Flags           int         `json:"flags" db:"flags"`
-	CreatedAt       time.Time   `json:"created_at" db:"created_at"`
-	EditedAt        *time.Time  `json:"edited_at,omitempty" db:"edited_at"`
+	ID               uuid.UUID   `json:"id" db:"id"`
+	ChannelID        uuid.UUID   `json:"channel_id" db:"channel_id"`
+	ServerID         *uuid.UUID  `json:"server_id,omitempty" db:"server_id"`
+	AuthorID         uuid.UUID   `json:"author_id" db:"author_id"`
+	Content          string      `json:"content" db:"content"`
+	EncryptedContent string      `json:"encrypted_content,omitempty" db:"encrypted_content"`
+	Type             MessageType `json:"type" db:"type"`
+	ReplyToID        *uuid.UUID  `json:"reply_to_id,omitempty" db:"reply_to_id"`
+	ThreadID         *uuid.UUID  `json:"thread_id,omitempty" db:"thread_id"`
+	Pinned           bool        `json:"pinned" db:"pinned"`
+	TTS              bool        `json:"tts" db:"tts"`
+	MentionEveryone  bool        `json:"mention_everyone" db:"mention_everyone"`
+	Flags            int         `json:"flags" db:"flags"`
+	CreatedAt        time.Time   `json:"created_at" db:"created_at"`
+	EditedAt         *time.Time  `json:"edited_at,omitempty" db:"edited_at"`
 
 	// Populated from joins/aggregations
-	Author         *PublicUser   `json:"author,omitempty"`
-	Attachments    []Attachment  `json:"attachments,omitempty"`
-	Embeds         []Embed       `json:"embeds,omitempty"`
-	Reactions      []Reaction    `json:"reactions,omitempty"`
-	Mentions       []uuid.UUID   `json:"mentions,omitempty"`
-	MentionRoles   []uuid.UUID   `json:"mention_roles,omitempty"`
-	ReferencedMsg  *Message      `json:"referenced_message,omitempty"`
+	Author        *PublicUser  `json:"author,omitempty"`
+	Attachments   []Attachment `json:"attachments,omitempty"`
+	Embeds        []Embed      `json:"embeds,omitempty"`
+	Reactions     []Reaction   `json:"reactions,omitempty"`
+	Mentions      []uuid.UUID  `json:"mentions,omitempty"`
+	MentionRoles  []uuid.UUID  `json:"mention_roles,omitempty"`
+	ReferencedMsg *Message     `json:"referenced_message,omitempty"`
 }
 
 // MessageFlags
@@ -63,16 +65,20 @@ const (
 
 // Attachment represents a file attached to a message
 type Attachment struct {
-	ID          uuid.UUID `json:"id" db:"id"`
-	MessageID   uuid.UUID `json:"message_id" db:"message_id"`
-	Filename    string    `json:"filename" db:"filename"`
-	URL         string    `json:"url" db:"url"`
-	ProxyURL    *string   `json:"proxy_url,omitempty" db:"proxy_url"`
-	Size        int64     `json:"size" db:"size"`
-	ContentType *string   `json:"content_type,omitempty" db:"content_type"`
-	Width       *int      `json:"width,omitempty" db:"width"`
-	Height      *int      `json:"height,omitempty" db:"height"`
-	Ephemeral   bool      `json:"ephemeral" db:"ephemeral"`
+	ID           uuid.UUID `json:"id" db:"id"`
+	MessageID    uuid.UUID `json:"message_id" db:"message_id"`
+	Filename     string    `json:"filename" db:"filename"`
+	URL          string    `json:"url" db:"url"`
+	ProxyURL     *string   `json:"proxy_url,omitempty" db:"proxy_url"`
+	Size         int64     `json:"size" db:"size"`
+	ContentType  *string   `json:"content_type,omitempty" db:"content_type"`
+	Width        *int      `json:"width,omitempty" db:"width"`
+	Height       *int      `json:"height,omitempty" db:"height"`
+	Ephemeral    bool      `json:"ephemeral" db:"ephemeral"`
+	Encrypted    bool      `json:"encrypted" db:"encrypted"`
+	EncryptedKey string    `json:"encrypted_key,omitempty" db:"encrypted_key"`
+	IV           string    `json:"iv,omitempty" db:"iv"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
 // Embed represents a rich embed in a message
@@ -135,6 +141,23 @@ type ReactionUser struct {
 	UserID    uuid.UUID `json:"user_id" db:"user_id"`
 	Emoji     string    `json:"emoji" db:"emoji"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+// MentionType represents different types of mentions
+type MentionType int
+
+const (
+	MentionTypeUser MentionType = iota
+	MentionTypeRole
+	MentionTypeChannel
+	MentionTypeEveryone
+	MentionTypeHere
+)
+
+// Mention represents a mention in a message
+type Mention struct {
+	Type MentionType `json:"type"`
+	ID   uuid.UUID   `json:"id,omitempty"`
 }
 
 // CreateMessageRequest is the input for sending a message

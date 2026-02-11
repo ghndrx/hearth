@@ -8,18 +8,19 @@ import (
 
 // Role represents a server role with permissions
 type Role struct {
-	ID          uuid.UUID `json:"id" db:"id"`
-	ServerID    uuid.UUID `json:"server_id" db:"server_id"`
-	Name        string    `json:"name" db:"name"`
-	Color       int       `json:"color" db:"color"` // RGB integer
-	Permissions int64     `json:"permissions" db:"permissions"`
-	Position    int       `json:"position" db:"position"`
-	Hoist       bool      `json:"hoist" db:"hoist"`       // Show separately in member list
-	Managed     bool      `json:"managed" db:"managed"`   // Managed by integration
-	Mentionable bool      `json:"mentionable" db:"mentionable"`
-	IconURL     *string   `json:"icon_url,omitempty" db:"icon_url"`
-	UnicodeEmoji *string  `json:"unicode_emoji,omitempty" db:"unicode_emoji"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	ID           uuid.UUID `json:"id" db:"id"`
+	ServerID     uuid.UUID `json:"server_id" db:"server_id"`
+	Name         string    `json:"name" db:"name"`
+	Color        int       `json:"color" db:"color"` // RGB integer
+	Permissions  int64     `json:"permissions" db:"permissions"`
+	Position     int       `json:"position" db:"position"`
+	Hoist        bool      `json:"hoist" db:"hoist"`             // Show separately in member list
+	Managed      bool      `json:"managed" db:"managed"`         // Managed by integration
+	Mentionable  bool      `json:"mentionable" db:"mentionable"`
+	IsDefault    bool      `json:"is_default" db:"is_default"`   // @everyone role
+	IconURL      *string   `json:"icon_url,omitempty" db:"icon_url"`
+	UnicodeEmoji *string   `json:"unicode_emoji,omitempty" db:"unicode_emoji"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
 // Permission bits
@@ -69,8 +70,8 @@ const (
 	PermMoveMembers        int64 = 1 << 47
 	PermUseSoundboard      int64 = 1 << 48
 
-	// Admin
-	PermAdministrator      int64 = 1 << 63
+	// Admin (bit 62 is max safe for int64)
+	PermAdministrator      int64 = 1 << 62
 )
 
 // PermissionAll is all permissions combined (except Administrator)

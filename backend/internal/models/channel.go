@@ -24,13 +24,15 @@ const (
 type Channel struct {
 	ID                 uuid.UUID   `json:"id" db:"id"`
 	ServerID           *uuid.UUID  `json:"server_id,omitempty" db:"server_id"`
-	CategoryID         *uuid.UUID  `json:"category_id,omitempty" db:"category_id"`
+	ParentID           *uuid.UUID  `json:"parent_id,omitempty" db:"parent_id"`
+	OwnerID            *uuid.UUID  `json:"owner_id,omitempty" db:"owner_id"`
 	Type               ChannelType `json:"type" db:"type"`
-	Name               *string     `json:"name,omitempty" db:"name"`
-	Topic              *string     `json:"topic,omitempty" db:"topic"`
+	Name               string      `json:"name" db:"name"`
+	Topic              string      `json:"topic" db:"topic"`
 	Position           int         `json:"position" db:"position"`
 	NSFW               bool        `json:"nsfw" db:"nsfw"`
-	SlowmodeSeconds    int         `json:"slowmode_seconds" db:"slowmode_seconds"`
+	Slowmode           int         `json:"slowmode" db:"slowmode"`
+	E2EEEnabled        bool        `json:"e2ee_enabled" db:"e2ee_enabled"`
 	Bitrate            int         `json:"bitrate" db:"bitrate"`
 	UserLimit          int         `json:"user_limit" db:"user_limit"`
 	RTCRegion          *string     `json:"rtc_region,omitempty" db:"rtc_region"`
@@ -41,7 +43,7 @@ type Channel struct {
 
 	// Populated from joins
 	PermissionOverrides []PermissionOverride `json:"permission_overrides,omitempty"`
-	Recipients          []PublicUser         `json:"recipients,omitempty"` // For DMs
+	Recipients          []uuid.UUID          `json:"recipients,omitempty"` // For DMs - user IDs
 }
 
 // AutoArchiveDuration constants (in minutes)
@@ -74,6 +76,16 @@ type UpdateChannelRequest struct {
 	SlowmodeSeconds *int    `json:"slowmode_seconds,omitempty" validate:"omitempty,min=0,max=21600"`
 	Bitrate         *int    `json:"bitrate,omitempty" validate:"omitempty,min=8000,max=384000"`
 	UserLimit       *int    `json:"user_limit,omitempty" validate:"omitempty,min=0,max=99"`
+}
+
+// ChannelUpdate is used for partial updates via services
+type ChannelUpdate struct {
+	Name        *string `json:"name,omitempty"`
+	Topic       *string `json:"topic,omitempty"`
+	Position    *int    `json:"position,omitempty"`
+	Slowmode    *int    `json:"slowmode,omitempty"`
+	NSFW        *bool   `json:"nsfw,omitempty"`
+	E2EEEnabled *bool   `json:"e2ee_enabled,omitempty"`
 }
 
 // PermissionOverride represents channel-specific permission overrides

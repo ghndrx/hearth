@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
-	"time"
 
-	"github.com/gofiber/contrib/websocket"
 	"github.com/google/uuid"
 )
 
@@ -15,15 +13,15 @@ type Hub struct {
 	// Registered clients by user ID
 	clients    map[uuid.UUID]map[*Client]bool
 	clientsMux sync.RWMutex
-	
+
 	// Channel subscriptions
 	channels    map[uuid.UUID]map[*Client]bool
 	channelsMux sync.RWMutex
-	
+
 	// Server subscriptions (for presence, typing, etc.)
 	servers    map[uuid.UUID]map[*Client]bool
 	serversMux sync.RWMutex
-	
+
 	// Incoming events
 	broadcast  chan *Event
 	register   chan *Client
@@ -48,13 +46,13 @@ func (h *Hub) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-			
+
 		case client := <-h.register:
 			h.registerClient(client)
-			
+
 		case client := <-h.unregister:
 			h.unregisterClient(client)
-			
+
 		case event := <-h.broadcast:
 			h.handleBroadcast(event)
 		}
@@ -64,7 +62,7 @@ func (h *Hub) Run(ctx context.Context) {
 func (h *Hub) registerClient(client *Client) {
 	h.clientsMux.Lock()
 	defer h.clientsMux.Unlock()
-	
+
 	if h.clients[client.UserID] == nil {
 		h.clients[client.UserID] = make(map[*Client]bool)
 	}
@@ -80,7 +78,7 @@ func (h *Hub) unregisterClient(client *Client) {
 		}
 	}
 	h.clientsMux.Unlock()
-	
+
 	// Unsubscribe from all channels
 	h.channelsMux.Lock()
 	for channelID, clients := range h.channels {
@@ -92,7 +90,7 @@ func (h *Hub) unregisterClient(client *Client) {
 		}
 	}
 	h.channelsMux.Unlock()
-	
+
 	// Unsubscribe from all servers
 	h.serversMux.Lock()
 	for serverID, clients := range h.servers {
@@ -104,48 +102,53 @@ func (h *Hub) unregisterClient(client *Client) {
 		}
 	}
 	h.serversMux.Unlock()
-	
+
 	close(client.send)
 }
 
 func (h *Hub) handleBroadcast(event *Event) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+
 	switch {
 	case event.ChannelID != nil:
 		// Send to all clients subscribed to channel
 		h.channelsMux.RLock()
 		clients := h.channels[*event.ChannelID]
 		h.channelsMux.RUnlock()
-		
+
 		for client := range clients {
 			select {
-			case client.send <- event:
+			case client.send <- data:
 			default:
 				// Client buffer full, skip
 			}
 		}
-		
+
 	case event.ServerID != nil:
 		// Send to all clients subscribed to server
 		h.serversMux.RLock()
 		clients := h.servers[*event.ServerID]
 		h.serversMux.RUnlock()
-		
+
 		for client := range clients {
 			select {
-			case client.send <- event:
+			case client.send <- data:
 			default:
 			}
 		}
-		
+
 	case event.UserID != nil:
 		// Send to specific user (all their connections)
 		h.clientsMux.RLock()
 		clients := h.clients[*event.UserID]
 		h.clientsMux.RUnlock()
-		
+
 		for client := range clients {
 			select {
-			case client.send <- event:
+			case client.send <- data:
 			default:
 			}
 		}
@@ -156,7 +159,7 @@ func (h *Hub) handleBroadcast(event *Event) {
 func (h *Hub) SubscribeChannel(client *Client, channelID uuid.UUID) {
 	h.channelsMux.Lock()
 	defer h.channelsMux.Unlock()
-	
+
 	if h.channels[channelID] == nil {
 		h.channels[channelID] = make(map[*Client]bool)
 	}
@@ -167,7 +170,7 @@ func (h *Hub) SubscribeChannel(client *Client, channelID uuid.UUID) {
 func (h *Hub) UnsubscribeChannel(client *Client, channelID uuid.UUID) {
 	h.channelsMux.Lock()
 	defer h.channelsMux.Unlock()
-	
+
 	if clients, ok := h.channels[channelID]; ok {
 		delete(clients, client)
 		if len(clients) == 0 {
@@ -180,7 +183,7 @@ func (h *Hub) UnsubscribeChannel(client *Client, channelID uuid.UUID) {
 func (h *Hub) SubscribeServer(client *Client, serverID uuid.UUID) {
 	h.serversMux.Lock()
 	defer h.serversMux.Unlock()
-	
+
 	if h.servers[serverID] == nil {
 		h.servers[serverID] = make(map[*Client]bool)
 	}
@@ -214,7 +217,7 @@ func (h *Hub) SendToServer(serverID uuid.UUID, event *Event) {
 func (h *Hub) GetOnlineUsers(userIDs []uuid.UUID) []uuid.UUID {
 	h.clientsMux.RLock()
 	defer h.clientsMux.RUnlock()
-	
+
 	online := make([]uuid.UUID, 0)
 	for _, id := range userIDs {
 		if _, ok := h.clients[id]; ok {
@@ -224,142 +227,39 @@ func (h *Hub) GetOnlineUsers(userIDs []uuid.UUID) []uuid.UUID {
 	return online
 }
 
-// Client represents a WebSocket connection
-type Client struct {
-	hub    *Hub
-	conn   *websocket.Conn
-	send   chan *Event
-	UserID uuid.UUID
-	
-	// Subscriptions
-	Channels []uuid.UUID
-	Servers  []uuid.UUID
-}
-
-// NewClient creates a new WebSocket client
-func NewClient(hub *Hub, conn *websocket.Conn, userID uuid.UUID) *Client {
-	return &Client{
-		hub:      hub,
-		conn:     conn,
-		send:     make(chan *Event, 256),
-		UserID:   userID,
-		Channels: make([]uuid.UUID, 0),
-		Servers:  make([]uuid.UUID, 0),
-	}
-}
-
-// ReadPump handles incoming messages
-func (c *Client) ReadPump() {
-	defer func() {
-		c.hub.unregister <- c
-		c.conn.Close()
-	}()
-	
-	for {
-		_, message, err := c.conn.ReadMessage()
-		if err != nil {
-			break
-		}
-		
-		var event Event
-		if err := json.Unmarshal(message, &event); err != nil {
-			continue
-		}
-		
-		c.handleEvent(&event)
-	}
-}
-
-// WritePump handles outgoing messages
-func (c *Client) WritePump() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer func() {
-		ticker.Stop()
-		c.conn.Close()
-	}()
-	
-	for {
-		select {
-		case event, ok := <-c.send:
-			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-			
-			data, err := json.Marshal(event)
-			if err != nil {
-				continue
-			}
-			
-			if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-				return
-			}
-			
-		case <-ticker.C:
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
-			}
-		}
-	}
-}
-
-func (c *Client) handleEvent(event *Event) {
-	switch event.Type {
-	case EventTypeTypingStart:
-		// Broadcast typing indicator
-		c.hub.SendToChannel(event.Data.(TypingData).ChannelID, &Event{
-			Type: EventTypeTypingStart,
-			Data: TypingData{
-				ChannelID: event.Data.(TypingData).ChannelID,
-				UserID:    c.UserID,
-			},
-		})
-		
-	case EventTypeSubscribe:
-		// Subscribe to channel/server
-		data := event.Data.(SubscribeData)
-		if data.ChannelID != nil {
-			c.hub.SubscribeChannel(c, *data.ChannelID)
-		}
-		if data.ServerID != nil {
-			c.hub.SubscribeServer(c, *data.ServerID)
-		}
-	}
-}
-
 // Event types
 const (
-	EventTypeReady         = "READY"
-	EventTypeMessageCreate = "MESSAGE_CREATE"
-	EventTypeMessageUpdate = "MESSAGE_UPDATE"
-	EventTypeMessageDelete = "MESSAGE_DELETE"
-	EventTypeTypingStart   = "TYPING_START"
+	EventTypeReady          = "READY"
+	EventTypeMessageCreate  = "MESSAGE_CREATE"
+	EventTypeMessageUpdate  = "MESSAGE_UPDATE"
+	EventTypeMessageDelete  = "MESSAGE_DELETE"
+	EventTypeTypingStart    = "TYPING_START"
 	EventTypePresenceUpdate = "PRESENCE_UPDATE"
-	EventTypeServerCreate  = "SERVER_CREATE"
-	EventTypeServerUpdate  = "SERVER_UPDATE"
-	EventTypeServerDelete  = "SERVER_DELETE"
-	EventTypeMemberJoin    = "MEMBER_JOIN"
-	EventTypeMemberLeave   = "MEMBER_LEAVE"
-	EventTypeMemberUpdate  = "MEMBER_UPDATE"
-	EventTypeChannelCreate = "CHANNEL_CREATE"
-	EventTypeChannelUpdate = "CHANNEL_UPDATE"
-	EventTypeChannelDelete = "CHANNEL_DELETE"
-	EventTypeReactionAdd   = "REACTION_ADD"
+	EventTypeServerCreate   = "SERVER_CREATE"
+	EventTypeServerUpdate   = "SERVER_UPDATE"
+	EventTypeServerDelete   = "SERVER_DELETE"
+	EventTypeMemberJoin     = "MEMBER_JOIN"
+	EventTypeMemberLeave    = "MEMBER_LEAVE"
+	EventTypeMemberUpdate   = "MEMBER_UPDATE"
+	EventTypeChannelCreate  = "CHANNEL_CREATE"
+	EventTypeChannelUpdate  = "CHANNEL_UPDATE"
+	EventTypeChannelDelete  = "CHANNEL_DELETE"
+	EventTypeReactionAdd    = "REACTION_ADD"
 	EventTypeReactionRemove = "REACTION_REMOVE"
-	EventTypeSubscribe     = "SUBSCRIBE"
-	EventTypeUnsubscribe   = "UNSUBSCRIBE"
+	EventTypeSubscribe      = "SUBSCRIBE"
+	EventTypeUnsubscribe    = "UNSUBSCRIBE"
 )
 
 // Event represents a WebSocket event
 type Event struct {
-	Type      string      `json:"t"`
-	Data      interface{} `json:"d"`
-	Sequence  int64       `json:"s,omitempty"`
-	
+	Type     string      `json:"t"`
+	Data     interface{} `json:"d"`
+	Sequence int64       `json:"s,omitempty"`
+
 	// Routing (not serialized)
-	UserID    *uuid.UUID  `json:"-"`
-	ChannelID *uuid.UUID  `json:"-"`
-	ServerID  *uuid.UUID  `json:"-"`
+	UserID    *uuid.UUID `json:"-"`
+	ChannelID *uuid.UUID `json:"-"`
+	ServerID  *uuid.UUID `json:"-"`
 }
 
 // Event data types

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ghndrx/hearth/internal/models"
+	"hearth/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -110,8 +110,8 @@ type MFASetup struct {
 	BackupCodes []string `json:"backup_codes"`
 }
 
-// Claims for JWT tokens
-type Claims struct {
+// ProviderClaims for external provider JWT tokens (distinct from internal Claims in jwt.go)
+type ProviderClaims struct {
 	UserID    uuid.UUID    `json:"uid"`
 	Username  string       `json:"usr"`
 	SessionID uuid.UUID    `json:"sid"`
