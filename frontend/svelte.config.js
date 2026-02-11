@@ -4,6 +4,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	preprocess: vitePreprocess(),
+
 	kit: {
 		adapter: adapter({
 			pages: 'build',
@@ -13,10 +14,28 @@ const config = {
 			strict: true
 		}),
 		alias: {
-			$lib: './src/lib',
-			$components: './src/lib/components',
-			$stores: './src/lib/stores',
-			$utils: './src/lib/utils'
+			$lib: 'src/lib'
+		},
+		csp: {
+			mode: 'auto',
+			directives: {
+				'default-src': ['self'],
+				'script-src': ['self'],
+				'style-src': ['self', 'unsafe-inline'],
+				'img-src': ['self', 'data:', 'https:'],
+				'connect-src': ['self', 'wss:', 'https:'],
+				'font-src': ['self'],
+				'object-src': ['none'],
+				'frame-ancestors': ['self'],
+				'base-uri': ['self'],
+				'form-action': ['self']
+			}
+		},
+		paths: {
+			base: ''
+		},
+		prerender: {
+			entries: []
 		}
 	}
 };
