@@ -1,103 +1,214 @@
 <script lang="ts">
-	import { activeServer, activeMembers } from '$stores';
-	import type { Member } from '$lib/types';
-
-	function getStatusColor(status: string): string {
+	import { currentServer } from '$lib/stores/servers';
+	import { writable } from 'svelte/store';
+	
+	interface Member {
+		id: string;
+		user: {
+			id: string;
+			username: string;
+			display_name: string | null;
+			avatar: string | null;
+		};
+		nickname: string | null;
+		roles: string[];
+		status: 'online' | 'idle' | 'dnd' | 'offline';
+	}
+	
+	interface Role {
+		id: string;
+		name: string;
+		color: string;
+		position: number;
+	}
+	
+	// TODO: Load from API
+	const members = writable<Member[]>([]);
+	const roles = writable<Role[]>([]);
+	
+	$: groupedMembers = groupMembersByRole($members, $roles);
+	
+	function groupMembersByRole(members: Member[], roles: Role[]) {
+		const groups: { role: Role | null; members: Member[] }[] = [];
+		const roleMap = new Map(roles.map(r => [r.id, r]));
+		const usedMembers = new Set<string>();
+		
+		// Sort roles by position
+		const sortedRoles = [...roles].sort((a, b) => b.position - a.position);
+		
+		// Group members by their highest role
+		for (const role of sortedRoles) {
+			if (role.name === '@everyone') continue;
+			
+			const roleMembers = members.filter(m => 
+				m.roles.includes(role.id) && !usedMembers.has(m.id)
+			);
+			
+			if (roleMembers.length > 0) {
+				groups.push({ role, members: roleMembers });
+				roleMembers.forEach(m => usedMembers.add(m.id));
+			}
+		}
+		
+		// Online members without special roles
+		const onlineMembers = members.filter(m => 
+			!usedMembers.has(m.id) && m.status !== 'offline'
+		);
+		if (onlineMembers.length > 0) {
+			groups.push({ role: null, members: onlineMembers });
+		}
+		
+		// Offline members
+		const offlineMembers = members.filter(m => 
+			!usedMembers.has(m.id) && m.status === 'offline'
+		);
+		if (offlineMembers.length > 0) {
+			groups.push({ 
+				role: { id: 'offline', name: 'Offline', color: '', position: -1 }, 
+				members: offlineMembers 
+			});
+		}
+		
+		return groups;
+	}
+	
+	function getStatusColor(status: string) {
 		switch (status) {
-			case 'online':
-				return 'bg-green-500';
-			case 'idle':
-				return 'bg-yellow-500';
-			case 'dnd':
-				return 'bg-red-500';
-			default:
-				return 'bg-gray-500';
+			case 'online': return 'var(--status-online)';
+			case 'idle': return 'var(--status-idle)';
+			case 'dnd': return 'var(--status-dnd)';
+			default: return 'var(--status-offline)';
 		}
 	}
-
-	// Group members by their primary role (simplified)
-	$: onlineMembers = $activeMembers.filter((m) => m.user?.status !== 'offline');
-	$: offlineMembers = $activeMembers.filter((m) => m.user?.status === 'offline');
 </script>
 
-{#if $activeServer}
-	<aside class="w-60 bg-dark-800 flex flex-col shrink-0 hidden lg:flex">
-		<div class="flex-1 overflow-y-auto px-2 py-4">
-			<!-- Online members -->
-			{#if onlineMembers.length > 0}
-				<div class="mb-4">
-					<h3 class="px-2 mb-2 text-xs font-semibold uppercase text-gray-400">
-						Online — {onlineMembers.length}
-					</h3>
-					{#each onlineMembers as member (member.userId)}
-						<button class="sidebar-item w-full text-left group">
-							<div class="relative">
-								<div class="w-8 h-8 rounded-full bg-hearth-500 flex items-center justify-center">
-									{#if member.user?.avatarUrl}
-										<img
-											src={member.user.avatarUrl}
-											alt={member.user.username}
-											class="w-full h-full rounded-full object-cover"
-										/>
-									{:else}
-										<span class="text-sm font-medium text-white">
-											{member.user?.username?.charAt(0).toUpperCase() || 'U'}
-										</span>
-									{/if}
-								</div>
-								<div
-									class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-dark-800
-									       {getStatusColor(member.user?.status || 'offline')}"
-								></div>
-							</div>
-							<div class="flex-1 min-w-0">
-								<span class="text-gray-300 group-hover:text-white truncate block">
-									{member.nickname || member.user?.username || 'Unknown'}
-								</span>
-							</div>
-						</button>
-					{/each}
+{#if $currentServer}
+	<div class="member-list">
+		{#each groupedMembers as group}
+			<div class="member-group">
+				<div class="group-header">
+					{group.role?.name || 'Online'} — {group.members.length}
 				</div>
-			{/if}
-
-			<!-- Offline members -->
-			{#if offlineMembers.length > 0}
-				<div>
-					<h3 class="px-2 mb-2 text-xs font-semibold uppercase text-gray-400">
-						Offline — {offlineMembers.length}
-					</h3>
-					{#each offlineMembers as member (member.userId)}
-						<button class="sidebar-item w-full text-left group opacity-60">
-							<div class="relative">
-								<div class="w-8 h-8 rounded-full bg-dark-600 flex items-center justify-center">
-									{#if member.user?.avatarUrl}
-										<img
-											src={member.user.avatarUrl}
-											alt={member.user.username}
-											class="w-full h-full rounded-full object-cover grayscale"
-										/>
-									{:else}
-										<span class="text-sm font-medium text-gray-400">
-											{member.user?.username?.charAt(0).toUpperCase() || 'U'}
-										</span>
-									{/if}
+				
+				{#each group.members as member}
+					<button class="member">
+						<div class="avatar">
+							{#if member.user.avatar}
+								<img src={member.user.avatar} alt="" />
+							{:else}
+								<div class="avatar-placeholder">
+									{(member.user.username)[0].toUpperCase()}
 								</div>
-							</div>
-							<div class="flex-1 min-w-0">
-								<span class="text-gray-500 group-hover:text-gray-400 truncate block">
-									{member.nickname || member.user?.username || 'Unknown'}
-								</span>
-							</div>
-						</button>
-					{/each}
-				</div>
-			{/if}
-
-			{#if $activeMembers.length === 0}
-				<p class="text-center text-gray-500 text-sm py-4">
-					No members to display
-				</p>
-			{/if}
-		</div>
-	</aside>
+							{/if}
+							<div 
+								class="status-indicator"
+								style="background: {getStatusColor(member.status)}"
+							></div>
+						</div>
+						
+						<div class="member-info">
+							<span 
+								class="name"
+								style="color: {group.role?.color || 'inherit'}"
+							>
+								{member.nickname || member.user.display_name || member.user.username}
+							</span>
+						</div>
+					</button>
+				{/each}
+			</div>
+		{/each}
+	</div>
 {/if}
+
+<style>
+	.member-list {
+		width: 240px;
+		background: var(--bg-secondary);
+		overflow-y: auto;
+		padding: 8px 8px 8px 0;
+	}
+	
+	.member-group {
+		margin-bottom: 8px;
+	}
+	
+	.group-header {
+		padding: 16px 8px 4px 16px;
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.02em;
+	}
+	
+	.member {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		padding: 6px 8px;
+		margin-left: 8px;
+		border-radius: 4px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+	}
+	
+	.member:hover {
+		background: var(--bg-modifier-hover);
+	}
+	
+	.avatar {
+		position: relative;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		overflow: visible;
+	}
+	
+	.avatar img {
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		object-fit: cover;
+	}
+	
+	.avatar-placeholder {
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		background: var(--brand-primary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: white;
+		font-weight: 600;
+		font-size: 14px;
+	}
+	
+	.status-indicator {
+		position: absolute;
+		bottom: -2px;
+		right: -2px;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 3px solid var(--bg-secondary);
+	}
+	
+	.member-info {
+		flex: 1;
+		min-width: 0;
+	}
+	
+	.name {
+		display: block;
+		font-size: 14px;
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+</style>
