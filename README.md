@@ -8,6 +8,13 @@ Hearth is an open-source, self-hosted real-time communication platform that give
 
 ## ✨ Features
 
+### 🔐 End-to-End Encrypted by Default
+- **All DMs encrypted** — Server never sees your messages
+- **Group chats encrypted** — Every group DM is E2EE
+- **Voice/video encrypted** — SRTP with E2EE key exchange
+- **Server channels** — E2EE by default (admin can disable per-channel)
+- **Zero knowledge** — We can't read your messages. Period.
+
 ### Core Communication
 - **Text Channels** — Real-time messaging with Markdown, embeds, and file sharing
 - **Voice Channels** — Crystal-clear voice chat with WebRTC
@@ -62,12 +69,15 @@ Hearth is an open-source, self-hosted real-time communication platform that give
 - **Slash Commands** — Registered bot commands with autocomplete
 - **REST + WebSocket API** — Full programmatic access
 
-### Self-Hosting
+### Privacy & Security
+- **E2EE by Default** — All DMs, group chats, and voice encrypted end-to-end
+- **Zero Knowledge** — Server never sees plaintext content
 - **Data Sovereignty** — All data stays on your infrastructure
 - **No Telemetry** — Zero tracking, zero analytics
+
+### Self-Hosting
 - **SQLite or Postgres** — Choose your database backend
 - **S3-Compatible Storage** — AWS, MinIO, B2, R2, Wasabi
-- **E2EE Ready** — Optional end-to-end encryption for DMs
 - **Easy Deployment** — Docker, Helm, systemd, or binary
 
 ---

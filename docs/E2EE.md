@@ -1,33 +1,60 @@
 # Hearth — End-to-End Encryption (E2EE)
 
-**Version:** 1.0  
+**Version:** 2.0  
 **Last Updated:** 2026-02-11  
-**Status:** Planned (v2.0)
+**Status:** Core Feature (v1.0)
 
 ---
 
-## Overview
+## Philosophy
 
-Hearth supports optional end-to-end encryption for private conversations. When enabled, messages are encrypted on the sender's device and can only be decrypted by intended recipients. The server never has access to plaintext content.
+**E2EE is not optional in Hearth. It's the default.**
+
+Every private conversation is encrypted end-to-end. The server **never** sees plaintext content. This isn't a premium feature or an afterthought — it's the foundation of how Hearth works.
+
+> *"If we can read your messages, so can hackers, governments, and bad actors. We chose not to have that capability."*
 
 ---
 
 ## Scope
 
-| Channel Type | E2EE Support | Notes |
-|--------------|--------------|-------|
-| Direct Messages | ✅ Optional | Per-conversation toggle |
-| Group DMs | ✅ Optional | All members must support E2EE |
-| Server Channels | ❌ No | Too many members, impractical key management |
+| Channel Type | E2EE | Notes |
+|--------------|------|-------|
+| Direct Messages | ✅ **Always On** | Cannot be disabled |
+| Group DMs | ✅ **Always On** | All members have keys |
+| Server Channels | ✅ **Default On** | Can be disabled per-channel by admin |
+| Voice/Video | ✅ **Always On** | SRTP with E2EE key exchange |
 | Voice (future) | ⚠️ Planned | SRTP with E2EE key exchange |
+
+---
+
+## Why E2EE by Default?
+
+### The Problem with "Optional"
+
+When E2EE is optional:
+- Most users don't enable it (friction)
+- Metadata reveals who uses encryption (targeting)
+- Server still stores plaintext for non-E2EE users
+- "Nothing to hide" mentality prevails
+- One compromised account exposes all non-E2EE history
+
+### The Hearth Approach
+
+When E2EE is default:
+- **Zero plaintext on server** — Nothing to steal
+- **Zero trust architecture** — Server is just a relay
+- **Uniform metadata** — Everyone looks the same
+- **No compliance headaches** — We can't produce what we don't have
+- **User trust** — Privacy isn't a feature, it's the product
 
 ---
 
 ## Protocol
 
-### Signal Protocol (Recommended)
+### Signal Protocol (MLS for Groups)
 
-Hearth implements the Signal Protocol for E2EE, the same protocol used by Signal, WhatsApp, and others. It provides:
+Hearth implements the Signal Protocol for 1:1 messaging and MLS (Messaging Layer Security) for groups. These are the same battle-tested protocols used by Signal, WhatsApp, and others. They provide:
 
 - **Perfect Forward Secrecy (PFS):** Compromising a key doesn't expose past messages
 - **Future Secrecy:** Recovering from compromise without manual intervention
@@ -347,18 +374,98 @@ DELETE /api/v1/devices/{device_id}
 
 ---
 
+## Server Channel E2EE
+
+### How It Works
+
+Server channels use MLS (Messaging Layer Security) for group encryption:
+
+1. **Channel Key Group** — Each E2EE channel has an MLS group
+2. **Member Join** — Adding a member adds them to the MLS group
+3. **Key Rotation** — Keys rotate on member changes
+4. **Forward Secrecy** — Past messages stay encrypted even if keys leak
+
+### Admin Controls
+
+Server owners can choose per-channel:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Channel Settings: #general                                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  🔒 End-to-End Encryption                                   │
+│                                                             │
+│  ● Encrypted (recommended)                                  │
+│    Messages are E2EE. Server cannot read content.          │
+│    ⚠️ Search only works on your device.                    │
+│    ⚠️ New members cannot see history before joining.       │
+│                                                             │
+│  ○ Unencrypted                                              │
+│    Messages stored on server. Full search available.        │
+│    Use for public announcements or searchable archives.     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Trade-offs (Encrypted Channels)
+
+| Feature | Encrypted | Unencrypted |
+|---------|-----------|-------------|
+| Server can read | ❌ No | ✅ Yes |
+| Server-side search | ❌ No | ✅ Yes |
+| History for new members | ❌ No | ✅ Yes |
+| Link previews | ✅ Client-side | ✅ Server-side |
+| File storage | ✅ Encrypted | ✅ Plaintext |
+| Compliance export | ❌ No | ✅ Yes |
+
+### Default Behavior
+
+| Channel Type | Default | Changeable |
+|--------------|---------|------------|
+| DMs | Encrypted | ❌ No |
+| Group DMs | Encrypted | ❌ No |
+| Text Channels | Encrypted | ✅ Yes (by admin) |
+| Voice Channels | Encrypted | ❌ No |
+| Announcement | Unencrypted | ✅ Yes |
+| Forum | Encrypted | ✅ Yes |
+
+---
+
+## Voice/Video E2EE
+
+All voice and video calls are end-to-end encrypted using:
+
+1. **SRTP** — Secure Real-time Transport Protocol
+2. **DTLS** — Key exchange for SRTP
+3. **Orotund frames** — Additional E2EE layer on top
+
+The SFU (Selective Forwarding Unit) only sees encrypted packets — it cannot decode audio/video content.
+
+```
+┌─────────┐         ┌─────────┐         ┌─────────┐
+│ Client A│◄───────►│   SFU   │◄───────►│Client B │
+│(encrypt)│ cipher  │(relay)  │ cipher  │(decrypt)│
+└─────────┘         └─────────┘         └─────────┘
+          ▲                              ▲
+          └──────── E2EE keys ───────────┘
+            (exchanged peer-to-peer)
+```
+
+---
+
 ## Implementation Status
 
-| Component | Status |
-|-----------|--------|
-| X3DH key agreement | 📋 Planned |
-| Double Ratchet | 📋 Planned |
-| Multi-device | 📋 Planned |
-| Sender Keys (groups) | 📋 Planned |
-| Key backup | 📋 Planned |
-| Device verification | 📋 Planned |
-| Sealed sender | 💭 Future |
-| E2EE voice | 💭 Future |
+| Component | Status | Priority |
+|-----------|--------|----------|
+| X3DH key agreement | 🔨 In Progress | P0 |
+| Double Ratchet | 🔨 In Progress | P0 |
+| Multi-device | 🔨 In Progress | P0 |
+| MLS (groups) | 🔨 In Progress | P0 |
+| Key backup | 📋 Planned | P1 |
+| Device verification | 📋 Planned | P1 |
+| Voice E2EE (SRTP) | 📋 Planned | P0 |
+| Sealed sender | 📋 Planned | P2 |
 
 ---
 
