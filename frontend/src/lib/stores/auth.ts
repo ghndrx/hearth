@@ -1,100 +1,172 @@
 import { writable, derived } from 'svelte/store';
-import type { User, LoginRequest, RegisterRequest, AuthResponse } from '$lib/types';
+import { browser } from '$app/environment';
+import { goto } from '$app/navigation';
+import { api, setAuthToken, clearAuthToken } from '$lib/api';
 
-const TOKEN_KEY = 'hearth_token';
+export interface User {
+	id: string;
+	username: string;
+	display_name: string | null;
+	email: string;
+	avatar: string | null;
+	banner: string | null;
+	bio: string | null;
+	pronouns: string | null;
+	bot: boolean;
+	created_at: string;
+}
+
+export interface AuthState {
+	user: User | null;
+	token: string | null;
+	loading: boolean;
+	initialized: boolean;
+}
+
+const initialState: AuthState = {
+	user: null,
+	token: null,
+	loading: true,
+	initialized: false
+};
 
 function createAuthStore() {
-	const { subscribe, set, update } = writable<{
-		user: User | null;
-		token: string | null;
-		loading: boolean;
-		error: string | null;
-	}>({
-		user: null,
-		token: null,
-		loading: true,
-		error: null
-	});
-
+	const { subscribe, set, update } = writable<AuthState>(initialState);
+	
 	return {
 		subscribe,
-
-		init: async () => {
-			const token = localStorage.getItem(TOKEN_KEY);
-			if (token) {
-				try {
-					const res = await fetch('/api/auth/me', {
-						headers: { Authorization: `Bearer ${token}` }
-					});
-					if (res.ok) {
-						const user = await res.json();
-						set({ user, token, loading: false, error: null });
-						return;
-					}
-				} catch {
-					localStorage.removeItem(TOKEN_KEY);
-				}
+		
+		async init() {
+			if (!browser) return;
+			
+			const token = localStorage.getItem('hearth_token');
+			if (!token) {
+				update(s => ({ ...s, loading: false, initialized: true }));
+				return;
 			}
-			set({ user: null, token: null, loading: false, error: null });
-		},
-
-		login: async (data: LoginRequest) => {
-			update((s) => ({ ...s, loading: true, error: null }));
+			
+			setAuthToken(token);
+			
 			try {
-				const res = await fetch('/api/auth/login', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(data)
-				});
-				if (!res.ok) {
-					const err = await res.json();
-					throw new Error(err.message || 'Login failed');
-				}
-				const { user, token }: AuthResponse = await res.json();
-				localStorage.setItem(TOKEN_KEY, token);
-				set({ user, token, loading: false, error: null });
-				return true;
-			} catch (e) {
-				const error = e instanceof Error ? e.message : 'Login failed';
-				update((s) => ({ ...s, loading: false, error }));
-				return false;
+				const user = await api.get('/users/@me');
+				update(s => ({
+					...s,
+					user,
+					token,
+					loading: false,
+					initialized: true
+				}));
+			} catch (error) {
+				// Token invalid
+				localStorage.removeItem('hearth_token');
+				localStorage.removeItem('hearth_refresh_token');
+				clearAuthToken();
+				update(s => ({ ...s, loading: false, initialized: true }));
 			}
 		},
-
-		register: async (data: RegisterRequest) => {
-			update((s) => ({ ...s, loading: true, error: null }));
+		
+		async login(email: string, password: string) {
+			update(s => ({ ...s, loading: true }));
+			
 			try {
-				const res = await fetch('/api/auth/register', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(data)
+				const { access_token, refresh_token } = await api.post('/auth/login', {
+					email,
+					password
 				});
-				if (!res.ok) {
-					const err = await res.json();
-					throw new Error(err.message || 'Registration failed');
-				}
-				const { user, token }: AuthResponse = await res.json();
-				localStorage.setItem(TOKEN_KEY, token);
-				set({ user, token, loading: false, error: null });
-				return true;
-			} catch (e) {
-				const error = e instanceof Error ? e.message : 'Registration failed';
-				update((s) => ({ ...s, loading: false, error }));
-				return false;
+				
+				localStorage.setItem('hearth_token', access_token);
+				localStorage.setItem('hearth_refresh_token', refresh_token);
+				setAuthToken(access_token);
+				
+				const user = await api.get('/users/@me');
+				
+				update(s => ({
+					...s,
+					user,
+					token: access_token,
+					loading: false
+				}));
+				
+				goto('/channels/@me');
+			} catch (error: any) {
+				update(s => ({ ...s, loading: false }));
+				throw error;
 			}
 		},
-
-		logout: () => {
-			localStorage.removeItem(TOKEN_KEY);
-			set({ user: null, token: null, loading: false, error: null });
+		
+		async register(email: string, username: string, password: string) {
+			update(s => ({ ...s, loading: true }));
+			
+			try {
+				const { access_token, refresh_token } = await api.post('/auth/register', {
+					email,
+					username,
+					password
+				});
+				
+				localStorage.setItem('hearth_token', access_token);
+				localStorage.setItem('hearth_refresh_token', refresh_token);
+				setAuthToken(access_token);
+				
+				const user = await api.get('/users/@me');
+				
+				update(s => ({
+					...s,
+					user,
+					token: access_token,
+					loading: false
+				}));
+				
+				goto('/channels/@me');
+			} catch (error: any) {
+				update(s => ({ ...s, loading: false }));
+				throw error;
+			}
 		},
-
-		clearError: () => {
-			update((s) => ({ ...s, error: null }));
+		
+		async logout() {
+			try {
+				await api.post('/auth/logout');
+			} catch (error) {
+				// Ignore logout errors
+			}
+			
+			localStorage.removeItem('hearth_token');
+			localStorage.removeItem('hearth_refresh_token');
+			clearAuthToken();
+			
+			set({ ...initialState, loading: false, initialized: true });
+			goto('/login');
+		},
+		
+		async refreshToken() {
+			const refreshToken = localStorage.getItem('hearth_refresh_token');
+			if (!refreshToken) {
+				throw new Error('No refresh token');
+			}
+			
+			const { access_token, refresh_token } = await api.post('/auth/refresh', {
+				refresh_token: refreshToken
+			});
+			
+			localStorage.setItem('hearth_token', access_token);
+			localStorage.setItem('hearth_refresh_token', refresh_token);
+			setAuthToken(access_token);
+			
+			update(s => ({ ...s, token: access_token }));
+		},
+		
+		async updateProfile(updates: Partial<User>) {
+			const user = await api.patch('/users/@me', updates);
+			update(s => ({ ...s, user }));
+			return user;
 		}
 	};
 }
 
 export const auth = createAuthStore();
-export const isAuthenticated = derived(auth, ($auth) => !!$auth.user);
-export const currentUser = derived(auth, ($auth) => $auth.user);
+
+// Derived stores for convenience
+export const user = derived(auth, $auth => $auth.user);
+export const isAuthenticated = derived(auth, $auth => !!$auth.user);
+export const isLoading = derived(auth, $auth => $auth.loading);
