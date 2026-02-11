@@ -104,14 +104,22 @@ Hearth is an open-source, self-hosted real-time communication platform that give
 curl -sSL https://get.hearth.chat | bash
 ```
 
-### With Custom Domain (Caddy + Auto-SSL)
-```bash
-curl -sSL https://get.hearth.chat | bash -s -- --domain hearth.gregh.dev
-```
+### With Custom Domain
 
-### With Custom Domain (Nginx + Let's Encrypt)
+Pick your reverse proxy:
+
 ```bash
+# Caddy (auto-SSL, simplest)
+curl -sSL https://get.hearth.chat | bash -s -- --domain hearth.gregh.dev
+
+# Nginx + Let's Encrypt
 curl -sSL https://get.hearth.chat/nginx | bash -s -- --domain hearth.gregh.dev --email you@example.com
+
+# Traefik + Let's Encrypt (with dashboard)
+curl -sSL https://get.hearth.chat/traefik | bash -s -- --domain hearth.gregh.dev --email you@example.com
+
+# Cloudflare Tunnel (zero exposed ports, DDoS protection)
+curl -sSL https://get.hearth.chat/cloudflare | bash -s -- --domain hearth.gregh.dev --tunnel-token <TOKEN>
 ```
 
 ### With Enterprise SSO (FusionAuth)
