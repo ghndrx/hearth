@@ -9,39 +9,66 @@ Hearth is an open-source, self-hosted real-time communication platform that give
 ## ✨ Features
 
 ### Core Communication
-- **Text Channels** — Real-time messaging with rich text, embeds, and file sharing
+- **Text Channels** — Real-time messaging with Markdown, embeds, and file sharing
 - **Voice Channels** — Crystal-clear voice chat with WebRTC
 - **Video Calls** — Face-to-face communication, screen sharing
-- **Direct Messages** — Private 1:1 and group conversations
+- **Direct Messages** — Private 1:1 and group conversations (up to 10)
 - **Threads** — Focused discussions without cluttering main channels
+- **Forum Channels** — Threaded discussions with tags
+
+### Rich Messaging
+- **Markdown** — Bold, italic, code blocks, spoilers, quotes, lists
+- **File Sharing** — Images, videos, documents up to 100MB
+- **Link Embeds** — Auto-preview for URLs, YouTube, Twitter
+- **Emoji & Reactions** — Unicode + custom server emoji
+- **GIF Picker** — Tenor/Giphy integration
+- **Typing Indicators** — See who's typing in real-time
+- **Message Search** — Full-text with filters (from:, in:, has:, before:)
 
 ### Server Management
-- **Servers (Instances)** — Create isolated communities with custom branding
+- **Servers** — Create isolated communities with custom branding
 - **Categories** — Organize channels into logical groups
-- **Roles & Permissions** — Granular access control with role hierarchy
-- **Invites** — Time-limited or permanent invite links
-- **Moderation Tools** — Ban, kick, mute, timeout, audit logs
+- **Roles & Permissions** — 30+ granular permissions with hierarchy
+- **Channel Overrides** — Per-channel permission tweaks
+- **Invites** — Time-limited, usage-limited, or permanent
+- **Server Folders** — Organize your server list
+
+### Voice & Video
+- **Voice Channels** — Low-latency WebRTC audio
+- **Video Chat** — Camera support with grid layout
+- **Screen Sharing** — Full screen or window
+- **Push-to-Talk** — Or voice activity detection
+- **Noise Suppression** — AI-based background noise removal
+- **Voice Moderation** — Server mute, deafen, move, disconnect
+
+### Moderation
+- **Kick/Ban/Timeout** — Full member management
+- **Audit Log** — Track all moderation actions
+- **Auto-Moderation** — Spam, link, and word filters
+- **Verification Levels** — Email, account age, phone
+- **Bulk Message Delete** — Purge up to 100 messages
 
 ### User Experience
-- **User Profiles** — Customizable profiles with status and bio
-- **Reactions** — Emoji reactions on messages
-- **Mentions** — @user, @role, @everyone, @here
-- **Search** — Full-text search across messages
-- **Notifications** — Configurable push, email, and in-app alerts
-- **Presence** — Online, idle, DND, invisible status
+- **User Profiles** — Avatar, banner, bio, status
+- **Presence** — Online, idle, DND, invisible + custom status
+- **Friends System** — Friend requests, mutual servers
+- **User Notes** — Private notes on any user
+- **Notifications** — Per-channel/server, desktop, mobile push
+- **Dark/Light Theme** — With accessibility options
 
 ### Extensibility
 - **Webhooks** — Inbound integrations for external services
 - **Bot API** — Build custom bots with full API access
-- **Plugins** — Extend functionality with community plugins
-- **Themes** — Customizable UI themes
+- **Slash Commands** — Registered bot commands with autocomplete
+- **REST + WebSocket API** — Full programmatic access
 
-### Self-Hosting Benefits
+### Self-Hosting
 - **Data Sovereignty** — All data stays on your infrastructure
-- **No Telemetry** — Zero tracking, zero analytics sent externally
-- **Federation Ready** — Future support for server-to-server communication
-- **Single Binary** — Easy deployment with Docker or standalone binary
+- **No Telemetry** — Zero tracking, zero analytics
 - **SQLite or Postgres** — Choose your database backend
+- **S3-Compatible Storage** — AWS, MinIO, B2, R2, Wasabi
+- **E2EE Ready** — Optional end-to-end encryption for DMs
+- **Easy Deployment** — Docker, Helm, systemd, or binary
 
 ---
 
@@ -91,15 +118,18 @@ Visit `http://localhost:8080` and create your first server.
 
 ## 📚 Documentation
 
-- [Product Requirements (PRD)](docs/PRD.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Data Model](docs/DATA_MODEL.md)
-- [API Reference](docs/API.md)
-- [Features Deep Dive](docs/FEATURES.md)
-- [Security Model](docs/SECURITY.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Self-Hosting Guide](docs/SELF_HOSTING.md)
-- [Contributing](docs/CONTRIBUTING.md)
+| Document | Description |
+|----------|-------------|
+| [Features](docs/FEATURES.md) | Complete feature specification (200+ features) |
+| [PRD](docs/PRD.md) | Product requirements and user stories |
+| [Architecture](docs/ARCHITECTURE.md) | System design, WebSocket, WebRTC |
+| [Data Model](docs/DATA_MODEL.md) | Database schema and relationships |
+| [Deployment](docs/DEPLOYMENT.md) | Docker, Helm, systemd installation |
+| [Self-Hosting](docs/SELF_HOSTING.md) | Configuration and maintenance |
+| [Security](docs/SECURITY.md) | Auth, encryption, attack mitigation |
+| [E2EE](docs/E2EE.md) | End-to-end encryption design |
+| [Roadmap](docs/ROADMAP.md) | Development phases and timeline |
+| [Contributing](docs/CONTRIBUTING.md) | How to contribute |
 
 ---
 
