@@ -104,14 +104,19 @@ Hearth is an open-source, self-hosted real-time communication platform that give
 curl -sSL https://get.hearth.chat | bash
 ```
 
+### With Custom Domain (Caddy + Auto-SSL)
+```bash
+curl -sSL https://get.hearth.chat | bash -s -- --domain hearth.gregh.dev
+```
+
+### With Custom Domain (Nginx + Let's Encrypt)
+```bash
+curl -sSL https://get.hearth.chat/nginx | bash -s -- --domain hearth.gregh.dev --email you@example.com
+```
+
 ### With Enterprise SSO (FusionAuth)
 ```bash
 curl -sSL https://get.hearth.chat | bash -s -- --with-fusionauth
-```
-
-### With Custom Domain + SSL
-```bash
-curl -sSL https://get.hearth.chat | bash -s -- --domain chat.example.com
 ```
 
 ### Manual Docker Compose

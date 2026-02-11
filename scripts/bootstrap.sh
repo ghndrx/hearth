@@ -8,6 +8,9 @@
 #   curl -sSL https://get.hearth.chat | bash -s -- --with-fusionauth
 #   curl -sSL https://get.hearth.chat | bash -s -- --domain chat.example.com
 #
+# For Nginx instead of Caddy:
+#   curl -sSL https://get.hearth.chat/nginx | bash -s -- --domain chat.example.com --email you@example.com
+#
 
 set -e
 
