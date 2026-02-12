@@ -2,6 +2,7 @@
 	import { channels, currentChannel } from '$lib/stores/channels';
 	import { currentServer } from '$lib/stores/servers';
 	import { createEventDispatcher } from 'svelte';
+	import UserPanel from './UserPanel.svelte';
 	
 	const dispatch = createEventDispatcher();
 	
@@ -16,6 +17,7 @@
 </script>
 
 <div class="channel-list">
+	<div class="channel-list-content">
 	{#if $currentServer}
 		<div class="server-header">
 			<h2>{$currentServer.name}</h2>
@@ -116,6 +118,9 @@
 			</button>
 		{/each}
 	{/if}
+	</div>
+	
+	<UserPanel />
 </div>
 
 <style>
@@ -124,6 +129,10 @@
 		flex-direction: column;
 		width: 240px;
 		background: var(--bg-secondary);
+	}
+	
+	.channel-list-content {
+		flex: 1;
 		overflow-y: auto;
 	}
 	

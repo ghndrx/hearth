@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { user, auth } from '$lib/stores/auth';
 	import { gatewayState } from '$lib/gateway';
+	import { settings } from '$lib/stores/settings';
 	
-	let showSettings = false;
 	let isMuted = false;
 	let isDeafened = false;
 	
@@ -16,7 +16,7 @@
 	}
 	
 	function openSettings() {
-		showSettings = true;
+		settings.open('account');
 	}
 	
 	function getConnectionStatus(state: string) {
