@@ -21,7 +21,7 @@ func NewHandlers(
 	userService *services.UserService,
 	serverService *services.ServerService,
 	messageService *services.MessageService,
-	hub *websocket.Hub,
+	gateway *websocket.Gateway,
 ) *Handlers {
 	return &Handlers{
 		Auth:     NewAuthHandler(userService),
@@ -30,6 +30,6 @@ func NewHandlers(
 		Channels: NewChannelHandler(messageService),
 		Invites:  NewInviteHandler(serverService),
 		Voice:    NewVoiceHandler(),
-		Gateway:  NewGatewayHandler(hub, userService),
+		Gateway:  NewGatewayHandler(gateway),
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -18,8 +19,10 @@ import (
 	"hearth/internal/api"
 	"hearth/internal/api/handlers"
 	"hearth/internal/api/middleware"
+	"hearth/internal/auth"
 	"hearth/internal/config"
 	"hearth/internal/database/postgres"
+	"hearth/internal/events"
 	"hearth/internal/services"
 	"hearth/internal/websocket"
 )
@@ -56,12 +59,48 @@ func main() {
 	// Initialize repositories
 	repos := postgres.NewRepositories(db)
 
-	// Initialize services
-	quotaService := services.NewQuotaService(cfg.Quotas, nil, nil, nil)
+	// Initialize event bus
+	eventBus := events.NewBus()
+	serviceBus := events.NewServiceBusAdapter(eventBus)
+
+	// Initialize auth services
+	jwtService := auth.NewJWTService(
+		cfg.SecretKey,
+		15*time.Minute,  // Access token expiry
+		7*24*time.Hour,  // Refresh token expiry
+	)
 
 	// Initialize WebSocket hub
 	wsHub := websocket.NewHub()
 	go wsHub.Run(context.Background())
+
+	// Initialize WebSocket gateway
+	wsGateway := websocket.NewGateway(wsHub, jwtService, nil)
+
+	// Initialize event bridge (connects domain events to WebSocket)
+	_ = websocket.NewEventBridge(wsHub, eventBus)
+
+	// Initialize services
+	quotaService := services.NewQuotaService(cfg.Quotas, nil, nil, nil)
+	userService := services.NewUserService(repos.Users, nil, serviceBus)
+	serverService := services.NewServerService(
+		repos.Servers,
+		repos.Channels,
+		nil, // role repo - TODO: implement RoleRepository interface methods
+		quotaService,
+		nil, // cache
+		serviceBus,
+	)
+	messageService := services.NewMessageService(
+		repos.Messages,
+		repos.Channels,
+		repos.Servers,
+		quotaService,
+		nil, // rate limiter
+		nil, // e2ee service
+		nil, // cache
+		serviceBus,
+	)
 
 	// Initialize Fiber app with security settings
 	app := fiber.New(fiber.Config{
@@ -122,7 +161,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(nil, nil, nil, wsHub)
+	h := handlers.NewHandlers(userService, serverService, messageService, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
@@ -153,6 +192,10 @@ func main() {
 	log.Println("Shutting down gracefully...")
 	app.Shutdown()
 
+	// Keep references to avoid unused variable errors during development
 	_ = repos
 	_ = quotaService
+	_ = userService
+	_ = serverService
+	_ = messageService
 }

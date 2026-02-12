@@ -113,6 +113,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	voice := api.Group("/voice")
 	voice.Get("/regions", h.Voice.GetRegions)
 	
+	// Gateway stats (admin)
+	api.Get("/gateway/stats", h.Gateway.GetStats)
+	
 	// WebSocket gateway
 	app.Get("/gateway", m.WebSocketUpgrade, websocket.New(h.Gateway.Connect))
 	

@@ -67,44 +67,21 @@ func (h *VoiceHandler) GetRegions(c *fiber.Ctx) error {
 
 // GatewayHandler handles WebSocket gateway connections
 type GatewayHandler struct {
-	hub         *ws.Hub
-	userService *services.UserService
+	gateway *ws.Gateway
 }
 
-func NewGatewayHandler(hub *ws.Hub, userService *services.UserService) *GatewayHandler {
+func NewGatewayHandler(gateway *ws.Gateway) *GatewayHandler {
 	return &GatewayHandler{
-		hub:         hub,
-		userService: userService,
+		gateway: gateway,
 	}
 }
 
-// Connect handles WebSocket connection
+// Connect handles WebSocket connection upgrade and delegates to Gateway
 func (h *GatewayHandler) Connect(conn *websocket.Conn) {
-	// Get user ID from query or auth
-	userIDStr := conn.Query("user_id") // TODO: Get from JWT
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		conn.Close()
-		return
-	}
-
-	// Get session info from query params
-	sessionID := conn.Query("session_id")
-	if sessionID == "" {
-		sessionID = uuid.New().String()
-	}
-	clientType := conn.Query("client_type")
-	if clientType == "" {
-		clientType = "web"
-	}
-
-	// NOTE: This would require converting the fiber websocket to gorilla websocket
-	// For now, this handler is a placeholder
-	// In production, use a separate gorilla websocket upgrader
-	_ = userID
-	_ = sessionID
-	_ = clientType
-	conn.Close()
+	h.gateway.HandleConnection(conn)
 }
 
-// Note: WebSocket hub registration is handled internally by the Hub
+// GetStats returns gateway statistics
+func (h *GatewayHandler) GetStats(c *fiber.Ctx) error {
+	return c.JSON(h.gateway.GetStats())
+}
