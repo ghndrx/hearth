@@ -522,3 +522,100 @@ type MemberKickedEvent struct {
 	KickedBy uuid.UUID
 	Reason   string
 }
+
+// MemberBannedEvent and MemberJoinedEvent are defined in invite_service.go
+
+// GetUserServers retrieves all servers a user is a member of
+func (s *ServerService) GetUserServers(ctx context.Context, userID uuid.UUID) ([]*models.Server, error) {
+	return s.repo.GetUserServers(ctx, userID)
+}
+
+// GetMembers retrieves members of a server with pagination
+func (s *ServerService) GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error) {
+	return s.repo.GetMembers(ctx, serverID, limit, offset)
+}
+
+// GetMember retrieves a specific member
+func (s *ServerService) GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error) {
+	member, err := s.repo.GetMember(ctx, serverID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if member == nil {
+		return nil, ErrNotServerMember
+	}
+	return member, nil
+}
+
+// UpdateMember updates a member's nickname/roles
+func (s *ServerService) UpdateMember(ctx context.Context, serverID, requesterID, targetID uuid.UUID, nickname *string, roles []uuid.UUID) (*models.Member, error) {
+	member, err := s.repo.GetMember(ctx, serverID, targetID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+	
+	// TODO: Check permissions (user editing self vs. admin editing others)
+	
+	if nickname != nil {
+		member.Nickname = nickname
+	}
+	if roles != nil {
+		member.Roles = roles
+	}
+	
+	if err := s.repo.UpdateMember(ctx, member); err != nil {
+		return nil, err
+	}
+	
+	return member, nil
+}
+
+// GetBans retrieves all bans for a server
+func (s *ServerService) GetBans(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error) {
+	return s.repo.GetBans(ctx, serverID)
+}
+
+// UnbanMember removes a ban
+func (s *ServerService) UnbanMember(ctx context.Context, serverID, requesterID, targetID uuid.UUID) error {
+	// TODO: Check permissions
+	return s.repo.RemoveBan(ctx, serverID, targetID)
+}
+
+// GetInvites retrieves all invites for a server
+func (s *ServerService) GetInvites(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error) {
+	return s.repo.GetInvites(ctx, serverID)
+}
+
+// GetInvite retrieves an invite by code
+func (s *ServerService) GetInvite(ctx context.Context, code string) (*models.Invite, error) {
+	invite, err := s.repo.GetInvite(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if invite == nil {
+		return nil, ErrInviteNotFound
+	}
+	return invite, nil
+}
+
+// DeleteInvite deletes an invite
+func (s *ServerService) DeleteInvite(ctx context.Context, code string, requesterID uuid.UUID) error {
+	invite, err := s.repo.GetInvite(ctx, code)
+	if err != nil || invite == nil {
+		return ErrInviteNotFound
+	}
+	
+	// TODO: Check permissions (creator or admin)
+	
+	return s.repo.DeleteInvite(ctx, code)
+}
+
+// GetChannels retrieves all channels for a server
+func (s *ServerService) GetChannels(ctx context.Context, serverID uuid.UUID) ([]*models.Channel, error) {
+	return s.channelRepo.GetByServerID(ctx, serverID)
+}
+
+// GetRoles retrieves all roles for a server
+func (s *ServerService) GetRoles(ctx context.Context, serverID uuid.UUID) ([]*models.Role, error) {
+	return s.roleRepo.GetByServerID(ctx, serverID)
+}

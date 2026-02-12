@@ -311,6 +311,7 @@ type UserResponse struct {
 	ID            uuid.UUID `json:"id"`
 	Username      string    `json:"username"`
 	Discriminator string    `json:"discriminator"`
+	Email         *string   `json:"email,omitempty"` // Only set for self-user responses
 	AvatarURL     *string   `json:"avatar_url,omitempty"`
 	BannerURL     *string   `json:"banner_url,omitempty"`
 	Bio           *string   `json:"bio,omitempty"`

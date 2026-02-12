@@ -98,6 +98,12 @@ func main() {
 		nil, // cache
 		serviceBus,
 	)
+	channelService := services.NewChannelService(
+		repos.Channels,
+		repos.Servers,
+		nil, // cache
+		serviceBus,
+	)
 	messageService := services.NewMessageService(
 		repos.Messages,
 		repos.Channels,
@@ -168,7 +174,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, messageService, wsGateway)
+	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
@@ -205,5 +211,6 @@ func main() {
 	_ = userService
 	_ = authService
 	_ = serverService
+	_ = channelService
 	_ = messageService
 }
