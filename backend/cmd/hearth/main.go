@@ -83,6 +83,13 @@ func main() {
 	// Initialize services
 	quotaService := services.NewQuotaService(cfg.Quotas, nil, nil, nil)
 	userService := services.NewUserService(repos.Users, nil, serviceBus)
+	authService := services.NewAuthService(
+		repos.Users,
+		jwtService,
+		nil, // cache - TODO: add Redis cache
+		true, // registration enabled
+		false, // invite only
+	)
 	serverService := services.NewServerService(
 		repos.Servers,
 		repos.Channels,
@@ -161,7 +168,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(userService, serverService, messageService, wsGateway)
+	h := handlers.NewHandlers(authService, userService, serverService, messageService, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
@@ -196,6 +203,7 @@ func main() {
 	_ = repos
 	_ = quotaService
 	_ = userService
+	_ = authService
 	_ = serverService
 	_ = messageService
 }

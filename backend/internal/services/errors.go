@@ -44,4 +44,7 @@ var (
 	ErrUserNotFound  = errors.New("user not found")
 	ErrUsernameTaken = errors.New("username already taken")
 	ErrSelfAction    = errors.New("cannot perform this action on yourself")
+
+	// Cache errors
+	ErrCacheNotFound = errors.New("key not found in cache")
 )
