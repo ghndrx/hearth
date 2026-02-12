@@ -1,5 +1,6 @@
-export { auth, isAuthenticated, currentUser } from './auth';
+export { auth, isAuthenticated, user, user as currentUser } from './auth';
 export { websocket } from './websocket';
-export { servers, activeServer, activeChannels, activeChannel, activeMembers } from './servers';
+export { servers, currentServer, currentServer as activeServer } from './servers';
+export { channels, currentChannel, currentChannel as activeChannel, loadServerChannels } from './channels';
 export { messages } from './messages';
 export { settings, isSettingsOpen, appSettings, currentTheme } from './settings';

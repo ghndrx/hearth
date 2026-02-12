@@ -1,24 +1,25 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { messages, activeChannel, websocket } from '$stores';
-	import type { Message } from '$lib/types';
+	import { loadMessages, addMessage, sendMessage as sendMessageFn } from '$lib/stores/messages';
+	import type { Message } from '$lib/stores/messages';
 
 	let messageInput = '';
 	let messagesContainer: HTMLDivElement;
 	let unsubscribeWS: (() => void) | null = null;
 
 	$: channelMessages = $activeChannel
-		? $messages.messages.get($activeChannel.id) || []
+		? $messages[$activeChannel.id] || []
 		: [];
 
 	$: if ($activeChannel) {
-		messages.loadMessages($activeChannel.id);
+		loadMessages($activeChannel.id);
 	}
 
 	onMount(() => {
 		unsubscribeWS = websocket.on('MESSAGE_CREATE', (event) => {
 			const message = event.data as Message;
-			messages.addMessage(message);
+			addMessage(message);
 			scrollToBottom();
 		});
 	});
@@ -35,18 +36,18 @@
 		}, 0);
 	}
 
-	async function sendMessage() {
+	async function handleSendMessage() {
 		if (!messageInput.trim() || !$activeChannel) return;
 
 		const content = messageInput.trim();
 		messageInput = '';
-		await messages.sendMessage($activeChannel.id, content);
+		await sendMessageFn($activeChannel.id, content);
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			sendMessage();
+			handleSendMessage();
 		}
 	}
 
@@ -71,8 +72,8 @@
 
 	function shouldShowDateDivider(messages: Message[], index: number): boolean {
 		if (index === 0) return true;
-		const current = new Date(messages[index].createdAt).toDateString();
-		const previous = new Date(messages[index - 1].createdAt).toDateString();
+		const current = new Date(messages[index].created_at).toDateString();
+		const previous = new Date(messages[index - 1].created_at).toDateString();
 		return current !== previous;
 	}
 
@@ -82,8 +83,8 @@
 		const previous = messages[index - 1];
 
 		// Same author and within 7 minutes
-		if (current.authorId !== previous.authorId) return false;
-		const timeDiff = new Date(current.createdAt).getTime() - new Date(previous.createdAt).getTime();
+		if (current.author_id !== previous.author_id) return false;
+		const timeDiff = new Date(current.created_at).getTime() - new Date(previous.created_at).getTime();
 		return timeDiff < 7 * 60 * 1000;
 	}
 </script>
@@ -110,7 +111,7 @@
 					<div class="flex items-center my-4">
 						<div class="flex-1 h-px bg-dark-500"></div>
 						<span class="px-4 text-xs text-gray-500 font-medium">
-							{formatDate(message.createdAt)}
+							{formatDate(message.created_at)}
 						</span>
 						<div class="flex-1 h-px bg-dark-500"></div>
 					</div>
@@ -133,7 +134,7 @@
 										{message.author?.username || 'Unknown'}
 									</span>
 									<span class="text-xs text-gray-500">
-										{formatTime(message.createdAt)}
+										{formatTime(message.created_at)}
 									</span>
 								</div>
 								<p class="text-gray-200 break-words">{message.content}</p>
@@ -142,7 +143,7 @@
 					{:else}
 						<div class="flex items-start gap-4">
 							<span class="w-10 text-center text-xs text-gray-600 opacity-0 group-hover:opacity-100 pt-1">
-								{formatTime(message.createdAt)}
+								{formatTime(message.created_at)}
 							</span>
 							<p class="text-gray-200 break-words">{message.content}</p>
 						</div>

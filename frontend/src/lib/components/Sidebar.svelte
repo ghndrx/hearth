@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { servers, activeServer } from '$stores';
-	import type { Server } from '$lib/types';
+	import { servers, currentServer, loadServerChannels } from '$stores';
+	import type { Server } from '$lib/stores/servers';
 
 	function getInitials(name: string): string {
 		return name
@@ -12,9 +12,8 @@
 	}
 
 	function selectServer(server: Server) {
-		servers.setActiveServer(server.id);
-		servers.loadChannels(server.id);
-		servers.loadMembers(server.id);
+		currentServer.set(server);
+		loadServerChannels(server.id);
 	}
 </script>
 
@@ -23,13 +22,13 @@
 	<button
 		class="w-12 h-12 rounded-[24px] bg-dark-700 hover:bg-hearth-500 hover:rounded-[16px]
 		       flex items-center justify-center transition-all duration-200 group"
-		on:click={() => servers.setActiveServer(null)}
-		class:bg-hearth-500={!$activeServer}
-		class:rounded-[16px]={!$activeServer}
+		on:click={() => currentServer.set(null)}
+		class:bg-hearth-500={!$currentServer}
+		class:rounded-[16px]={!$currentServer}
 	>
 		<svg
 			class="w-7 h-7 text-gray-400 group-hover:text-white transition-colors"
-			class:text-white={!$activeServer}
+			class:text-white={!$currentServer}
 			fill="currentColor"
 			viewBox="0 0 24 24"
 		>
@@ -40,17 +39,17 @@
 	<div class="w-8 h-0.5 bg-dark-700 rounded-full my-1"></div>
 
 	<!-- Server list -->
-	{#each $servers.servers as server (server.id)}
+	{#each $servers as server (server.id)}
 		<button
 			class="w-12 h-12 rounded-[24px] bg-dark-700 hover:bg-hearth-500 hover:rounded-[16px]
 			       flex items-center justify-center transition-all duration-200 relative group"
-			class:bg-hearth-500={$activeServer?.id === server.id}
-			class:rounded-[16px]={$activeServer?.id === server.id}
+			class:bg-hearth-500={$currentServer?.id === server.id}
+			class:rounded-[16px]={$currentServer?.id === server.id}
 			on:click={() => selectServer(server)}
 		>
-			{#if server.iconUrl}
+			{#if server.icon}
 				<img
-					src={server.iconUrl}
+					src={server.icon}
 					alt={server.name}
 					class="w-full h-full rounded-inherit object-cover"
 				/>
@@ -61,7 +60,7 @@
 			{/if}
 
 			<!-- Active indicator -->
-			{#if $activeServer?.id === server.id}
+			{#if $currentServer?.id === server.id}
 				<div class="absolute left-0 w-1 h-10 bg-white rounded-r-full -translate-x-3"></div>
 			{/if}
 

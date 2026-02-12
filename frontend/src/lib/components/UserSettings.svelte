@@ -149,7 +149,7 @@
 										<Avatar 
 											src={$user?.avatar} 
 											alt={$user?.username || ''} 
-											size={80}
+											size="lg"
 										/>
 									</div>
 									<div class="account-details">
@@ -230,7 +230,7 @@
 												<Avatar 
 													src={$user?.avatar} 
 													alt={$user?.username || ''} 
-													size={92}
+													size="xl"
 												/>
 											</div>
 											<div class="preview-info">

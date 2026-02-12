@@ -14,7 +14,8 @@ const config = {
 			strict: true
 		}),
 		alias: {
-			$lib: 'src/lib'
+			$lib: 'src/lib',
+			$stores: 'src/lib/stores'
 		},
 		csp: {
 			mode: 'auto',

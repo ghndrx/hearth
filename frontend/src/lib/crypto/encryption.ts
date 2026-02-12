@@ -45,7 +45,7 @@ export async function encryptMessage(
   return {
     version: VERSION,
     ciphertext: arrayBufferToBase64(ciphertext),
-    iv: arrayBufferToBase64(iv),
+    iv: arrayBufferToBase64(iv.buffer as ArrayBuffer),
     tag: '', // Tag is included in ciphertext with AES-GCM
     senderKeyId,
     recipientKeyId,
@@ -116,7 +116,7 @@ export async function decryptFile(
   const decrypted = await crypto.subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv,
+      iv: iv as unknown as BufferSource,
       tagLength: 128,
     },
     key,

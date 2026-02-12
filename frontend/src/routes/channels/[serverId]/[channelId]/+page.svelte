@@ -10,6 +10,12 @@
 	$: serverId = $page.params.serverId;
 	$: channelId = $page.params.channelId;
 	
+	$: pageTitle = $currentChannel
+		? `${$currentChannel.type === 1 
+			? $currentChannel.recipients?.[0]?.username 
+			: '#' + $currentChannel.name} | ${$currentServer?.name || 'Hearth'}`
+		: $currentServer?.name || 'Hearth';
+	
 	onMount(() => {
 		if (serverId && serverId !== '@me') {
 			loadServerChannels(serverId);
@@ -30,15 +36,7 @@
 </script>
 
 <svelte:head>
-	<title>
-		{#if $currentChannel}
-			{$currentChannel.type === 1 
-				? $currentChannel.recipients?.[0]?.username 
-				: '#' + $currentChannel.name}
-			{' | '}
-		{/if}
-		{$currentServer?.name || 'Hearth'}
-	</title>
+	<title>{pageTitle}</title>
 </svelte:head>
 
 <div class="channel-header">
