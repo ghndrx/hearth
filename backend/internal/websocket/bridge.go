@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"log"
 
 	"github.com/google/uuid"
 
@@ -23,6 +24,45 @@ func NewEventBridge(hub *Hub, bus *events.Bus) *EventBridge {
 	}
 	bridge.registerHandlers()
 	return bridge
+}
+
+// sendToChannel marshals data and sends to a channel, logging errors
+func (b *EventBridge) sendToChannel(channelID uuid.UUID, eventType string, data interface{}) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("[EventBridge] failed to marshal %s event: %v", eventType, err)
+		return
+	}
+	b.hub.SendToChannel(channelID, &Event{
+		Type: eventType,
+		Data: json.RawMessage(jsonData),
+	})
+}
+
+// sendToServer marshals data and sends to a server, logging errors
+func (b *EventBridge) sendToServer(serverID uuid.UUID, eventType string, data interface{}) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("[EventBridge] failed to marshal %s event: %v", eventType, err)
+		return
+	}
+	b.hub.SendToServer(serverID, &Event{
+		Type: eventType,
+		Data: json.RawMessage(jsonData),
+	})
+}
+
+// sendToUser marshals data and sends to a user, logging errors
+func (b *EventBridge) sendToUser(userID uuid.UUID, eventType string, data interface{}) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("[EventBridge] failed to marshal %s event: %v", eventType, err)
+		return
+	}
+	b.hub.SendToUser(userID, &Event{
+		Type: eventType,
+		Data: json.RawMessage(jsonData),
+	})
 }
 
 // registerHandlers sets up event handlers for all domain events
@@ -75,14 +115,7 @@ func (b *EventBridge) onMessageCreated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := b.messageToWS(data.Message)
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeMessageCreate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeMessageCreate, b.messageToWS(data.Message))
 }
 
 func (b *EventBridge) onMessageUpdated(event events.Event) {
@@ -90,14 +123,7 @@ func (b *EventBridge) onMessageUpdated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := b.messageToWS(data.Message)
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeMessageUpdate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeMessageUpdate, b.messageToWS(data.Message))
 }
 
 func (b *EventBridge) onMessageDeleted(event events.Event) {
@@ -105,12 +131,7 @@ func (b *EventBridge) onMessageDeleted(event events.Event) {
 	if !ok {
 		return
 	}
-
-	jsonData, _ := json.Marshal(data)
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeMessageDelete,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeMessageDelete, data)
 }
 
 type MessageDeleteData struct {
@@ -124,12 +145,7 @@ func (b *EventBridge) onMessagePinned(event events.Event) {
 	if !ok {
 		return
 	}
-
-	jsonData, _ := json.Marshal(data)
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeChannelPinsUpdate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeChannelPinsUpdate, data)
 }
 
 type ChannelPinsData struct {
@@ -153,12 +169,7 @@ func (b *EventBridge) onReactionAdded(event events.Event) {
 	if !ok {
 		return
 	}
-
-	jsonData, _ := json.Marshal(data)
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeReactionAdd,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeReactionAdd, data)
 }
 
 func (b *EventBridge) onReactionRemoved(event events.Event) {
@@ -166,12 +177,7 @@ func (b *EventBridge) onReactionRemoved(event events.Event) {
 	if !ok {
 		return
 	}
-
-	jsonData, _ := json.Marshal(data)
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeReactionRemove,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeReactionRemove, data)
 }
 
 // Channel event handlers
@@ -186,14 +192,7 @@ func (b *EventBridge) onChannelCreated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := b.channelToWS(data.Channel)
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeChannelCreate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToServer(data.ServerID, EventTypeChannelCreate, b.channelToWS(data.Channel))
 }
 
 func (b *EventBridge) onChannelUpdated(event events.Event) {
@@ -201,14 +200,7 @@ func (b *EventBridge) onChannelUpdated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := b.channelToWS(data.Channel)
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeChannelUpdate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToServer(data.ServerID, EventTypeChannelUpdate, b.channelToWS(data.Channel))
 }
 
 func (b *EventBridge) onChannelDeleted(event events.Event) {
@@ -216,16 +208,9 @@ func (b *EventBridge) onChannelDeleted(event events.Event) {
 	if !ok {
 		return
 	}
-
-	deleteData := map[string]interface{}{
+	b.sendToServer(data.ServerID, EventTypeChannelDelete, map[string]interface{}{
 		"id":       data.Channel.ID.String(),
 		"guild_id": data.ServerID.String(),
-	}
-	jsonData, _ := json.Marshal(deleteData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeChannelDelete,
-		Data: json.RawMessage(jsonData),
 	})
 }
 
@@ -240,15 +225,8 @@ func (b *EventBridge) onServerCreated(event events.Event) {
 	if !ok {
 		return
 	}
-
 	// Server create is sent to the user who created it
-	wsData := b.serverToWS(data.Server)
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToUser(data.Server.OwnerID, &Event{
-		Type: EventTypeServerCreate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToUser(data.Server.OwnerID, EventTypeServerCreate, b.serverToWS(data.Server))
 }
 
 func (b *EventBridge) onServerUpdated(event events.Event) {
@@ -256,14 +234,7 @@ func (b *EventBridge) onServerUpdated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := b.serverToWS(data.Server)
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.Server.ID, &Event{
-		Type: EventTypeServerUpdate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToServer(data.Server.ID, EventTypeServerUpdate, b.serverToWS(data.Server))
 }
 
 func (b *EventBridge) onServerDeleted(event events.Event) {
@@ -271,15 +242,8 @@ func (b *EventBridge) onServerDeleted(event events.Event) {
 	if !ok {
 		return
 	}
-
-	deleteData := map[string]interface{}{
+	b.sendToServer(data.Server.ID, EventTypeServerDelete, map[string]interface{}{
 		"id": data.Server.ID.String(),
-	}
-	jsonData, _ := json.Marshal(deleteData)
-
-	b.hub.SendToServer(data.Server.ID, &Event{
-		Type: EventTypeServerDelete,
-		Data: json.RawMessage(jsonData),
 	})
 }
 
@@ -298,25 +262,7 @@ func (b *EventBridge) onMemberJoined(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := map[string]interface{}{
-		"guild_id":  data.ServerID.String(),
-		"joined_at": data.Member.JoinedAt.Format("2006-01-02T15:04:05.000Z"),
-		"roles":     []string{},
-	}
-	
-	if data.User != nil {
-		wsData["user"] = b.userToWS(data.User)
-	} else {
-		wsData["user"] = map[string]interface{}{"id": data.UserID.String()}
-	}
-	
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeMemberJoin,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToServer(data.ServerID, EventTypeMemberJoin, b.buildMemberData(data, true))
 }
 
 func (b *EventBridge) onMemberLeft(event events.Event) {
@@ -324,23 +270,7 @@ func (b *EventBridge) onMemberLeft(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := map[string]interface{}{
-		"guild_id": data.ServerID.String(),
-	}
-	
-	if data.User != nil {
-		wsData["user"] = b.userToWS(data.User)
-	} else {
-		wsData["user"] = map[string]interface{}{"id": data.UserID.String()}
-	}
-	
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeMemberLeave,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToServer(data.ServerID, EventTypeMemberLeave, b.buildMemberData(data, false))
 }
 
 func (b *EventBridge) onMemberUpdated(event events.Event) {
@@ -348,28 +278,12 @@ func (b *EventBridge) onMemberUpdated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := map[string]interface{}{
-		"guild_id": data.ServerID.String(),
-		"roles":    []string{}, // Would include actual roles
-	}
-	
-	if data.User != nil {
-		wsData["user"] = b.userToWS(data.User)
-	} else {
-		wsData["user"] = map[string]interface{}{"id": data.UserID.String()}
-	}
-	
+	wsData := b.buildMemberData(data, false)
+	wsData["roles"] = []string{} // Would include actual roles
 	if data.Member != nil && data.Member.Nickname != nil {
 		wsData["nick"] = *data.Member.Nickname
 	}
-	
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeMemberUpdate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToServer(data.ServerID, EventTypeMemberUpdate, wsData)
 }
 
 func (b *EventBridge) onMemberKicked(event events.Event) {
@@ -382,23 +296,24 @@ func (b *EventBridge) onMemberBanned(event events.Event) {
 	if !ok {
 		return
 	}
+	b.sendToServer(data.ServerID, EventTypeBanAdd, b.buildMemberData(data, false))
+}
 
+// buildMemberData creates the common member event payload
+func (b *EventBridge) buildMemberData(data *MemberEventData, includeJoinedAt bool) map[string]interface{} {
 	wsData := map[string]interface{}{
 		"guild_id": data.ServerID.String(),
 	}
-	
 	if data.User != nil {
 		wsData["user"] = b.userToWS(data.User)
 	} else {
 		wsData["user"] = map[string]interface{}{"id": data.UserID.String()}
 	}
-	
-	jsonData, _ := json.Marshal(wsData)
-
-	b.hub.SendToServer(data.ServerID, &Event{
-		Type: EventTypeBanAdd,
-		Data: json.RawMessage(jsonData),
-	})
+	if includeJoinedAt && data.Member != nil {
+		wsData["joined_at"] = data.Member.JoinedAt.Format("2006-01-02T15:04:05.000Z")
+		wsData["roles"] = []string{}
+	}
+	return wsData
 }
 
 // User event handlers
@@ -412,15 +327,8 @@ func (b *EventBridge) onUserUpdated(event events.Event) {
 	if !ok {
 		return
 	}
-
-	wsData := b.userToWS(data.User)
-	jsonData, _ := json.Marshal(wsData)
-
 	// Send to the user themselves
-	b.hub.SendToUser(data.User.ID, &Event{
-		Type: EventTypeUserUpdate,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToUser(data.User.ID, EventTypeUserUpdate, b.userToWS(data.User))
 }
 
 type PresenceEventData struct {
@@ -444,14 +352,10 @@ func (b *EventBridge) onPresenceUpdate(event events.Event) {
 		"activities":    data.Activities,
 		"client_status": map[string]string{},
 	}
-	jsonData, _ := json.Marshal(wsData)
 
 	// Send to all servers the user is in
 	for _, serverID := range data.ServerIDs {
-		b.hub.SendToServer(serverID, &Event{
-			Type: EventTypePresenceUpdate,
-			Data: json.RawMessage(jsonData),
-		})
+		b.sendToServer(serverID, EventTypePresenceUpdate, wsData)
 	}
 }
 
@@ -477,12 +381,7 @@ func (b *EventBridge) onTypingStarted(event events.Event) {
 	if data.ServerID != nil {
 		wsData.GuildID = data.ServerID.String()
 	}
-
-	jsonData, _ := json.Marshal(wsData)
-	b.hub.SendToChannel(data.ChannelID, &Event{
-		Type: EventTypeTypingStart,
-		Data: json.RawMessage(jsonData),
-	})
+	b.sendToChannel(data.ChannelID, EventTypeTypingStart, wsData)
 }
 
 // Conversion helpers
