@@ -4,10 +4,11 @@
 	import { isAuthenticated } from '$lib/stores/auth';
 	import { loadServers } from '$lib/stores/servers';
 	import { loadDMChannels } from '$lib/stores/channels';
-	import { isSettingsOpen, settings } from '$lib/stores/settings';
+	import { isSettingsOpen, isServerSettingsOpen, settings } from '$lib/stores/settings';
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import UserSettings from '$lib/components/UserSettings.svelte';
+	import ServerSettings from '$lib/components/ServerSettings.svelte';
 	
 	onMount(() => {
 		if (!$isAuthenticated) {
@@ -35,6 +36,11 @@
 <UserSettings 
 	open={$isSettingsOpen} 
 	on:close={() => settings.close()} 
+/>
+
+<ServerSettings 
+	open={$isServerSettingsOpen} 
+	on:close={() => settings.closeServerSettings()} 
 />
 
 <style>

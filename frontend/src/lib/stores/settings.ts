@@ -18,6 +18,7 @@ export interface AppSettings {
 
 export interface SettingsState {
 	isOpen: boolean;
+	isServerSettingsOpen: boolean;
 	activeSection: string;
 	app: AppSettings;
 }
@@ -60,6 +61,7 @@ function applyTheme(theme: Theme) {
 
 const initialState: SettingsState = {
 	isOpen: false,
+	isServerSettingsOpen: false,
 	activeSection: 'account',
 	app: loadSettings()
 };
@@ -81,6 +83,14 @@ function createSettingsStore() {
 		
 		close() {
 			update(s => ({ ...s, isOpen: false }));
+		},
+		
+		openServerSettings() {
+			update(s => ({ ...s, isServerSettingsOpen: true }));
+		},
+		
+		closeServerSettings() {
+			update(s => ({ ...s, isServerSettingsOpen: false }));
 		},
 		
 		setSection(section: string) {
@@ -120,6 +130,7 @@ export const settings = createSettingsStore();
 
 // Convenience derived stores
 export const isSettingsOpen = derived(settings, $s => $s.isOpen);
+export const isServerSettingsOpen = derived(settings, $s => $s.isServerSettingsOpen);
 export const activeSection = derived(settings, $s => $s.activeSection);
 export const appSettings = derived(settings, $s => $s.app);
 export const currentTheme = derived(settings, $s => $s.app.theme);

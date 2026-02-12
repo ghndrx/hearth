@@ -1,31 +1,100 @@
 <script lang="ts">
 	import { channels, currentChannel } from '$lib/stores/channels';
-	import { currentServer } from '$lib/stores/servers';
+	import { currentServer, leaveServer } from '$lib/stores/servers';
+	import { user } from '$lib/stores/auth';
+	import { settings } from '$lib/stores/settings';
 	import { createEventDispatcher } from 'svelte';
 	import UserPanel from './UserPanel.svelte';
 	
 	const dispatch = createEventDispatcher();
 	
+	let showServerMenu = false;
+	
 	$: serverChannels = $channels.filter(c => c.server_id === $currentServer?.id);
 	$: textChannels = serverChannels.filter(c => c.type === 0);
 	$: voiceChannels = serverChannels.filter(c => c.type === 2);
+	$: isOwner = $currentServer?.owner_id === $user?.id;
 	
 	function selectChannel(channel: any) {
 		currentChannel.set(channel);
 		dispatch('select', channel);
 	}
+	
+	function toggleServerMenu() {
+		showServerMenu = !showServerMenu;
+	}
+	
+	function closeServerMenu() {
+		showServerMenu = false;
+	}
+	
+	function openServerSettings() {
+		closeServerMenu();
+		settings.openServerSettings();
+	}
+	
+	async function handleLeaveServer() {
+		if (!$currentServer) return;
+		if (!confirm(`Are you sure you want to leave ${$currentServer.name}?`)) return;
+		closeServerMenu();
+		try {
+			await leaveServer($currentServer.id);
+		} catch (error) {
+			console.error('Failed to leave server:', error);
+		}
+	}
 </script>
+
+<svelte:window on:click={closeServerMenu} />
 
 <div class="channel-list">
 	<div class="channel-list-content">
 	{#if $currentServer}
-		<div class="server-header">
-			<h2>{$currentServer.name}</h2>
-			<button class="dropdown-btn">
-				<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-					<path d="M7 10l5 5 5-5z"/>
+		<div class="server-header-wrapper">
+			<button 
+				class="server-header" 
+				class:menu-open={showServerMenu}
+				on:click|stopPropagation={toggleServerMenu}
+			>
+				<h2>{$currentServer.name}</h2>
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="dropdown-icon">
+					{#if showServerMenu}
+						<path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
+					{:else}
+						<path d="M7 10l5 5 5-5z"/>
+					{/if}
 				</svg>
 			</button>
+			
+			{#if showServerMenu}
+				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+				<div class="server-dropdown" on:click|stopPropagation>
+					<button class="dropdown-item" on:click={() => { closeServerMenu(); /* TODO: invite modal */ }}>
+						<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+							<path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+						</svg>
+						<span>Invite People</span>
+					</button>
+					
+					<button class="dropdown-item" on:click={openServerSettings}>
+						<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+							<path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+						</svg>
+						<span>Server Settings</span>
+					</button>
+					
+					<div class="dropdown-divider"></div>
+					
+					{#if !isOwner}
+						<button class="dropdown-item danger" on:click={handleLeaveServer}>
+							<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+								<path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+							</svg>
+							<span>Leave Server</span>
+						</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 		
 		<!-- Text Channels -->
@@ -136,6 +205,10 @@
 		overflow-y: auto;
 	}
 	
+	.server-header-wrapper {
+		position: relative;
+	}
+	
 	.server-header {
 		display: flex;
 		align-items: center;
@@ -143,6 +216,20 @@
 		padding: 12px 16px;
 		border-bottom: 1px solid var(--bg-modifier-accent);
 		cursor: pointer;
+		width: 100%;
+		background: none;
+		border-left: none;
+		border-right: none;
+		border-top: none;
+		transition: background 0.15s ease;
+	}
+	
+	.server-header:hover {
+		background: var(--bg-modifier-hover);
+	}
+	
+	.server-header.menu-open {
+		background: var(--bg-modifier-selected);
 	}
 	
 	.server-header h2 {
@@ -155,12 +242,60 @@
 		white-space: nowrap;
 	}
 	
-	.dropdown-btn {
+	.dropdown-icon {
+		color: var(--text-primary);
+		flex-shrink: 0;
+	}
+	
+	.server-dropdown {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 8px;
+		right: 8px;
+		background: var(--bg-floating);
+		border-radius: 4px;
+		padding: 6px 8px;
+		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+		z-index: 100;
+	}
+	
+	.dropdown-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 8px;
 		background: none;
 		border: none;
-		color: var(--text-primary);
+		border-radius: 2px;
+		color: var(--text-secondary);
+		font-size: 14px;
 		cursor: pointer;
-		padding: 0;
+		text-align: left;
+	}
+	
+	.dropdown-item:hover {
+		background: var(--brand-primary);
+		color: white;
+	}
+	
+	.dropdown-item:hover svg {
+		fill: white;
+	}
+	
+	.dropdown-item.danger {
+		color: var(--status-danger);
+	}
+	
+	.dropdown-item.danger:hover {
+		background: var(--status-danger);
+		color: white;
+	}
+	
+	.dropdown-divider {
+		height: 1px;
+		margin: 4px;
+		background: var(--bg-modifier-accent);
 	}
 	
 	.channel-category {
