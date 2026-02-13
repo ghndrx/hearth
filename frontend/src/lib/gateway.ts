@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { writable, get } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { handleMessageCreate, handleMessageUpdate, handleMessageDelete } from './stores/messages';
 
 export type GatewayState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';

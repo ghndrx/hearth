@@ -56,7 +56,7 @@ function createAuthStore() {
 					loading: false,
 					initialized: true
 				}));
-			} catch (error) {
+			} catch {
 				// Token invalid
 				localStorage.removeItem('hearth_token');
 				localStorage.removeItem('hearth_refresh_token');
@@ -127,7 +127,7 @@ function createAuthStore() {
 		async logout() {
 			try {
 				await api.post('/auth/logout');
-			} catch (error) {
+			} catch {
 				// Ignore logout errors
 			}
 			

@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { api } from '$lib/api';
 import { gateway } from '$lib/gateway';
 
