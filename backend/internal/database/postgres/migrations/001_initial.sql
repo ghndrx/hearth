@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Users table
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    username VARCHAR(32) UNIQUE NOT NULL,
-    display_name VARCHAR(64),
+    username VARCHAR(32) NOT NULL,
+    discriminator CHAR(4) NOT NULL DEFAULT '0000',
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     avatar_url VARCHAR(512),
@@ -17,13 +17,13 @@ CREATE TABLE users (
     bio TEXT,
     status VARCHAR(16) DEFAULT 'offline',
     custom_status VARCHAR(128),
-    locale VARCHAR(10) DEFAULT 'en-US',
     mfa_enabled BOOLEAN DEFAULT FALSE,
-    mfa_secret VARCHAR(32),
+    mfa_secret VARCHAR(64),
     verified BOOLEAN DEFAULT FALSE,
-    disabled BOOLEAN DEFAULT FALSE,
+    flags BIGINT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(username, discriminator)
 );
 
 CREATE INDEX idx_users_username ON users(username);

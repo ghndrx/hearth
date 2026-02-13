@@ -36,9 +36,10 @@ var (
 	ErrInviteMaxUses  = errors.New("invite has reached maximum uses")
 
 	// Role errors
-	ErrRoleNotFound     = errors.New("role not found")
-	ErrCannotDeleteRole = errors.New("cannot delete this role")
-	ErrRoleHierarchy    = errors.New("cannot modify role with higher position")
+	ErrRoleNotFound        = errors.New("role not found")
+	ErrCannotDeleteRole    = errors.New("cannot delete this role")
+	ErrCannotDeleteDefault = errors.New("cannot delete the default role")
+	ErrRoleHierarchy       = errors.New("cannot modify role with higher position")
 
 	// User errors
 	ErrUserNotFound  = errors.New("user not found")

@@ -126,8 +126,8 @@ func main() {
 		AppName:               "Hearth",
 		DisableStartupMessage: true,
 		BodyLimit:             100 * 1024 * 1024, // 100MB
-		ReadTimeout:           30,
-		WriteTimeout:          30,
+		ReadTimeout:           30 * time.Second,
+		WriteTimeout:          30 * time.Second,
 		// Security
 		EnableTrustedProxyCheck: true,
 		ProxyHeader:             "X-Forwarded-For",
@@ -151,7 +151,7 @@ func main() {
 	// Rate limiting
 	app.Use(limiter.New(limiter.Config{
 		Max:               100,
-		Expiration:        60,
+		Expiration:        60 * time.Second,
 		LimiterMiddleware: limiter.SlidingWindow{},
 		KeyGenerator: func(c *fiber.Ctx) string {
 			return c.IP()

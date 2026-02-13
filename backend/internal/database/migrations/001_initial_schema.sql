@@ -366,31 +366,5 @@ CREATE TRIGGER update_servers_updated_at BEFORE UPDATE ON servers
 CREATE TRIGGER update_channels_updated_at BEFORE UPDATE ON channels
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- +migrate Down
-
-DROP TABLE IF EXISTS user_notes CASCADE;
-DROP TABLE IF EXISTS relationships CASCADE;
-DROP TABLE IF EXISTS webhooks CASCADE;
-DROP TABLE IF EXISTS emoji_roles CASCADE;
-DROP TABLE IF EXISTS emoji CASCADE;
-DROP TABLE IF EXISTS audit_log CASCADE;
-DROP TABLE IF EXISTS dm_recipients CASCADE;
-DROP TABLE IF EXISTS bans CASCADE;
-DROP TABLE IF EXISTS invites CASCADE;
-DROP TABLE IF EXISTS read_states CASCADE;
-DROP TABLE IF EXISTS pins CASCADE;
-DROP TABLE IF EXISTS message_role_mentions CASCADE;
-DROP TABLE IF EXISTS message_mentions CASCADE;
-DROP TABLE IF EXISTS reactions CASCADE;
-DROP TABLE IF EXISTS attachments CASCADE;
-DROP TABLE IF EXISTS messages CASCADE;
-DROP TABLE IF EXISTS channel_overrides CASCADE;
-DROP TABLE IF EXISTS member_roles CASCADE;
-DROP TABLE IF EXISTS members CASCADE;
-DROP TABLE IF EXISTS roles CASCADE;
-DROP TABLE IF EXISTS channels CASCADE;
-DROP TABLE IF EXISTS sessions CASCADE;
-DROP TABLE IF EXISTS servers CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-
-DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
+-- Note: Down migration moved to 001_initial_schema_down.sql for migration tool compatibility
+-- The docker-entrypoint-initdb.d only runs files that DON'T contain "_down" in the name

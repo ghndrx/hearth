@@ -2,15 +2,10 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"hearth/internal/models"
-)
-
-var (
-	ErrCannotDeleteDefault = errors.New("cannot delete the default role")
 )
 
 // RoleService handles role-related business logic
