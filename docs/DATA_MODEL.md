@@ -312,4 +312,32 @@ ON voice_states(channel_id);
 
 ---
 
+## Scaling Considerations
+
+For deployments exceeding single-database capacity, see the detailed research documents:
+
+- **[Database Sharding Strategies](./research/architecture-database-sharding.md)** - Partition/shard strategies for messages at scale (Discord, Slack, Matrix patterns)
+- **[WebSocket Scaling](./research/architecture-websocket-scaling.md)** - Horizontal scaling for real-time connections
+
+### Message ID Strategy
+
+Hearth uses Snowflake-style IDs (64-bit integers) for messages, enabling:
+- Chronological sorting without secondary indexes
+- Distributed ID generation without coordination
+- Embedded timestamp extraction
+- Efficient cursor-based pagination
+
+### Partition-Ready Schema
+
+All message queries should include `channel_id` to enable future partitioning:
+```sql
+-- Good: Partition-aware query
+SELECT * FROM messages WHERE channel_id = ? ORDER BY id DESC LIMIT 50;
+
+-- Avoid: Full table scan
+SELECT * FROM messages WHERE content LIKE '%search%';
+```
+
+---
+
 *End of Data Model Reference*
