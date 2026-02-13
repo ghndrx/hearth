@@ -90,10 +90,16 @@ func main() {
 		true, // registration enabled
 		false, // invite only
 	)
+	roleService := services.NewRoleService(
+		repos.Roles,
+		repos.Servers,
+		nil, // cache
+		serviceBus,
+	)
 	serverService := services.NewServerService(
 		repos.Servers,
 		repos.Channels,
-		nil, // role repo - TODO: implement RoleRepository interface methods
+		repos.Roles,
 		quotaService,
 		nil, // cache
 		serviceBus,
@@ -174,7 +180,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, wsGateway)
+	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes

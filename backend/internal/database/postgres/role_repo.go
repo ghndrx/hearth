@@ -82,7 +82,7 @@ func (r *RoleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-func (r *RoleRepository) AddToMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error {
+func (r *RoleRepository) AddRoleToMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error {
 	query := `
 		UPDATE members 
 		SET roles = array_append(roles, $3)
@@ -92,7 +92,7 @@ func (r *RoleRepository) AddToMember(ctx context.Context, serverID, userID, role
 	return err
 }
 
-func (r *RoleRepository) RemoveFromMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error {
+func (r *RoleRepository) RemoveRoleFromMember(ctx context.Context, serverID, userID, roleID uuid.UUID) error {
 	query := `
 		UPDATE members 
 		SET roles = array_remove(roles, $3)
@@ -100,6 +100,38 @@ func (r *RoleRepository) RemoveFromMember(ctx context.Context, serverID, userID,
 	`
 	_, err := r.db.ExecContext(ctx, query, serverID, userID, roleID)
 	return err
+}
+
+func (r *RoleRepository) UpdatePositions(ctx context.Context, serverID uuid.UUID, positions map[uuid.UUID]int) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for roleID, position := range positions {
+		_, err := tx.ExecContext(ctx,
+			`UPDATE roles SET position = $1 WHERE id = $2 AND server_id = $3`,
+			position, roleID, serverID,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *RoleRepository) GetMemberRoles(ctx context.Context, serverID, userID uuid.UUID) ([]*models.Role, error) {
+	query := `
+		SELECT r.* FROM roles r
+		INNER JOIN members m ON r.id = ANY(m.roles)
+		WHERE m.server_id = $1 AND m.user_id = $2
+		ORDER BY r.position DESC
+	`
+	var roles []*models.Role
+	err := r.db.SelectContext(ctx, &roles, query, serverID, userID)
+	return roles, err
 }
 
 // GetMemberPermissions calculates combined permissions for a member

@@ -23,12 +23,13 @@ func NewHandlers(
 	serverService *services.ServerService,
 	channelService *services.ChannelService,
 	messageService *services.MessageService,
+	roleService *services.RoleService,
 	gateway *websocket.Gateway,
 ) *Handlers {
 	return &Handlers{
 		Auth:     NewAuthHandler(authService),
 		Users:    NewUserHandler(userService, serverService, channelService),
-		Servers:  NewServerHandler(serverService),
+		Servers:  NewServerHandler(serverService, channelService, roleService),
 		Channels: NewChannelHandler(messageService),
 		Invites:  NewInviteHandler(serverService),
 		Voice:    NewVoiceHandler(),
