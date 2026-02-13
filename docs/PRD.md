@@ -184,6 +184,11 @@ A polished, easy-to-deploy communication platform that:
 | MSG-032 | Thread membership | P1 | Join/leave |
 | MSG-033 | Thread archiving | P1 | Auto after inactivity |
 | MSG-034 | Thread permissions | P1 | Inherit or override |
+| MSG-035 | Thread discovery panel | P2 | Sidebar showing active threads, unread counts |
+| MSG-036 | Thread topic tags | P2 | Optional labels for organization/search |
+| MSG-037 | Move messages to thread | P2 | Mod tool to relocate messages |
+| MSG-038 | Thread follow/unfollow | P2 | Watch without participating |
+| MSG-039 | Thread suggestion | P3 | Auto-suggest after N rapid replies |
 
 ### 3.5 Direct Messages
 

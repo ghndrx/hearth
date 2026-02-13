@@ -2,6 +2,7 @@ import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { api, setAuthToken, clearAuthToken } from '$lib/api';
+import { setCurrentUserId } from './typing';
 
 export interface User {
 	id: string;
@@ -49,6 +50,7 @@ function createAuthStore() {
 			
 			try {
 				const user = await api.get('/users/@me');
+				setCurrentUserId(user.id);
 				update(s => ({
 					...s,
 					user,
@@ -79,6 +81,7 @@ function createAuthStore() {
 				setAuthToken(access_token);
 				
 				const user = await api.get('/users/@me');
+				setCurrentUserId(user.id);
 				
 				update(s => ({
 					...s,
@@ -109,6 +112,7 @@ function createAuthStore() {
 				setAuthToken(access_token);
 				
 				const user = await api.get('/users/@me');
+				setCurrentUserId(user.id);
 				
 				update(s => ({
 					...s,
@@ -134,6 +138,7 @@ function createAuthStore() {
 			localStorage.removeItem('hearth_token');
 			localStorage.removeItem('hearth_refresh_token');
 			clearAuthToken();
+			setCurrentUserId(null);
 			
 			set({ ...initialState, loading: false, initialized: true });
 			goto('/login');

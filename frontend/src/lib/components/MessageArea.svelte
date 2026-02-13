@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { messages, activeChannel, websocket } from '$stores';
-	import { loadMessages, addMessage, sendMessage as sendMessageFn } from '$lib/stores/messages';
+	import { loadMessages, addMessage, sendMessage as sendMessageFn, sendTypingIndicator } from '$lib/stores/messages';
 	import type { Message } from '$lib/stores/messages';
+	import TypingIndicator from './TypingIndicator.svelte';
 
 	let messageInput = '';
 	let messagesContainer: HTMLDivElement;
 	let unsubscribeWS: (() => void) | null = null;
+	let lastTypingTime = 0;
 
 	$: channelMessages = $activeChannel
 		? $messages[$activeChannel.id] || []
@@ -42,6 +44,15 @@
 		const content = messageInput.trim();
 		messageInput = '';
 		await sendMessageFn($activeChannel.id, content);
+	}
+
+	function handleInput() {
+		// Send typing indicator (throttled to every 3 seconds)
+		const now = Date.now();
+		if (now - lastTypingTime > 3000 && $activeChannel) {
+			lastTypingTime = now;
+			sendTypingIndicator($activeChannel.id);
+		}
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -166,8 +177,9 @@
 			{/if}
 		</div>
 
-		<!-- Message input -->
+		<!-- Typing indicator + Message input -->
 		<div class="px-4 pb-6 shrink-0">
+			<TypingIndicator channelId={$activeChannel.id} />
 			<div class="bg-dark-600 rounded-lg flex items-end">
 				<button class="p-3 text-gray-400 hover:text-gray-200">
 					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,6 +193,7 @@
 					placeholder="Message #{$activeChannel.name}"
 					rows="1"
 					bind:value={messageInput}
+					on:input={handleInput}
 					on:keydown={handleKeydown}
 				></textarea>
 				<div class="flex items-center gap-1 p-2">
