@@ -69,14 +69,25 @@ export async function loadMessages(channelId: string, before?: string) {
 	}
 }
 
-export async function sendMessage(channelId: string, content: string, attachments: File[] = []) {
+export async function sendMessage(
+	channelId: string,
+	content: string,
+	attachments: File[] = [],
+	replyToId?: string
+) {
 	try {
 		let data: any = { content };
+		if (replyToId) {
+			data.reply_to = replyToId;
+		}
 		
 		// If we have attachments, use FormData
 		if (attachments.length > 0) {
 			const formData = new FormData();
 			formData.append('content', content);
+			if (replyToId) {
+				formData.append('reply_to', replyToId);
+			}
 			attachments.forEach((file, i) => {
 				formData.append(`files[${i}]`, file);
 			});
