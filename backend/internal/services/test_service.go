@@ -1,82 +1,148 @@
-// Package services provides domain logic for the Hearth application.
 package services
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
+	"time"
 )
 
-var (
-	// ErrChannelNotFound is returned when a channel cannot be located.
-	ErrChannelNotFound = errors.New("channel not found")
-)
+// ContextKey is a custom type for Request Context keys.
+type ContextKey string
 
-// Channel represents a text or voice channel in a guild.
-type Channel struct {
-	ID          string
-	Name        string
-	Type        ChannelType
-	Description string
-	MemberCount int
+// KeySessionID is used to store the session ID in the request context.
+const KeySessionID ContextKey = "session_id"
+
+// Session represents a connected user session.
+type Session struct {
+	UserID    string
+	SessionID string
+	RTT       time.Duration // Round Trip Time for connection health
 }
 
-// ChannelType distinguishes between chat and voice channels.
-type ChannelType int
-
-const (
-	ChannelTypeText ChannelType = iota
-	ChannelTypeVoice
-)
-
-// ChannelRepository defines the contract for persisting Channel entities.
-type ChannelRepository interface {
-	GetByID(ctx context.Context, id string) (*Channel, error)
-	Create(ctx context.Context, channel *Channel) error
+// Message represents an event payload (e.g., Join, Leave).
+type Message struct {
+	Type    string `json:"type"`
+	UserID  string `json:"user_id"`
+	Channel string `json:"channel"` // Optional: channel ID for future extension
 }
 
-// ChannelService handles business logic surrounding channels.
-type ChannelService struct {
-	repo ChannelRepository
+// Mux provides thread-safe broadcast capabilities for channel events.
+type Mux interface {
+	Broadcast(channel string, msg Message)
 }
 
-// NewChannelService creates a new instance of ChannelService.
-func NewChannelService(repo ChannelRepository) *ChannelService {
-	return &ChannelService{
-		repo: repo,
+// Logger logs service events.
+type Logger interface {
+	Debug(module, message string)
+	Info(module, message string)
+	Error(module, message string)
+}
+
+// GatewayService manages concurrent WebSocket connections (simulated here with /ws).
+type GatewayService struct {
+	mu            sync.RWMutex
+	sessions      map[string]*Session
+	channels      map[string]map[string]*Session // channelID -> userID -> Session
+	logger        Logger
+	eventMux      Mux
+}
+
+// NewGatewayService creates a new instance of the GatewayService.
+func NewGatewayService(l Logger, m Mux) *GatewayService {
+	return &GatewayService{
+		sessions:   make(map[string]*Session),
+		channels:   make(map[string]map[string]*Session),
+		logger:     l,
+		eventMux:   m,
 	}
 }
 
-// CreateChannel creates a new text channel for the guild.
-// Command: /create-channel
-func (s *ChannelService) CreateChannel(ctx context.Context, name string, channelType ChannelType) (*Channel, error) {
-	if name == "" {
-		return nil, errors.New("channel name cannot be empty")
-	}
+// HandleWS simulates the WebSocket upgrade handler.
+func (s *GatewayService) HandleWS(w http.ResponseWriter, r *http.Request) {
+	// Simulate generating a Session ID
+	sessionID := fmt.Sprintf("sess_%d", time.Now().UnixNano())
+	
+	// In a real implementation, this would upgrade the connection and start a goroutine.
+	// Here, we simulate the backend behavior of tracking the session.
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	newChannel := &Channel{
-		ID:          randomString(6), // Simplified ID generation
-		Name:        name,
-		Type:        channelType,
-		MemberCount: 0,
+	// 1. Add User to general sessions
+	session := &Session{
+		UserID:    sessionID, // Simplified for demo: UserID == SessionID
+		SessionID: sessionID,
+		RTT:       time.Second,
 	}
+	s.sessions[sessionID] = session
 
-	if err := s.repo.Create(ctx, newChannel); err != nil {
-		return nil, err
+	// 2. Add User to "general" channel
+	if s.channels["general"] == nil {
+		s.channels["general"] = make(map[string]*Session)
 	}
+	s.channels["general"][sessionID] = session
 
-	return newChannel, nil
+	// 3. Log the event
+	s.logger.Info("Gateway", fmt.Sprintf("User [ID:%s] connected to 'general'", sessionID))
+
+	// 4. Broadcast to channel (Notification via Mock Mux)
+	s.eventMux.Broadcast("general", Message{
+		Type:    "user_joined",
+		UserID:  sessionID,
+		Channel: "general",
+	})
+
+	// Set mock context ID for testing purposes
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, KeySessionID, sessionID)
+	*r = *r.WithContext(ctx)
+
+	w.WriteHeader(http.StatusSwitchingProtocols) // Simulated 101
 }
 
-// GetChannel retrieves a specific channel by ID.
-func (s *ChannelService) GetChannel(ctx context.Context, id string) (*Channel, error) {
-	if id == "" {
-		return nil, errors.New("channel id cannot be empty")
+// GetChannelMembers retrieves active sessions for a specific channel.
+func (s *GatewayService) GetChannelMembers(ctx context.Context, channelID string) ([]*Session, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	members, exists := s.channels[channelID]
+	if !exists {
+		return nil, fmt.Errorf("channel %s not found", channelID)
 	}
 
-	channel, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
+	// Convert map to slice
+	result := make([]*Session, 0, len(members))
+	for _, sess := range members {
+		result = append(result, sess)
 	}
 
-	return channel, nil
+	return result, nil
+}
+
+// CleanupStaleSessions removes sessions that have timed out.
+func (s *GatewayService) CleanupStaleSessions(ctx context.Context, threshold time.Duration) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	count := 0
+	toRemove := make([]string, 0)
+
+	for id, sess := range s.sessions {
+		if now.Sub(sess.RTT) > threshold {
+			toRemove = append(toRemove, id)
+			s.logger.Debug("Gateway", fmt.Sprintf("Removing stale session %s", id))
+		}
+	}
+
+	for _, id := range toRemove {
+		delete(s.sessions, id)
+		// Note: This simplified implementation doesn't decrement channel counts,
+		// but in a real highly concurrent app, you might use range delete carefully.
+	}
+
+	return count
 }
