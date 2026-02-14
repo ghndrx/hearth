@@ -1,4 +1,3 @@
-// package services
 package services
 
 import (
@@ -14,20 +13,20 @@ import (
 type Status string
 
 const (
-	StatusOnline   Status = "online"
-	StatusAway     Status = "away"
+	StatusOnline       Status = "online"
+	StatusAway         Status = "away"
 	StatusDoNotDisturb Status = "dnd"
-	StatusInvisible Status = "invisible"
+	StatusInvisible    Status = "invisible"
 )
 
 // Presence defines the data structure for a user's presence.
 type Presence struct {
-	UserID    string    `json:"user_id"`
-	Username  string    `json:"username"`
-	Status    Status    `json:"status"`
-	ServerID  string    `json:"server_id"` // nil if global status
-	Activity  string    `json:"activity"`  // e.g., "Playing Valorant"
-	LastSeen  time.Time `json:"last_seen"`
+	UserID   string    `json:"user_id"`
+	Username string    `json:"username"`
+	Status   Status    `json:"status"`
+	ServerID string    `json:"server_id"` // nil if global status
+	Activity string    `json:"activity"`  // e.g., "Playing Valorant"
+	LastSeen time.Time `json:"last_seen"`
 }
 
 // PresenceRepo defines the contract for storing and retrieving Presence data.
@@ -56,7 +55,7 @@ func NewPresenceService(repo PresenceRepo) *PresenceService {
 // UpdateStatus updates a user's presence state.
 // It respects graceful error handling and logic to determine LastSeen.
 func (s *PresenceService) UpdateStatus(ctx context.Context, userID, username, statusStr, activity string, serverID *string) error {
-	
+
 	// Ensure status string is valid
 	var status Status
 	switch statusStr {
@@ -71,12 +70,12 @@ func (s *PresenceService) UpdateStatus(ctx context.Context, userID, username, st
 		sID = *serverID
 	}
 	presence := &Presence{
-		UserID:    userID,
-		Username:  username,
-		Status:    status,
-		ServerID:  sID,
-		Activity:  activity,
-		LastSeen:  time.Now(),
+		UserID:   userID,
+		Username: username,
+		Status:   status,
+		ServerID: sID,
+		Activity: activity,
+		LastSeen: time.Now(),
 	}
 
 	return s.repo.UpsertPresence(ctx, presence)

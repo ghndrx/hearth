@@ -96,7 +96,7 @@ func TestHeartService_CreateHeart(t *testing.T) {
 				// Test execution
 				_, err := service.CreateHeart(ctx, tt.userID, tt.target)
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "cannot heart themselves")
+				assert.Equal(t, ErrSelfAction, err)
 				// Ensure repo.Create was NOT called
 				mockRepo.AssertNotCalled(t, "Create", ctx, mock.Anything)
 			}
@@ -124,9 +124,9 @@ func TestHeartService_GetHeartSummary(t *testing.T) {
 
 	// Assertions
 	assert.NoError(t, err)
-	assert.Equal(t, metricsToSend, result.LikeCount)
+	assert.Equal(t, metricsToReceive, result.LikeCount)
+	assert.Equal(t, metricsToSend, result.RepostCount)
 	assert.Equal(t, int64(0), result.QuoteCount)
-	assert.Equal(t, int64(0), result.RepostCount)
 
 	// Verify calls
 	mockRepo.AssertExpectations(t)

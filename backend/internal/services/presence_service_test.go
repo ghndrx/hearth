@@ -43,7 +43,7 @@ func (m *MockRepo) GetOnlineUsers(ctx context.Context, serverID string) ([]*Pres
 	var online []*Presence
 	for _, p := range m.Presences {
 		// Mock logic: consider user online if status is "online" or "away" (common exceptions)
-		// Or simply if the repo passed them in this specific list. 
+		// Or simply if the repo passed them in this specific list.
 		// Here we just filter by the mocked data.
 		if p.Status == StatusOnline {
 			online = append(online, p)
@@ -97,13 +97,13 @@ func TestUpdateStatus(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:             "Failure: Upsert Fails",
-			ctx:              context.Background(),
-			userID:           "user123",
-			statusStr:        "online",
-			mockUpsertErr:    errors.New("database connection error"),
-			expectError:      true,
-			expectStatus:     StatusOnline, // Status shouldn't be updated in logic if error occurs
+			name:          "Failure: Upsert Fails",
+			ctx:           context.Background(),
+			userID:        "user123",
+			statusStr:     "online",
+			mockUpsertErr: errors.New("database connection error"),
+			expectError:   true,
+			expectStatus:  StatusOnline, // Status shouldn't be updated in logic if error occurs
 		},
 	}
 
@@ -112,7 +112,7 @@ func TestUpdateStatus(t *testing.T) {
 			// Setup
 			mockRepo := &MockRepo{Err: tt.mockUpsertErr}
 			svc := NewPresenceService(mockRepo)
-			
+
 			// Action
 			err := svc.UpdateStatus(tt.ctx, tt.userID, tt.username, tt.statusStr, tt.activity, tt.serverID)
 
@@ -148,8 +148,8 @@ func TestGetOnlineUsers(t *testing.T) {
 				onlineUser1 := &Presence{UserID: "u1", Username: "User1", Status: StatusOnline, ServerID: serverID, LastSeen: time.Now()}
 				onlineUser2 := &Presence{UserID: "u2", Username: "User2", Status: StatusOnline, ServerID: serverID, LastSeen: time.Now()}
 				// Should not appear
-				offline := &Presence{UserID: "u3", Username: "User3", Status: StatusAway, ServerID: serverID, LastSeen: time.Now()} 
-				
+				offline := &Presence{UserID: "u3", Username: "User3", Status: StatusAway, ServerID: serverID, LastSeen: time.Now()}
+
 				m.Presences = append(m.Presences, onlineUser1, onlineUser2, offline)
 			},
 			expectedCount: 2,
@@ -160,7 +160,7 @@ func TestGetOnlineUsers(t *testing.T) {
 			setupMock: func(m *MockRepo) {
 				// Mock repo implementation defined above filters by StatusOnline
 				// Here we rely on expectation that GetOnlineUsers logic in repo returns only Online
-				m.Presences = append(m.Presences, 
+				m.Presences = append(m.Presences,
 					&Presence{UserID: "u1", Username: "User1", Status: StatusOnline, ServerID: serverID, LastSeen: time.Now()},
 				)
 			},
@@ -181,7 +181,7 @@ func TestGetOnlineUsers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := &MockRepo{}
 			tt.setupMock(mockRepo)
-			
+
 			svc := NewPresenceService(mockRepo)
 
 			users, err := svc.GetOnlineUsers(ctx, serverID)
@@ -196,6 +196,98 @@ func TestGetOnlineUsers(t *testing.T) {
 				}
 				if len(users) != tt.expectedCount {
 					t.Errorf("expected %d users, got %d", tt.expectedCount, len(users))
+				}
+			}
+		})
+	}
+}
+
+func TestGetPresence(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name             string
+		userID           string
+		serverID         *string
+		setupMock        func(*MockRepo)
+		expectError      bool
+		expectedPresence *Presence
+	}{
+		{
+			name:     "Success: Get Global Presence",
+			userID:   "user123",
+			serverID: nil,
+			setupMock: func(m *MockRepo) {
+				m.Presences = append(m.Presences, &Presence{
+					UserID:   "user123",
+					Username: "Alice",
+					Status:   StatusOnline,
+				})
+			},
+			expectError: false,
+			expectedPresence: &Presence{
+				UserID:   "user123",
+				Username: "Alice",
+				Status:   StatusOnline,
+			},
+		},
+		{
+			name:     "Success: Get Server-Specific Presence",
+			userID:   "user123",
+			serverID: strPtr("server_abc"),
+			setupMock: func(m *MockRepo) {
+				m.Presences = append(m.Presences, &Presence{
+					UserID:   "user123",
+					Username: "Alice",
+					Status:   StatusAway,
+					ServerID: "server_abc",
+				})
+			},
+			expectError: false,
+			expectedPresence: &Presence{
+				UserID:   "user123",
+				Username: "Alice",
+				Status:   StatusAway,
+				ServerID: "server_abc",
+			},
+		},
+		{
+			name:     "User Not Found",
+			userID:   "nonexistent",
+			serverID: nil,
+			setupMock: func(m *MockRepo) {
+				// Empty presences
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &MockRepo{}
+			tt.setupMock(mockRepo)
+
+			svc := NewPresenceService(mockRepo)
+
+			presence, err := svc.GetPresence(ctx, tt.userID, tt.serverID)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if presence == nil {
+					t.Error("expected presence, got nil")
+				} else if tt.expectedPresence != nil {
+					if presence.UserID != tt.expectedPresence.UserID {
+						t.Errorf("expected UserID %s, got %s", tt.expectedPresence.UserID, presence.UserID)
+					}
+					if presence.Status != tt.expectedPresence.Status {
+						t.Errorf("expected Status %s, got %s", tt.expectedPresence.Status, presence.Status)
+					}
 				}
 			}
 		})

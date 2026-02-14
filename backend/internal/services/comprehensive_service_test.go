@@ -155,6 +155,40 @@ func TestComprehensiveService_RegisterUser(t *testing.T) {
 	})
 }
 
+func TestComprehensiveService_GetUser(t *testing.T) {
+	mockRepo := new(MockcomprehensiveRepository)
+	service := NewComprehensiveService(mockRepo)
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		userID := uuid.New()
+		expectedUser := &models.User{ID: userID, Username: "testuser"}
+
+		mockRepo.On("GetUserByID", ctx, userID).Return(expectedUser, nil).Once()
+
+		user, err := service.GetUser(ctx, userID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, user)
+		assert.Equal(t, expectedUser.ID, user.ID)
+		assert.Equal(t, expectedUser.Username, user.Username)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("User Not Found", func(t *testing.T) {
+		userID := uuid.New()
+
+		mockRepo.On("GetUserByID", ctx, userID).Return(nil, ErrUserNotFound).Once()
+
+		user, err := service.GetUser(ctx, userID)
+
+		assert.Error(t, err)
+		assert.Nil(t, user)
+		assert.Equal(t, ErrUserNotFound, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
 func TestComprehensiveService_CreateServer(t *testing.T) {
 	mockRepo := new(MockcomprehensiveRepository)
 	service := NewComprehensiveService(mockRepo)
@@ -189,6 +223,16 @@ func TestComprehensiveService_CreateServer(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, server)
 		assert.Equal(t, ErrUserNotFound, err)
+	})
+
+	t.Run("Invalid Input - Empty Name", func(t *testing.T) {
+		ownerID := uuid.New()
+
+		server, err := service.CreateServer(ctx, "", ownerID)
+
+		assert.Error(t, err)
+		assert.Nil(t, server)
+		assert.Equal(t, ErrInvalidInput, err)
 	})
 }
 

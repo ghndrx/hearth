@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	ErrGuildNotFound      = errors.New("guild not found")
 	ErrUnauthorizedAccess = errors.New("unauthorized access")
 	ErrInvalidInput       = errors.New("invalid input")
 )

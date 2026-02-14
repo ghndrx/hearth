@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -48,7 +47,7 @@ func NewHeartService(repo HeartRepository) *HeartService {
 // Returns an error if the target user is the same as the author.
 func (s *HeartService) CreateHeart(ctx context.Context, authorID, targetUserID uuid.UUID) (*Heart, error) {
 	if authorID == targetUserID {
-		return nil, errors.New("author cannot heart themselves")
+		return nil, ErrSelfAction
 	}
 
 	// NOTE: In a real application, you might want to check against a banned list
@@ -79,14 +78,14 @@ func (s *HeartService) GetHeartSummary(ctx context.Context, userID, requestFromU
 	}
 
 	// 2. Count hearts received by the target user
-	_, err = s.repo.GetByTargetID(ctx, userID)
+	receivedCount, err := s.repo.GetByTargetID(ctx, userID)
 	if err != nil {
 		return PublicMetrics{}, fmt.Errorf("failed to get received hearts count: %w", err)
 	}
 
 	return PublicMetrics{
-		LikeCount:   sentCount,
-		RepostCount: 0, // Reposts are separate from hearts
+		LikeCount:   receivedCount,
+		RepostCount: sentCount,
 		QuoteCount:  0,
 	}, nil
 }
