@@ -2,173 +2,218 @@ package services
 
 import (
 	"context"
-	"fmt"
-	"sync"
+	"errors"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// --- Interfaces ---
+// --- Mock Implementations ---
 
-// StorageService defines the contract for data access
-type StorageService interface {
-	SaveMessage(ctx context.Context, id, channelID, content string) (string, error)
-	GetMessages(ctx context.Context, channelID string) ([]Message, error)
+// MockUserRepository acts as a database mock for tests.
+type MockUserRepository struct {
+	mock.Mock
 }
 
-// ChannelService defines the contract for channel logic
-type ChannelService interface {
-	ValidateChannelID(id string) bool
-	GetChannelName(id string) (string, error)
-}
-
-// Message represents a chat message
-type Message struct {
-	ID        string
-	ChannelID string
-	Content   string
-	Timestamp time.Time
-	AuthorID  string
-}
-
-// Channel represents a chat channel
-type Channel struct {
-	ID   string
-	Name string
-	Type string
-}
-
-// AuthService simulates authentication
-type AuthService interface {
-	ValidateToken(token string) (bool, string)
-}
-
-// --- Core Application Logic ---
-
-// MessageService is the main service entry point
-type MessageService interface {
-	SendMessage(ctx context.Context, channelID, content, authorID string) (string, error)
-	GetHistory(ctx context.Context, channelID string) ([]Message, error)
-}
-
-// messageService is the private implementation
-type messageService struct {
-	channelSvc ChannelService
-	storageSvc StorageService
-	authSvc    AuthService
-	mu         sync.Mutex // Ensures mock database isolation
-}
-
-// NewMessageService configures the service
-func NewMessageService(channelSvc ChannelService, storageSvc StorageService, authSvc AuthService) MessageService {
-	return &messageService{
-		channelSvc: channelSvc,
-		storageSvc: storageSvc,
-		authSvc:    authSvc,
+func (m *MockUserRepository) FindByID(ctx context.Context, id int) (*User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
+	return args.Get(0).(*User), args.Error(1)
 }
 
-// SendMessage handles the request logic
-func (s *messageService) SendMessage(ctx context.Context, channelID, content, authorID string) (string, error) {
-	// 1. Validate Channel
-	if !s.channelSvc.ValidateChannelID(channelID) {
-		return "", fmt.Errorf("service: invalid channel ID '%s'", channelID)
+func (m *MockUserRepository) Create(ctx context.Context, user *User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
+// MockChatService acts as a chat dispatcher mock.
+type MockChatService struct {
+	mock.Mock
+}
+
+func (m *MockChatService) GetMessages(ctx context.Context, channel string, limit int) ([]Message, error) {
+	args := m.Called(ctx, channel, limit)
+	return args.Get(0).([]Message), args.Error(1)
+}
+
+func (m *MockChatService) SendMessage(ctx context.Context, user *User, channel, content string) error {
+	args := m.Called(ctx, user, channel, content)
+	return args.Error(0)
+}
+
+// --- Tests ---
+
+func TestNewTestService(t *testing.T) {
+	repo := new(MockUserRepository)
+	chat := new(MockChatService)
+
+	service := NewTestService(repo, chat)
+
+	assert.NotNil(t, service)
+	assert.Same(t, repo, service.userRepo)
+	assert.Same(t, chat, service.chatSvc)
+}
+
+func TestGetUserService(t *testing.T) {
+	ctx := context.Background()
+	userID := 123
+	expectedUser := &User{
+		ID:       userID,
+		Username: "TestUser",
+		Created:  time.Now(),
 	}
 
-	// 2. Validate Content
-	if content == "" {
-		return "", fmt.Errorf("service: content cannot be empty")
-	}
-
-	// 3. Check Authentication (Business Rule)
-	// In this example, we don't use authorID in storage, but we validate it.
-	if authorID == "" {
-		return "", fmt.Errorf("service: author ID cannot be empty")
-	}
-	_, _ = s.authSvc.ValidateToken(authorID)
-
-	// 4. Generate ID
-	s.mu.Lock()
-	msgID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
-	s.mu.Unlock()
-
-	// 5. Persist
-	return msgID, s.storageSvc.SaveMessage(ctx, msgID, channelID, content)
-}
-
-// GetHistory retrieves data
-func (s *messageService) GetHistory(ctx context.Context, channelID string) ([]Message, error) {
-	if !s.channelSvc.ValidateChannelID(channelID) {
-		return nil, fmt.Errorf("service: access denied or invalid channel ID '%s'", channelID)
-	}
-
-	return s.storageSvc.GetMessages(ctx, channelID)
-}
-
-// MockDatabase simulates a SQL database
-type MockDatabase struct {
-	Messages map[string]Message
-	Channels map[string]Channel
-	mu       sync.RWMutex
-}
-
-func NewMockDatabase() *MockDatabase {
-	return &MockDatabase{
-		Messages: make(map[string]Message),
-		Channels: make(map[string]Channel),
-	}
-}
-
-func (db *MockDatabase) SaveMessage(ctx context.Context, id, channelID, content string) (string, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	
-	msg := Message{
-		ID:        id,
-		ChannelID: channelID,
-		Content:   content,
-		Timestamp: time.Now(),
-		AuthorID:  "system",
-	}
-	db.Messages[id] = msg
-	return id, nil
-}
-
-func (db *MockDatabase) GetMessages(ctx context.Context, channelID string) ([]Message, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	var results []Message
-	for _, msg := range db.Messages {
-		if msg.ChannelID == channelID {
-			results = append(results, msg)
-		}
-	}
-	return results, nil
-}
-
-// MockChannelService is a mock implementation of ChannelService
-type MockChannelService struct {
-	ValidIDs map[string]bool // true = valid
-}
-
-func NewMockChannelService() *MockChannelService {
-	return &MockChannelService{
-		ValidIDs: map[string]bool{
-			"general":   true,
-			"random":    true,
-			"admin":     false, // Invalid
-			"deep-deep": true,
+	tests := []struct {
+		name        string
+		userID      int
+		mockRepo    func(*MockUserRepository)
+		expectedErr error
+	}{
+		{
+			name:   "Happy Path: User found",
+			userID: userID,
+			mockRepo: func(r *MockUserRepository) {
+				r.On("FindByID", ctx, userID).Return(expectedUser, nil)
+			},
+			expectedErr: nil,
+		},
+		{
+			name:   "Error: User not found in repository",
+			userID: 999,
+			mockRepo: func(r *MockUserRepository) {
+				r.On("FindByID", ctx, 999).Return(nil, errors.New("db error"))
+			},
+			expectedErr: errors.New("db error"),
+		},
+		{
+			name:   "Boundary: Negative ID returns ErrUserNotFound",
+			userID: -1,
+			mockRepo: func(r *MockUserRepository) {
+				// Should not be called
+			},
+			expectedErr: ErrUserNotFound,
 		},
 	}
-}
 
-func (m *MockChannelService) ValidateChannelID(id string) bool {
-	return m.ValidIDs[id]
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := new(MockUserRepository)
+			tt.mockRepo(repo)
+			chat := new(MockChatService)
 
-func (m *MockChannelService) GetChannelName(id string) (string, error) {
-	if !m.ValidIDs[id] {
-		return "", fmt.Errorf("channel not found")
+			service := NewTestService(repo, chat)
+			user, err := service.GetUserService(ctx, tt.userID)
+
+			assert.Equal(t, tt.expectedErr, err)
+			if tt.expectedErr == nil {
+				assert.Equal(t, expectedUser, user)
+				repo.AssertExpectations(t)
+			} else {
+				repo.AssertNotCalled(t, "FindByID") // Ensure we returned early
+			}
+		})
 	}
-	return "General Chat", nil
+}
+
+func TestCreateChannelMessage(t *testing.T) {
+	ctx := context.Background()
+	userID := 1
+	channelName := "general"
+	content := "Hello World"
+	validUser := &User{ID: userID, Username: "Felix"}
+
+	tests := []struct {
+		name        string
+		userID      int
+		channel     string
+		content     string
+		mockRepo    func(*MockUserRepository)
+		mockChatSvc func(*MockChatService)
+		expectedErr error
+	}{
+		{
+			name:   "Happy Path: Message sent successfully",
+			userID: userID,
+			channel: channelName,
+			content: content,
+			mockRepo: func(r *MockUserRepository) {
+				r.On("FindByID", ctx, userID).Return(validUser, nil)
+			},
+			mockChatSvc: func(c *MockChatService) {
+				c.On("SendMessage", ctx, validUser, channelName, content).Return(nil)
+			},
+			expectedErr: nil,
+		},
+		{
+			name:   "Error: Empty channel",
+			userID: userID,
+			channel: "",
+			content: content,
+			mockRepo: func(r *MockUserRepository) {
+				// Never called
+			},
+			mockChatSvc: func(c *MockChatService) {},
+			expectedErr: errors.New("channel and content cannot be empty"),
+		},
+		{
+			name:   "Error: Empty content",
+			userID: userID,
+			channel: channelName,
+			content: "",
+			mockRepo: func(r *MockUserRepository) {
+				// Never called
+			},
+			mockChatSvc: func(c *MockChatService) {},
+			expectedErr: errors.New("channel and content cannot be empty"),
+		},
+		{
+			name:   "Error: Service returns user error (e.g., unauthorized)",
+			userID: 404,
+			channel: channelName,
+			content: content,
+			mockRepo: func(r *MockUserRepository) {
+				r.On("FindByID", ctx, 404).Return(nil, ErrUserNotFound)
+			},
+			mockChatSvc: func(c *MockChatService) {},
+			expectedErr: ErrUserNotFound,
+		},
+		{
+			name:   "Error: Chat service fails",
+			userID: userID,
+			channel: channelName,
+			content: content,
+			mockRepo: func(r *MockUserRepository) {
+				r.On("FindByID", ctx, userID).Return(validUser, nil)
+			},
+			mockChatSvc: func(c *MockChatService) {
+				c.On("SendMessage", ctx, validUser, channelName, content).Return(errors.New("network error"))
+			},
+			expectedErr: errors.New("network error"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := new(MockUserRepository)
+			chat := new(MockChatService)
+
+			tt.mockRepo(repo)
+			tt.mockChatSvc(chat)
+
+			service := NewTestService(repo, chat)
+			err := service.CreateChannelMessage(ctx, tt.userID, tt.channel, tt.content)
+
+			assert.Equal(t, tt.expectedErr, err)
+
+			if tt.expectedErr == nil {
+				// Verify all mocks were called as expected
+				repo.AssertExpectations(t)
+				chat.AssertExpectations(t)
+			}
+		})
+	}
 }
