@@ -499,11 +499,12 @@ func TestRemoveReaction_Success(t *testing.T) {
 }
 
 func TestPinMessage_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	requesterID := uuid.New()
 	messageID := uuid.New()
 	channelID := uuid.New()
+	serverID := uuid.New()
 
 	existingMessage := &models.Message{
 		ID:        messageID,
@@ -511,7 +512,14 @@ func TestPinMessage_Success(t *testing.T) {
 		Pinned:    false,
 	}
 
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
 	msgRepo.On("GetByID", ctx, messageID).Return(existingMessage, nil)
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
 	msgRepo.On("Update", ctx, mock.AnythingOfType("*models.Message")).Return(nil)
 	eventBus.On("Publish", "message.pinned", mock.AnythingOfType("*services.MessagePinnedEvent")).Return()
 
@@ -521,11 +529,12 @@ func TestPinMessage_Success(t *testing.T) {
 }
 
 func TestUnpinMessage_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	requesterID := uuid.New()
 	messageID := uuid.New()
 	channelID := uuid.New()
+	serverID := uuid.New()
 
 	existingMessage := &models.Message{
 		ID:        messageID,
@@ -533,7 +542,14 @@ func TestUnpinMessage_Success(t *testing.T) {
 		Pinned:    true,
 	}
 
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
 	msgRepo.On("GetByID", ctx, messageID).Return(existingMessage, nil)
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
 	msgRepo.On("Update", ctx, mock.AnythingOfType("*models.Message")).Return(nil)
 	eventBus.On("Publish", "message.unpinned", mock.AnythingOfType("*services.MessageUnpinnedEvent")).Return()
 
@@ -557,11 +573,12 @@ func TestUnpinMessage_NotFound(t *testing.T) {
 }
 
 func TestUnpinMessage_AlreadyUnpinned(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, _ := setupMessageService()
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	requesterID := uuid.New()
 	messageID := uuid.New()
 	channelID := uuid.New()
+	serverID := uuid.New()
 
 	existingMessage := &models.Message{
 		ID:        messageID,
@@ -569,7 +586,14 @@ func TestUnpinMessage_AlreadyUnpinned(t *testing.T) {
 		Pinned:    false, // Already unpinned
 	}
 
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
 	msgRepo.On("GetByID", ctx, messageID).Return(existingMessage, nil)
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
 	// No Update or Publish calls expected - it's a no-op
 
 	err := service.UnpinMessage(ctx, messageID, requesterID)
