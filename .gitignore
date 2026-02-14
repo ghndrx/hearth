@@ -48,3 +48,8 @@ uploads/
 # Uploads (in dev)
 vendor/
 .vscode/
+
+# Agent orchestration (local only)
+TASKS.json
+specs/
+AGENTS.md
