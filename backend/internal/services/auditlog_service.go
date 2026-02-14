@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,7 @@ type AuditEntry struct {
 }
 
 type AuditLogService struct {
+	mu      sync.RWMutex
 	entries []AuditEntry
 }
 
@@ -26,6 +28,9 @@ func NewAuditLogService() *AuditLogService {
 }
 
 func (s *AuditLogService) Log(ctx context.Context, serverID, userID uuid.UUID, action string, targetID *uuid.UUID, changes map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.entries = append(s.entries, AuditEntry{
 		ID:        uuid.New(),
 		ServerID:  serverID,
@@ -39,6 +44,9 @@ func (s *AuditLogService) Log(ctx context.Context, serverID, userID uuid.UUID, a
 }
 
 func (s *AuditLogService) GetLogs(ctx context.Context, serverID uuid.UUID, limit int) ([]AuditEntry, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var logs []AuditEntry
 	for i := len(s.entries) - 1; i >= 0 && len(logs) < limit; i-- {
 		if s.entries[i].ServerID == serverID {
