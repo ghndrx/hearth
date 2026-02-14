@@ -16,7 +16,7 @@ export const currentServer = writable<Server | null>(null);
 
 export async function loadServers() {
 	try {
-		const data = await api.get('/users/@me/servers');
+		const data = await api.get<Server[]>('/users/@me/servers');
 		servers.set(data);
 	} catch (error) {
 		console.error('Failed to load servers:', error);
@@ -25,7 +25,7 @@ export async function loadServers() {
 
 export async function createServer(name: string, icon?: string) {
 	try {
-		const server = await api.post('/servers', { name, icon });
+		const server = await api.post<Server>('/servers', { name, icon });
 		servers.update(s => [...s, server]);
 		return server;
 	} catch (error) {
@@ -36,7 +36,7 @@ export async function createServer(name: string, icon?: string) {
 
 export async function updateServer(id: string, updates: Partial<Server>) {
 	try {
-		const server = await api.patch(`/servers/${id}`, updates);
+		const server = await api.patch<Server>(`/servers/${id}`, updates);
 		servers.update(s => s.map(srv => srv.id === id ? server : srv));
 		currentServer.update(s => s?.id === id ? server : s);
 		return server;
@@ -50,7 +50,7 @@ export async function updateServerIcon(id: string, iconFile: File) {
 	try {
 		const formData = new FormData();
 		formData.append('icon', iconFile);
-		const server = await api.patch(`/servers/${id}`, formData);
+		const server = await api.patch<Server>(`/servers/${id}`, formData);
 		servers.update(s => s.map(srv => srv.id === id ? server : srv));
 		currentServer.update(s => s?.id === id ? server : s);
 		return server;
@@ -62,7 +62,7 @@ export async function updateServerIcon(id: string, iconFile: File) {
 
 export async function removeServerIcon(id: string) {
 	try {
-		const server = await api.patch(`/servers/${id}`, { icon: null });
+		const server = await api.patch<Server>(`/servers/${id}`, { icon: null });
 		servers.update(s => s.map(srv => srv.id === id ? server : srv));
 		currentServer.update(s => s?.id === id ? server : s);
 		return server;
@@ -96,7 +96,7 @@ export async function leaveServer(id: string) {
 
 export async function joinServer(inviteCode: string) {
 	try {
-		const server = await api.post(`/invites/${inviteCode}`);
+		const server = await api.post<Server>(`/invites/${inviteCode}`);
 		servers.update(s => [...s, server]);
 		return server;
 	} catch (error) {
