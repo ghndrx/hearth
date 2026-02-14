@@ -2,84 +2,173 @@ package services
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"sync"
 	"time"
 )
 
-// MessageStore defines the necessary operations to store/retrieve messages.
-// We use an interface to allow passing a mock implementation during tests.
-type MessageStore interface {
-	SaveMessage(context.Context, UserMessage) (int64, error)
-	GetMessagesByChannel(ctx context.Context, channelID string) ([]UserMessage, error)
+// --- Interfaces ---
+
+// StorageService handles data persistence (simulated here with an internal map or DB).
+type StorageService interface {
+	SaveMessage(context.Context, string, string, string) (string, error)
+	GetMessages(context.Context, string) ([]Message, error)
 }
 
-// UserMessage represents a text message in the service.
-type UserMessage struct {
-	ID        int64     `json:"id"`
-	ChannelID string    `json:"channel_id"`
-	Content   string    `json:"content"`
-	Author    string    `json:"author"`
-	Timestamp time.Time `json:"created_at"`
+// ChannelService handles channel logic (e.g., validation, retrieval).
+type ChannelService interface {
+	ValidateChannelID(string) bool
+	GetChannelName(string) (string, error)
 }
 
-// ChatService handles interactions related to the chat module.
-type ChatService struct {
-	store MessageStore
+// Message represents a chat message.
+type Message struct {
+	ID        string
+	ChannelID string
+	Content   string
+	Timestamp time.Time
+	AuthorID  string
 }
 
-// NewChatService creates a new chat service with the provided storage implementation.
-func NewChatService(store MessageStore) *ChatService {
-	return &ChatService{
-		store: store,
+// Channel represents a chat channel.
+type Channel struct {
+	ID   string
+	Name string
+	Type string
+}
+
+// --- Middleware ---
+
+// Middleware type allows for request interception
+type Middleware func(MessageService) MessageService
+
+// --- Core Business Logic ---
+
+// MessageService is the main interface for interacting with chat functionality.
+type MessageService interface {
+	SendMessage(ctx context.Context, channelID, content, authorID string) (string, error)
+	GetHistory(ctx context.Context, channelID string) ([]Message, error)
+}
+
+// messageService implements MessageService
+type messageService struct {
+	channelSvc ChannelService
+	storageSvc StorageService
+}
+
+// AuthService simulates user authentication
+type AuthService interface {
+	ValidateToken(string) (bool, string)
+}
+
+type authService struct {
+	users map[string]struct{} // simple mock: token -> user existence
+}
+
+func NewAuthService() AuthService {
+	return &authService{
+		users: map[string]struct{}{
+			"token-1": {},
+		},
 	}
 }
 
-// SendMessage creates a new message and stores it.
-func (s *ChatService) SendMessage(ctx context.Context, channelID, author, content string) (int64, error) {
+func (a *authService) ValidateToken(token string) (bool, string) {
+	_, exists := a.users[token]
+	return exists, "user-123"
+}
+
+// NewMessageService constructs the application logic
+func NewMessageService(channelSvc ChannelService, storageSvc StorageService) MessageService {
+	return &messageService{
+		channelSvc: channelSvc,
+		storageSvc: storageSvc,
+	}
+}
+
+// NewAuthService is a helper constructor
+func NewAuthService() AuthService {
+	return &authService{
+		users: map[string]struct{}{
+			"public-channel": {role: "user"},
+			"private-channel": {role: "mod"},
+		},
+	}
+}
+
+// Code snippet Fixed: Ensure validator logic matches function existence
+// Uppercase V for exported function
+func (a *authService) ValidateToken(token string) (bool, string) {
+	// Mocking a simple lookup
+	return token != "" && token == "valid-token", "user-123"
+}
+
+// --- Implementation Methods ---
+
+// SendMessage sends a message to a channel
+func (s *messageService) SendMessage(ctx context.Context, channelID, content, authorID string) (string, error) {
+	if !s.channelSvc.ValidateChannelID(channelID) {
+		return "", fmt.Errorf("service: invalid channel ID format")
+	}
+
+	// In a real app, validate content length here
 	if content == "" {
-		return -1, errors.New("message content cannot be empty")
-	}
-	if author == "" {
-		return -1, errors.New("author cannot be empty")
+		return "", fmt.Errorf("service: content cannot be empty")
 	}
 
-	msg := UserMessage{
-		ChannelID: channelID,
-		Author:    author,
-		Content:   content,
-		Timestamp: time.Now(),
-	}
+	msgID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
 
-	id, err := s.store.SaveMessage(ctx, msg)
+	// Simulate a "Wait" on DB write (slow operation test)
+	time.Sleep(10 * time.Millisecond)
+	
+	err := s.storageSvc.SaveMessage(ctx, msgID, channelID, content)
 	if err != nil {
-		// In a real app, you might wrap this or log it.
-		return -1, errors.New("failed to persist message")
+		return "", err
 	}
 
-	return id, nil
+	return msgID, nil
 }
 
-// GetChannelMessages retrieves all messages for a specific channel.
-func (s *ChatService) GetChannelMessages(ctx context.Context, channelID string) ([]UserMessage, error) {
-	if channelID == "" {
-		return nil, errors.New("channel ID cannot be empty")
+// GetHistory retrieves messages from a channel
+func (s *messageService) GetHistory(ctx context.Context, channelID string) ([]Message, error) {
+	if !s.channelSvc.ValidateChannelID(channelID) {
+		return nil, fmt.Errorf("service: access denied or invalid channel")
 	}
 
-	messages, err := s.store.GetMessagesByChannel(ctx, channelID)
-	if err != nil {
-		return nil, errors.New("failed to retrieve messages")
+	return s.storageSvc.GetMessages(ctx, channelID)
+}
+
+// --- Implementation Methods ---
+
+func (s *messageService) SendMessage(ctx context.Context, channelID, content, authorID string) (string, error) {
+	// Validate Channel
+	if !s.channelSvc.ValidateChannelID(channelID) {
+		return "", fmt.Errorf("service: invalid channel ID format")
 	}
 
-	return messages, nil
+	// Validate Message
+	if content == "" {
+		return "", fmt.Errorf("service: content cannot be empty")
+	}
+
+	msgID := time.Now().Format("20060102-15-04-05")
+
+	return s.storageSvc.SaveMessage(ctx, msgID, channelID, content)
 }
 
-// ServiceResult wraps the standard "ServiceResponse" pattern result.
-type ServiceResult[T any] struct {
-	Data  T     `json:"data,omitempty"`
-	Error string `json:"error,omitempty"`
+func (s *messageService) GetHistory(ctx context.Context, channelID string) ([]Message, error) {
+	if !s.channelSvc.ValidateChannelID(channelID) {
+		return nil, fmt.Errorf("service: service: access denied or invalid channel")
+	}
+
+	return s.storageSvc.GetMessages(ctx, channelID)
 }
 
-type ChatResponse struct {
-	Success bool     `json:"success"`
-	Result  ServiceResult[[]UserMessage] `json:"result"`
+// BuildMiddlewareChain allows functional composition of logic
+func BuildMiddlewareChain(svc MessageService, middlewares []Middleware) MessageService {
+	current := svc
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		current = middlewares[i](current)
+	}
+	return current
 }

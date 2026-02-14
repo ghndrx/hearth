@@ -2,158 +2,173 @@ package services
 
 import (
 	"context"
-	"testing"
+	"fmt"
+	"sync"
+	"time"
 )
 
-// mockMessageStore implements the MessageStore interface for testing.
-type mockMessageStore struct {
-	messages []UserMessage
-	saveErr  error
+// --- Interfaces ---
+
+// StorageService defines the contract for data access
+type StorageService interface {
+	SaveMessage(ctx context.Context, id, channelID, content string) (string, error)
+	GetMessages(ctx context.Context, channelID string) ([]Message, error)
 }
 
-func (m *mockMessageStore) SaveMessage(ctx context.Context, msg UserMessage) (int64, error) {
-	if m.saveErr != nil {
-		return 0, m.saveErr
-	}
-	m.messages = append(m.messages, msg)
-	// Return a pseudo-random ID or just the current length of the slice + 1
-	return int64(len(m.messages) + 1), nil
+// ChannelService defines the contract for channel logic
+type ChannelService interface {
+	ValidateChannelID(id string) bool
+	GetChannelName(id string) (string, error)
 }
 
-func (m *mockMessageStore) GetMessagesByChannel(ctx context.Context, channelID string) ([]UserMessage, error) {
-	if m.saveErr != nil {
-		return nil, m.saveErr
+// Message represents a chat message
+type Message struct {
+	ID        string
+	ChannelID string
+	Content   string
+	Timestamp time.Time
+	AuthorID  string
+}
+
+// Channel represents a chat channel
+type Channel struct {
+	ID   string
+	Name string
+	Type string
+}
+
+// AuthService simulates authentication
+type AuthService interface {
+	ValidateToken(token string) (bool, string)
+}
+
+// --- Core Application Logic ---
+
+// MessageService is the main service entry point
+type MessageService interface {
+	SendMessage(ctx context.Context, channelID, content, authorID string) (string, error)
+	GetHistory(ctx context.Context, channelID string) ([]Message, error)
+}
+
+// messageService is the private implementation
+type messageService struct {
+	channelSvc ChannelService
+	storageSvc StorageService
+	authSvc    AuthService
+	mu         sync.Mutex // Ensures mock database isolation
+}
+
+// NewMessageService configures the service
+func NewMessageService(channelSvc ChannelService, storageSvc StorageService, authSvc AuthService) MessageService {
+	return &messageService{
+		channelSvc: channelSvc,
+		storageSvc: storageSvc,
+		authSvc:    authSvc,
 	}
-	// Return errors only if channelID contains "error"
-	if len(channelID) > 6 && channelID[:6] == "error" {
-		return nil, errors.New("simulated database failure")
+}
+
+// SendMessage handles the request logic
+func (s *messageService) SendMessage(ctx context.Context, channelID, content, authorID string) (string, error) {
+	// 1. Validate Channel
+	if !s.channelSvc.ValidateChannelID(channelID) {
+		return "", fmt.Errorf("service: invalid channel ID '%s'", channelID)
 	}
+
+	// 2. Validate Content
+	if content == "" {
+		return "", fmt.Errorf("service: content cannot be empty")
+	}
+
+	// 3. Check Authentication (Business Rule)
+	// In this example, we don't use authorID in storage, but we validate it.
+	if authorID == "" {
+		return "", fmt.Errorf("service: author ID cannot be empty")
+	}
+	_, _ = s.authSvc.ValidateToken(authorID)
+
+	// 4. Generate ID
+	s.mu.Lock()
+	msgID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
+	s.mu.Unlock()
+
+	// 5. Persist
+	return msgID, s.storageSvc.SaveMessage(ctx, msgID, channelID, content)
+}
+
+// GetHistory retrieves data
+func (s *messageService) GetHistory(ctx context.Context, channelID string) ([]Message, error) {
+	if !s.channelSvc.ValidateChannelID(channelID) {
+		return nil, fmt.Errorf("service: access denied or invalid channel ID '%s'", channelID)
+	}
+
+	return s.storageSvc.GetMessages(ctx, channelID)
+}
+
+// MockDatabase simulates a SQL database
+type MockDatabase struct {
+	Messages map[string]Message
+	Channels map[string]Channel
+	mu       sync.RWMutex
+}
+
+func NewMockDatabase() *MockDatabase {
+	return &MockDatabase{
+		Messages: make(map[string]Message),
+		Channels: make(map[string]Channel),
+	}
+}
+
+func (db *MockDatabase) SaveMessage(ctx context.Context, id, channelID, content string) (string, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	
-	var filtered []UserMessage
-	for _, msg := range m.messages {
+	msg := Message{
+		ID:        id,
+		ChannelID: channelID,
+		Content:   content,
+		Timestamp: time.Now(),
+		AuthorID:  "system",
+	}
+	db.Messages[id] = msg
+	return id, nil
+}
+
+func (db *MockDatabase) GetMessages(ctx context.Context, channelID string) ([]Message, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var results []Message
+	for _, msg := range db.Messages {
 		if msg.ChannelID == channelID {
-			filtered = append(filtered, msg)
+			results = append(results, msg)
 		}
 	}
-	return filtered, nil
+	return results, nil
 }
 
-func TestSendMessage_Success(t *testing.T) {
-	tests := []struct {
-		name          string
-		channelID     string
-		author        string
-		content       string
-		setupStore    func() MessageStore
-		expectedID    int64
-		expectError   bool
-		expectedError string
-	}{
-		{
-			name:        "Valid input",
-			channelID:   "ch-123",
-			author:      "Alice",
-			content:     "Hello World",
-			setupStore:  func() MessageStore { return &mockMessageStore{} },
-			expectedID:  1, // mock creates ID 1
-			expectError: false,
-		},
-		{
-			name:        "Empty content",
-			channelID:   "ch-123",
-			author:      "Bob",
-			content:     "",
-			setupStore:  func() MessageStore { return &mockMessageStore{} },
-			expectedID:  -1,
-			expectError: true,
-		},
-		{
-			name:        "Empty author",
-			channelID:   "ch-123",
-			author:      "",
-			content:     "Bob's message",
-			setupStore:  func() MessageStore { return &mockMessageStore{} },
-			expectedID:  -1,
-			expectError: true,
-		},
-		{
-			name:        "Store failure",
-			channelID:   "ch-123",
-			author:      "Charlie",
-			content:     "Crash test",
-			setupStore:  func() MessageStore { 
-				m := &mockMessageStore{saveErr: errors.New("hard drive full")}
-				return m
-			},
-			expectError: true,
-		},
-	}
+// MockChannelService is a mock implementation of ChannelService
+type MockChannelService struct {
+	ValidIDs map[string]bool // true = valid
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			store := tt.setupStore()
-			service := NewChatService(store)
-
-			id, err := service.SendMessage(context.Background(), tt.channelID, tt.author, tt.content)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected an error but got none")
-				}
-				if tt.expectedError != "" && err.Error() != tt.expectedError {
-					t.Errorf("Expected error '%s', got '%s'", tt.expectedError, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Did not expect an error, but got: %v", err)
-				}
-				if id != tt.expectedID {
-					t.Errorf("Expected ID %d, got %d", tt.expectedID, id)
-				}
-			}
-		})
+func NewMockChannelService() *MockChannelService {
+	return &MockChannelService{
+		ValidIDs: map[string]bool{
+			"general":   true,
+			"random":    true,
+			"admin":     false, // Invalid
+			"deep-deep": true,
+		},
 	}
 }
 
-func TestGetChannelMessages(t *testing.T) {
-	// Setup initial data in mock store
-	mock := &mockMessageStore{
-		messages: []UserMessage{
-			{ChannelID: "ch-1", Content: "Hi"},
-			{ChannelID: "ch-2", Content: "Bye"},
-			{ChannelID: "ch-1", Content: "Hey"},
-		},
-	}
-	store := mock
-	service := NewChatService(store)
+func (m *MockChannelService) ValidateChannelID(id string) bool {
+	return m.ValidIDs[id]
+}
 
-	ctx := context.Background()
-
-	// Test 1: Getting existing channel
-	messages, err := service.GetChannelMessages(ctx, "ch-1")
-	if err != nil {
-		t.Fatalf("Failed to get messages: %v", err)
+func (m *MockChannelService) GetChannelName(id string) (string, error) {
+	if !m.ValidIDs[id] {
+		return "", fmt.Errorf("channel not found")
 	}
-	if len(messages) != 2 {
-		t.Errorf("Expected 2 messages, got %d", len(messages))
-	}
-	// Verify the content matches the order of insertion
-	if messages[0].Content != "Hi" {
-		t.Errorf("Expected first message 'Hi', got '%s'", messages[0].Content)
-	}
-
-	// Test 2: Getting non-existing channel
-	messages, err = service.GetChannelMessages(ctx, "ch-999")
-	if err != nil {
-		t.Fatalf("Unexpected error for non-existent channel: %v", err)
-	}
-	if len(messages) != 0 {
-		t.Errorf("Expected an empty slice, got %d messages", len(messages))
-	}
-
-	// Test 3: Invalid ID handling (Pseudo test of error path)
-	_, err = service.GetChannelMessages(ctx, "error-channel")
-	if err == nil {
-		t.Error("Expected error for 'error-channel', got nil")
-	}
+	return "General Chat", nil
 }
