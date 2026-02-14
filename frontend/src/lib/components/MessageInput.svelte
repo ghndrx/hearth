@@ -2,18 +2,26 @@
 	import { createEventDispatcher } from 'svelte';
 	import { currentChannel } from '$lib/stores/channels';
 	import { sendTypingIndicator } from '$lib/stores/messages';
-	
-	const dispatch = createEventDispatcher();
-	
+	import EmojiPicker from './EmojiPicker.svelte';
+
+	const dispatch = createEventDispatcher<{
+		send: { content: string; attachments: File[]; replyTo?: string };
+		typing: void;
+	}>();
+
+	export let placeholder = '';
+	export let replyTo: { id: string; content: string; author: { username: string } } | null = null;
+
 	let content = '';
 	let files: FileList | null = null;
 	let textarea: HTMLTextAreaElement;
 	let lastTypingTime = 0;
-	
-	$: placeholder = getPlaceholder($currentChannel);
-	
-	function getPlaceholder(channel: any) {
-		if (!channel) return 'Select a channel';
+	let showEmojiPicker = false;
+
+	$: actualPlaceholder = placeholder || getPlaceholder($currentChannel);
+
+	function getPlaceholder(channel: typeof $currentChannel) {
+		if (!channel) return 'Message';
 		if (channel.type === 1) {
 			return `Message @${channel.recipients?.[0]?.username || 'Unknown'}`;
 		}
@@ -22,17 +30,17 @@
 		}
 		return `Message #${channel.name}`;
 	}
-	
+
 	function handleInput() {
 		autoResize();
 		handleTyping();
 	}
-	
+
 	function autoResize() {
 		textarea.style.height = 'auto';
 		textarea.style.height = Math.min(textarea.scrollHeight, 300) + 'px';
 	}
-	
+
 	function handleTyping() {
 		const now = Date.now();
 		if (now - lastTypingTime > 3000) {
@@ -42,31 +50,32 @@
 			}
 		}
 	}
-	
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			send();
 		}
 	}
-	
+
 	function send() {
 		if (!content.trim() && !files?.length) return;
-		
+
 		dispatch('send', {
 			content: content.trim(),
-			attachments: files ? Array.from(files) : []
+			attachments: files ? Array.from(files) : [],
+			replyTo: replyTo?.id
 		});
-		
+
 		content = '';
 		files = null;
 		textarea.style.height = 'auto';
 	}
-	
+
 	function handlePaste(e: ClipboardEvent) {
 		const items = e.clipboardData?.items;
 		if (!items) return;
-		
+
 		for (const item of items) {
 			if (item.type.startsWith('image/')) {
 				const file = item.getAsFile();
@@ -81,7 +90,7 @@
 			}
 		}
 	}
-	
+
 	function removeFile(index: number) {
 		if (!files) return;
 		const dt = new DataTransfer();
@@ -90,9 +99,69 @@
 		}
 		files = dt.files;
 	}
+
+	function handleFileSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		if (input.files) {
+			const dt = new DataTransfer();
+			if (files) {
+				for (const f of files) dt.items.add(f);
+			}
+			for (const f of input.files) {
+				dt.items.add(f);
+			}
+			files = dt.files;
+		}
+	}
+
+	function handleEmojiSelect(emoji: string) {
+		const start = textarea.selectionStart;
+		const end = textarea.selectionEnd;
+		const before = content.substring(0, start);
+		const after = content.substring(end);
+		content = before + emoji + after;
+		showEmojiPicker = false;
+		// Focus back on textarea after selection
+		setTimeout(() => {
+			textarea.focus();
+			textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+		}, 0);
+	}
+
+	function clearReply() {
+		replyTo = null;
+	}
 </script>
 
 <div class="message-input-container">
+	<!-- Reply Preview -->
+	{#if replyTo}
+		<div class="reply-preview-bar">
+			<div class="reply-bar"></div>
+			<div class="reply-info">
+				<span class="reply-label">Replying to</span>
+				<span class="reply-author">{replyTo.author.username}</span>
+				<p class="reply-content">
+					{replyTo.content.slice(0, 100)}{replyTo.content.length > 100 ? '...' : ''}
+				</p>
+			</div>
+			<button class="close-reply-btn" on:click={clearReply}>
+				<svg
+					width="16"
+					height="16"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<line x1="18" y1="6" x2="6" y2="18" />
+					<line x1="6" y1="6" x2="18" y2="18" />
+				</svg>
+			</button>
+		</div>
+	{/if}
+
+	<!-- Attachments Preview -->
 	{#if files?.length}
 		<div class="attachments-preview">
 			{#each Array.from(files) as file, i}
@@ -101,47 +170,132 @@
 						<img src={URL.createObjectURL(file)} alt={file.name} />
 					{:else}
 						<div class="file-preview">
-							<span class="file-icon">📎</span>
-							<span class="file-name">{file.name}</span>
+							<svg
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+								/>
+							</svg>
+							<span>{file.name}</span>
 						</div>
 					{/if}
-					<button class="remove-attachment" on:click={() => removeFile(i)}>×</button>
+					<button class="remove-attachment" on:click={() => removeFile(i)}>
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<line x1="18" y1="6" x2="6" y2="18" />
+							<line x1="6" y1="6" x2="18" y2="18" />
+						</svg>
+					</button>
 				</div>
 			{/each}
 		</div>
 	{/if}
-	
+
+	<!-- Input Area -->
 	<div class="input-wrapper">
-		<button class="attach-btn" title="Attach file">
-			<label>
-				<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-					<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+		<!-- Attach Button -->
+		<div class="input-button attach-button">
+			<input
+				type="file"
+				id="file-upload"
+				multiple
+				accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+				on:change={handleFileSelect}
+				disabled={!$currentChannel}
+			/>
+			<label for="file-upload" class="icon-button" title="Upload a file">
+				<svg
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<path
+						d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+					/>
 				</svg>
-				<input type="file" multiple hidden bind:files />
 			</label>
-		</button>
-		
+		</div>
+
+		<!-- Text Area -->
 		<textarea
 			bind:this={textarea}
 			bind:value={content}
 			on:input={handleInput}
 			on:keydown={handleKeydown}
 			on:paste={handlePaste}
-			{placeholder}
+			placeholder={actualPlaceholder}
 			rows="1"
 			disabled={!$currentChannel}
 		></textarea>
-		
-		<div class="input-buttons">
-			<button class="emoji-btn" title="Emoji">
-				<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-					<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+
+		<!-- Right Buttons -->
+		<div class="input-buttons-right">
+			<!-- Gift Button (Placeholder) -->
+			<button
+				class="icon-button gift-button"
+				title="Upgrade to Hearth Nitro to send gifts!"
+				disabled={!$currentChannel}
+			>
+				<svg
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<polyline points="20 12 20 22 4 22 4 12" />
+					<rect x="2" y="7" width="20" height="5" />
+					<line x1="12" y1="22" x2="12" y2="7" />
+					<path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+					<path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
 				</svg>
 			</button>
-			
-			{#if $currentChannel?.e2ee_enabled}
-				<span class="e2ee-indicator" title="End-to-End Encrypted">🔒</span>
-			{/if}
+
+			<!-- Emoji Button -->
+			<div class="emoji-button-container">
+				<button
+					class="icon-button emoji-button"
+					title="Select emoji"
+					on:click={() => (showEmojiPicker = !showEmojiPicker)}
+					disabled={!$currentChannel}
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<circle cx="12" cy="12" r="10" />
+						<path d="M8 14s1.5 2 4 2 4-2 4-2" />
+						<line x1="9" y1="9" x2="9.01" y2="9" />
+						<line x1="15" y1="9" x2="15.01" y2="9" />
+					</svg>
+				</button>
+
+				<EmojiPicker
+					show={showEmojiPicker}
+					on:select={(e) => handleEmojiSelect(e.detail)}
+					on:close={() => (showEmojiPicker = false)}
+				/>
+			</div>
 		</div>
 	</div>
 </div>
@@ -150,36 +304,102 @@
 	.message-input-container {
 		padding: 0 16px 24px;
 	}
-	
+
+	/* Reply Preview Bar */
+	.reply-preview-bar {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 8px 16px;
+		background: var(--bg-secondary, #2b2d31);
+		border-radius: 8px 8px 0 0;
+		margin-bottom: 2px;
+	}
+
+	.reply-bar {
+		width: 2px;
+		background: var(--text-muted, #949ba4);
+		border-radius: 1px;
+		align-self: stretch;
+		flex-shrink: 0;
+	}
+
+	.reply-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.reply-label {
+		font-size: 12px;
+		color: var(--text-muted, #949ba4);
+		margin-right: 4px;
+	}
+
+	.reply-author {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--brand-primary, #5865f2);
+	}
+
+	.reply-content {
+		margin: 2px 0 0 0;
+		font-size: 14px;
+		color: var(--text-secondary, #b5bac1);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.close-reply-btn {
+		background: none;
+		border: none;
+		color: var(--text-muted, #949ba4);
+		cursor: pointer;
+		padding: 4px;
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition:
+			background-color 0.15s,
+			color 0.15s;
+	}
+
+	.close-reply-btn:hover {
+		background: var(--bg-modifier-hover, rgba(79, 84, 92, 0.16));
+		color: var(--text-primary, #f2f3f5);
+	}
+
+	/* Attachments Preview */
 	.attachments-preview {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
-		padding: 8px;
-		background: var(--bg-secondary);
-		border-radius: 8px 8px 0 0;
+		padding: 8px 16px;
+		background: var(--bg-secondary, #2b2d31);
+		border-radius: 0;
 	}
-	
+
 	.attachment-preview {
 		position: relative;
 		max-width: 200px;
 	}
-	
+
 	.attachment-preview img {
 		max-width: 200px;
 		max-height: 150px;
 		border-radius: 4px;
 	}
-	
+
 	.file-preview {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		padding: 8px 12px;
-		background: var(--bg-tertiary);
+		background: var(--bg-tertiary, #1e1f22);
 		border-radius: 4px;
 	}
-	
+
 	.remove-attachment {
 		position: absolute;
 		top: -8px;
@@ -187,93 +407,110 @@
 		width: 24px;
 		height: 24px;
 		border-radius: 50%;
-		background: var(--status-danger);
+		background: var(--status-danger, #f23f43);
 		border: none;
 		color: white;
-		font-size: 16px;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		transition: transform 0.1s;
 	}
-	
+
+	.remove-attachment:hover {
+		transform: scale(1.1);
+	}
+
+	/* Input Wrapper */
 	.input-wrapper {
 		display: flex;
 		align-items: flex-end;
 		gap: 8px;
-		background: var(--bg-tertiary);
+		background: var(--bg-tertiary, #1e1f22);
 		border-radius: 8px;
-		padding: 4px;
+		padding: 0 4px;
+		min-height: 44px;
 	}
-	
+
+	.reply-preview-bar + .input-wrapper,
 	.attachments-preview + .input-wrapper {
 		border-radius: 0 0 8px 8px;
 	}
-	
-	.attach-btn {
+
+	/* Attach Button */
+	.attach-button input[type='file'] {
+		display: none;
+	}
+
+	.icon-button {
 		background: none;
 		border: none;
-		color: var(--text-muted);
+		color: var(--text-muted, #949ba4);
 		cursor: pointer;
-		padding: 8px;
-		border-radius: 4px;
-	}
-	
-	.attach-btn:hover {
-		color: var(--text-primary);
-	}
-	
-	.attach-btn label {
-		cursor: pointer;
+		padding: 10px;
+		border-radius: 50%;
 		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition:
+			background-color 0.15s,
+			color 0.15s;
 	}
-	
+
+	.icon-button:hover:not(:disabled) {
+		background: var(--bg-modifier-hover, rgba(79, 84, 92, 0.16));
+		color: var(--text-primary, #f2f3f5);
+	}
+
+	.icon-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	/* Text Area */
 	textarea {
 		flex: 1;
 		background: none;
 		border: none;
-		color: var(--text-primary);
+		color: var(--text-primary, #f2f3f5);
 		font-size: 16px;
-		padding: 10px 0;
+		padding: 11px 0;
 		resize: none;
 		max-height: 300px;
-		line-height: 1.4;
+		line-height: 1.375;
+		font-family: inherit;
 	}
-	
+
 	textarea::placeholder {
-		color: var(--text-muted);
+		color: var(--text-muted, #949ba4);
 	}
-	
+
 	textarea:focus {
 		outline: none;
 	}
-	
+
 	textarea:disabled {
 		cursor: not-allowed;
 	}
-	
-	.input-buttons {
+
+	/* Right Buttons */
+	.input-buttons-right {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px;
 	}
-	
-	.emoji-btn {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		cursor: pointer;
-		padding: 4px;
-		border-radius: 4px;
+
+	/* Gift Button */
+	.gift-button:hover:not(:disabled) {
+		color: var(--status-danger, #f23f43);
 	}
-	
-	.emoji-btn:hover {
-		color: var(--text-primary);
+
+	/* Emoji Button Container */
+	.emoji-button-container {
+		position: relative;
 	}
-	
-	.e2ee-indicator {
-		font-size: 14px;
-		padding: 4px;
+
+	.emoji-button:hover:not(:disabled) {
+		color: #ffd700;
 	}
 </style>
