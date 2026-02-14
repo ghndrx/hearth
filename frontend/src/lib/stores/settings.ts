@@ -67,7 +67,7 @@ const initialState: SettingsState = {
 };
 
 function createSettingsStore() {
-	const { subscribe, set, update } = writable<SettingsState>(initialState);
+	const { subscribe, update } = writable<SettingsState>(initialState);
 	
 	// Apply theme on init
 	if (browser) {

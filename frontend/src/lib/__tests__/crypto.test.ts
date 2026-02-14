@@ -27,17 +27,14 @@ const mockCrypto = {
   }),
 };
 
-// Store original crypto
-const originalCrypto = globalThis.crypto;
-
 describe('Encryption', () => {
   beforeAll(() => {
-    // @ts-ignore - mock crypto
-    globalThis.crypto = mockCrypto;
+    vi.stubGlobal('crypto', mockCrypto);
+    vi.stubGlobal('indexedDB', {});
   });
 
   afterAll(() => {
-    globalThis.crypto = originalCrypto;
+    vi.unstubAllGlobals();
   });
 
   describe('isE2EESupported', () => {
@@ -47,13 +44,12 @@ describe('Encryption', () => {
     });
 
     it('should return false when crypto.subtle is unavailable', () => {
-      const tempCrypto = globalThis.crypto;
-      // @ts-ignore
-      globalThis.crypto = {};
-      
+      vi.stubGlobal('crypto', {});
+      vi.stubGlobal('indexedDB', {});
+
       expect(isE2EESupported()).toBe(false);
-      
-      globalThis.crypto = tempCrypto;
+
+      vi.stubGlobal('crypto', mockCrypto);
     });
   });
 
