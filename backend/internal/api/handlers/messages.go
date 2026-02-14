@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -175,6 +176,16 @@ func (h *MessageHandlers) EditMessage(c *fiber.Ctx) error {
 
 	message, err := h.messageService.EditMessage(c.Context(), messageID, userID, req.Content)
 	if err != nil {
+		if errors.Is(err, services.ErrMessageNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrNotMessageAuthor) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "You can only edit your own messages",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -195,6 +206,21 @@ func (h *MessageHandlers) DeleteMessage(c *fiber.Ctx) error {
 
 	err = h.messageService.DeleteMessage(c.Context(), messageID, userID)
 	if err != nil {
+		if errors.Is(err, services.ErrMessageNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrNotMessageAuthor) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "You can only delete your own messages",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to delete this message",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
