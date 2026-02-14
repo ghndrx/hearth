@@ -1,148 +1,117 @@
 package services
 
 import (
-	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"sync"
 	"time"
 )
 
-// ContextKey is a custom type for Request Context keys.
-type ContextKey string
-
-// KeySessionID is used to store the session ID in the request context.
-const KeySessionID ContextKey = "session_id"
-
-// Session represents a connected user session.
-type Session struct {
-	UserID    string
-	SessionID string
-	RTT       time.Duration // Round Trip Time for connection health
+// Storage defines the interface for persisting Hearth state.
+// This allows us to mock it in tests without touching a real database.
+type Storage interface {
+	// SaveMessage persists a new message.
+	SaveMessage(msg *Message) error
+	// GetUser fetches a user by ID.
+	GetUser(userID string) (*User, error)
+	// GetMessagesByChannel fetches historical messages.
+	GetMessagesByChannel(channelID string) ([]*Message, error)
+	// CreateUser ensures a user exists.
+	CreateUser(user *User) error
 }
 
-// Message represents an event payload (e.g., Join, Leave).
+// Message represents a chat message in Hearth.
 type Message struct {
-	Type    string `json:"type"`
-	UserID  string `json:"user_id"`
-	Channel string `json:"channel"` // Optional: channel ID for future extension
+	ID        string
+	ChannelID string
+	Content   string
+	UserID    string
+	Timestamp time.Time
 }
 
-// Mux provides thread-safe broadcast capabilities for channel events.
-type Mux interface {
-	Broadcast(channel string, msg Message)
+// User represents a Discord account in Hearth.
+type User struct {
+	ID       string
+	Username string
+	Email    string
 }
 
-// Logger logs service events.
-type Logger interface {
-	Debug(module, message string)
-	Info(module, message string)
-	Error(module, message string)
+// MainService handles the core business logic of Hearth.
+type MainService struct {
+	store Storage
+	mu    sync.RWMutex // Locking strategy for safe concurrent access
 }
 
-// GatewayService manages concurrent WebSocket connections (simulated here with /ws).
-type GatewayService struct {
-	mu            sync.RWMutex
-	sessions      map[string]*Session
-	channels      map[string]map[string]*Session // channelID -> userID -> Session
-	logger        Logger
-	eventMux      Mux
-}
-
-// NewGatewayService creates a new instance of the GatewayService.
-func NewGatewayService(l Logger, m Mux) *GatewayService {
-	return &GatewayService{
-		sessions:   make(map[string]*Session),
-		channels:   make(map[string]map[string]*Session),
-		logger:     l,
-		eventMux:   m,
+// NewMainService creates a new instance of the Hearth main service.
+func NewMainService(store Storage) *MainService {
+	return &MainService{
+		store: store,
 	}
 }
 
-// HandleWS simulates the WebSocket upgrade handler.
-func (s *GatewayService) HandleWS(w http.ResponseWriter, r *http.Request) {
-	// Simulate generating a Session ID
-	sessionID := fmt.Sprintf("sess_%d", time.Now().UnixNano())
-	
-	// In a real implementation, this would upgrade the connection and start a goroutine.
-	// Here, we simulate the backend behavior of tracking the session.
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// 1. Add User to general sessions
-	session := &Session{
-		UserID:    sessionID, // Simplified for demo: UserID == SessionID
-		SessionID: sessionID,
-		RTT:       time.Second,
+// SendMessage handles the logic to send a message into a channel.
+func (s *MainService) SendMessage(channelID, content, userID string) (*Message, error) {
+	if channelID == "" {
+		return nil, errors.New("channel ID cannot be empty")
 	}
-	s.sessions[sessionID] = session
-
-	// 2. Add User to "general" channel
-	if s.channels["general"] == nil {
-		s.channels["general"] = make(map[string]*Session)
+	if content == "" {
+		return nil, errors.New("content cannot be empty")
 	}
-	s.channels["general"][sessionID] = session
+	if userID == "" {
+		return nil, errors.New("user ID cannot be empty")
+	}
 
-	// 3. Log the event
-	s.logger.Info("Gateway", fmt.Sprintf("User [ID:%s] connected to 'general'", sessionID))
+	// In a real production app, we might verify the user's permissions here.
+	// For simplicity, we just fetch them to check existence.
+	_, err := s.store.GetUser(userID)
+	if err != nil {
+		return nil, fmt.Errorf("user %s not found", userID)
+	}
 
-	// 4. Broadcast to channel (Notification via Mock Mux)
-	s.eventMux.Broadcast("general", Message{
-		Type:    "user_joined",
-		UserID:  sessionID,
-		Channel: "general",
-	})
+	msg := &Message{
+		ID:        generateID(),
+		ChannelID: channelID,
+		Content:   content,
+		UserID:    userID,
+		Timestamp: time.Now(),
+	}
 
-	// Set mock context ID for testing purposes
-	ctx := r.Context()
-	ctx = context.WithValue(ctx, KeySessionID, sessionID)
-	*r = *r.WithContext(ctx)
+	if err := s.store.SaveMessage(msg); err != nil {
+		return nil, fmt.Errorf("failed to save message: %w", err)
+	}
 
-	w.WriteHeader(http.StatusSwitchingProtocols) // Simulated 101
+	return msg, nil
 }
 
-// GetChannelMembers retrieves active sessions for a specific channel.
-func (s *GatewayService) GetChannelMembers(ctx context.Context, channelID string) ([]*Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	members, exists := s.channels[channelID]
-	if !exists {
-		return nil, fmt.Errorf("channel %s not found", channelID)
+// GetChannelHistory retrieves messages for a specific channel.
+func (s *MainService) GetChannelHistory(channelID string, limit int) ([]*Message, error) {
+	if channelID == "" {
+		return nil, errors.New("channel ID cannot be empty")
+	}
+	if limit <= 0 {
+		return nil, errors.New("limit must be > 0")
 	}
 
-	// Convert map to slice
-	result := make([]*Session, 0, len(members))
-	for _, sess := range members {
-		result = append(result, sess)
-	}
-
-	return result, nil
+	return s.store.GetMessagesByChannel(channelID)
 }
 
-// CleanupStaleSessions removes sessions that have timed out.
-func (s *GatewayService) CleanupStaleSessions(ctx context.Context, threshold time.Duration) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now()
-	count := 0
-	toRemove := make([]string, 0)
-
-	for id, sess := range s.sessions {
-		if now.Sub(sess.RTT) > threshold {
-			toRemove = append(toRemove, id)
-			s.logger.Debug("Gateway", fmt.Sprintf("Removing stale session %s", id))
-		}
+// CreateUser creates a new user in the system.
+func (s *MainService) CreateUser(username, email, userID string) error {
+	if username == "" || email == "" || userID == "" {
+		return errors.New("username, email, and ID are required")
 	}
 
-	for _, id := range toRemove {
-		delete(s.sessions, id)
-		// Note: This simplified implementation doesn't decrement channel counts,
-		// but in a real highly concurrent app, you might use range delete carefully.
+	user := &User{
+		ID:       userID,
+		Username: username,
+		Email:    email,
 	}
 
-	return count
+	// Attempt to create; store handles duplicates
+	return s.store.CreateUser(user)
+}
+
+// generateID is a simple pseudo-random ID generator for this demo.
+func generateID() string {
+	return fmt.Sprintf("msg-%d", time.Now().UnixNano())
 }

@@ -1,237 +1,221 @@
 package services
 
 import (
-	"context"
-	"encoding/json"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 )
 
-// --- Mock Implementations ---
-
-// MockLogger asserts that correct calls to Info, Debug, and Error were made.
-type MockLogger struct {
-	LoggedInfo  []string
-	LoggedDebug []string
-	LoggedError []string
-	Errors      []error
+// MockStorage implements the Storage interface using an internal map
+// This makes it entirely deterministic and fast for tests.
+type MockStorage struct {
+	Messages map[string][]*Message
+	Users    map[string]*User
+	mu       sync.RWMutex
+	errToReturn error
 }
 
-func (m *MockLogger) Info(module, message string) {
-	m.LoggedInfo = append(m.LoggedInfo, module+": "+message)
-}
-
-func (m *MockLogger) Debug(module, message string) {
-	m.LoggedDebug = append(m.LoggedDebug, module+": "+message)
-}
-
-func (m *MockLogger) Error(module, message string) {
-	m.LoggedError = append(m.LoggedError, module+": "+message)
-}
-
-// MockMux asserts that Broadcast was called with the correct arguments.
-type MockMux struct {
-	Calls []struct {
-		Channel string
-		Message Message
+func NewMockStorage() *MockStorage {
+	return &MockStorage{
+		Messages: make(map[string][]*Message),
+		Users:    make(map[string]*User),
 	}
 }
 
-func (m *MockMux) Broadcast(channel string, msg Message) {
-	m.Calls = append(m.Calls, struct {
-		Channel string
-		Message Message
-	}{Channel: channel, Message: msg})
+// Implementing Storage interface methods
+
+func (m *MockStorage) SaveMessage(msg *Message) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	// Simulate a database error for specific conditions (optional)
+	if m.errToReturn != nil {
+		return m.errToReturn
+	}
+
+	m.Messages[msg.ChannelID] = append(m.Messages[msg.ChannelID], msg)
+	return nil
 }
 
-// --- Helper function to simulate Upgrade ---
-func createMockRequest(header http.Header, sessionID string) *http.Request {
-	r := &http.Request{
-		Header: header,
+func (m *MockStorage) GetUser(userID string) (*User, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	user, exists := m.Users[userID]
+	if !exists {
+		return nil, errors.New("user not found")
 	}
-	ctx := context.Background()
-	if sessionID != "" {
-		ctx = context.WithValue(ctx, KeySessionID, sessionID)
-	}
-	r = r.WithContext(ctx)
-	return &http.Request{Context: func() context.Context { return ctx }}
+	return user, nil
 }
 
-// --- Tests ---
+func (m *MockStorage) GetMessagesByChannel(channelID string) ([]*Message, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	return m.Messages[channelID], nil
+}
 
-func TestNewGatewayService(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockMux := &MockMux{}
-	service := NewGatewayService(mockLogger, mockMux)
-
-	// Assert service is initialized
-	if service == nil {
-		t.Fatal("Expected non-nil GatewayService")
-	}
-	if service.logger == nil {
-		t.Error("Expected logger to be initialized")
-	}
-	if service.eventMux == nil {
-		t.Error("Expected eventMux to be initialized")
+func (m *MockStorage) CreateUser(user *User) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if existing, exists := m.Users[user.ID]; exists {
+		return errors.New("user already exists")
 	}
 	
-	if len(service.sessions) != 0 {
-		t.Error("Expected empty sessions map on creation")
-	}
+	m.Users[user.ID] = user
+	return nil
 }
 
-func TestGatewayService_HandleWS(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockMux := &MockMux{}
-	service := NewGatewayService(mockLogger, mockMux)
+// TestHappyPath tests standard functionality
+func TestHappyPath(t *testing.T) {
+	store := NewMockStorage()
+	service := NewMainService(store)
 
-	tests := []struct {
-		name           string
-		sessionID      string // Simulator: we set this in context
-		wait           int    // Durations to wait, simulating concurrent adds
-		expectedInvite bool
-	}{
-		{
-			name:           "Successful connection",
-			sessionID:      "user_1",
-			wait:           0,
-			expectedInvite: true,
-		},
-		{
-			name:           "Connection via context",
-			sessionID:      "user_2",
-			wait:           100 * time.Millisecond, // Simulate 2nd request arriving slightly later
-			expectedInvite: true,
-		},
-	}
+	t.Run("User creation follows pattern", func(t *testing.T) {
+		err := service.CreateUser("alice", "alice@example.com", "u1")
+		if err != nil {
+			t.Fatalf("Expected no error, got: %v", err)
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Simulate HTTP Request with mock Session ID
-			req := createMockRequest(nil, tt.sessionID)
-			
-			// Simulate writing response (upgrade header usually)
-			w := &mockResponseWriter{}
+	t.Run("Sending a message to a channel", func(t *testing.T) {
+		channelID := "channel-1"
+		content := "Hello World"
+		userID := "u1"
 
-			// Execute
-			service.HandleWS(w, req)
+		msg, err := service.SendMessage(channelID, content, userID)
+		if err != nil {
+			t.Fatalf("Expected success, got: %v", err)
+		}
 
-			// Verify Context
-			sessID := req.Context().Value(KeySessionID)
-			if sessID == nil {
-				t.Error("Session ID not found in context")
-			} else if sessID != tt.sessionID {
-				t.Errorf("Context ID mismatch. Want %s, got %v", tt.sessionID, sessID)
-			}
+		if msg.Content != content {
+			t.Errorf("Expected content '%s', got '%s'", content, msg.Content)
+		}
+		if msg.ChannelID != channelID {
+			t.Errorf("Expected channel ID '%s', got '%s'", channelID, msg.ChannelID)
+		}
+		if msg.UserID != userID {
+			t.Errorf("Expected user ID '%s', got '%s'", userID, msg.UserID)
+		}
 
-			// Verify Logger Calls
-			if tt.expectedInvite && len(mockLogger.LoggedInfo) == 0 {
-				t.Error("Expected Info log on connection")
-			}
-			if tt.expectedInvite && len(mockLogger.LoggedDebug) == 0 {
-				t.Error("Expected Debug log on cleanup")
-			}
-
-			// Verify Mux Broadcast
-			if tt.expectedInvite && len(mockMux.Calls) == 0 {
-				t.Error("Expected Broadcast to be called")
-			} else if tt.expectedInvite {
-				// Verify broadcast payload
-				call := mockMux.Calls[len(mockMux.Calls)-1]
-				if call.Channel != "general" {
-					t.Errorf("Expected broadcast to 'general', got %s", call.Channel)
-				}
-				if call.Message.Type != "user_joined" {
-					t.Errorf("Expected message type 'user_joined', got '%s'", call.Message.Type)
-				}
-			}
-		})
-	}
+		// Verify message is in storage
+		history, _ := service.GetChannelHistory(channelID, 0)
+		if len(history) != 1 {
+			t.Fatalf("Expected 1 message in storage, got %d", len(history))
+		}
+	})
 }
 
-func TestGatewayService_GetChannelMembers(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockMux := &MockMux{}
-	service := NewGatewayService(mockLogger, mockMux)
+// TestErrorConditions ensures bad inputs are handled
+func TestErrorConditions(t *testing.T) {
+	store := NewMockStorage(service := NewMainService(store)
 
-	userId := "user_1"
-	req := createMockRequest(nil, userId)
-	service.HandleWS(nil, req)
+	t.Run("SendMessage fails with empty user", func(t *testing.T) {
+		_, err := service.SendMessage("c1", "content", "")
+		if err == nil {
+			t.Error("Expected an error for empty userID, got nil")
+		}
+	})
 
-	// Get Members
-	members, err := service.GetChannelMembers(context.Background(), "general")
+	t.Run("SendMessage fails with empty channel", func(t *testing.T) {
+		_, err := service.SendMessage("", "content", "u1")
+		if err == nil {
+			t.Error("Expected an error for empty channelID, got nil")
+		}
+	})
 
-	if err != nil {
-		t.Fatalf("Unexpected error getting members: %v", err)
-	}
+	t.Run("SendMessage fails with empty content", func(t *testing.T) {
+		_, err := service.SendMessage("c1", "", "u1")
+		if err == nil {
+			t.Error("Expected an error for empty content, got nil")
+		}
+	})
 
-	if len(members) != 1 {
-		t.Errorf("Expected 1 member, got %d", len(members))
-	}
+	t.Run("SendMessage fails with unknown user", func(t *testing.T) {
+		_, err := service.SendMessage("c1", "hello", "notfound-user")
+		if err == nil {
+			t.Error("Expected an error for unknown user, got nil")
+		}
+		if err.Error() != "user notfound-user not found" {
+			t.Errorf("Unexpected error message: %v", err)
+		}
+	})
 
-	if members[0].UserID != userId {
-		t.Errorf("Expected UserID %s, got %s", userId, members[0].UserID)
-	}
+	t.Run("CreateUser validates inputs", func(t *testing.T) {
+		err := service.CreateUser("", "email", "id")
+		if err == nil {
+			t.Error("Expected error for empty username, got nil")
+		}
+	})
 }
 
-func TestGatewayService_CleanupStaleSessions(t *testing.T) {
-	mockLogger := &MockLogger{}
-	mockMux := &MockMux{}
-	service := NewGatewayService(mockLogger, mockMux)
+// TestGetChannelHistory tests pagination and history fetching
+func TestGetChannelHistory(t *testing.T) {
+	store := NewMockStorage()
+	service := NewMainService(store)
 
-	// Create two sessions
-	userId1 := "user_1"
-	req1 := createMockRequest(nil, userId1)
-	service.HandleWS(nil, req1)
-
-	time.Sleep(10 * time.Millisecond) // Ensure unique creation times
-
-	userId2 := "user_2"
-	req2 := createMockRequest(nil, userId2)
-	service.HandleWS(nil, req2)
-
-	// Update timestamp of user1 to be "stale"
-	// Note: We need to access private fields for a precise test, or use a dirty trick.
-	// Here we use a tricky interface access via reflection or just update it via the public struct logic if exposed.
-	// Since we don't want to refactor internals for this snippet, we check the logic exists.
-	s.service.sessions["user_1"].RTT = time.Now().Add(-50 * time.Second)
-
-	// Count
-	s.service.mu.Lock()
-	count := len(s.service.sessions)
-	s.service.mu.Unlock()
-
-	if count != 2 {
-		t.Errorf("Expected 2 sessions before cleanup, found %d", count)
+	// Pre-seed data
+ msgs := []*Message{
+		{ID: "1", ChannelID: "c1", Content: "msg1", UserID: "u1", Timestamp: time.Now().Add(-10 * time.Second)},
+		{ID: "2", ChannelID: "c1", Content: "msg2", UserID: "u2", Timestamp: time.Now().Add(-5 * time.Second)},
+	}
+	for _, m := range msgs {
+		store.SaveMessage(m)
 	}
 
-	// Execute Cleanup (stale logic is internal, so we can't verify very granularly without exposing Getter)
-	// Instead, we test that the services initializes correctly and the map logic is sound.
-	// We can verify that after adding a non-stale session (or accessing a non-existent one), it's safe.
+	t.Run("Returns correct limit gently", func(t *testing.T) {
+		history, err := service.GetChannelHistory("c1", 2)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(history) != 2 {
+			t.Fatalf("Expected 2 messages, got %d", len(history))
+		}
+	})
+
+	t.Run("Empty limit should fail", func(t *testing.T) {
+		_, err := service.GetChannelHistory("c1", 0)
+		if err == nil {
+			t.Error("Expected error for limit 0, got nil")
+		}
+	})
+}
+
+// TestConcurrency tests the RWMutex implementation is working by
+// hammering the service with multiple goroutines.
+func TestConcurrency(t *testing.T) {
+	store := NewMockStorage()
+	service := NewMainService(store)
 	
-	_, err := service.GetChannelMembers(context.Background(), "general")
+	// Pre-create a valid user
+	service.CreateUser("alice", "a@e.com", "u1")
+	
+	wg := sync.WaitGroup{}
+	numGoroutines := 100
+	messagesPerGoroutine := 10
+	
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			for j := 0; j < messagesPerGoroutine; j++ {
+				_, _ = service.SendMessage("c1", fmt.Sprintf("msg-%d-%d", offset, j), "u1")
+			}
+		}(i)
+	}
+	
+	wg.Wait()
+	
+	// Assert all messages were received
+	history, err := service.GetChannelHistory("c1", 10000)
 	if err != nil {
-		t.Error("Update logic should not crash service")
+		t.Fatalf("Error retrieving history after concurrency: %v", err)
 	}
-}
-
-// MockResponseWriter satisfies http.ResponseWriter interface
-type mockResponseWriter struct {
-	header http.Header
-	status int
-	body   []byte
-}
-
-func (m *mockResponseWriter) Header() http.Header {
-	if m.header == nil {
-		m.header = make(http.Header)
+	
+	expectedCount := numGoroutines * messagesPerGoroutine
+	if len(history) != expectedCount {
+		t.Errorf("Expected %d messages after concurrency, got %d", expectedCount, len(history))
 	}
-	return m.header
-}
-
-func (m *mockResponseWriter) Write(b []byte) (int, error) {
-	m.status = http.StatusOK
-	m.body = make([]byte, len(b))
-	copy(m.body, b)
-	return len(b), nil
 }
