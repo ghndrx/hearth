@@ -59,7 +59,7 @@
 					{message}
 					grouped={isGrouped(groupIndex, messageIndex)}
 					isOwn={message.authorId === currentUserId}
-					{compact}
+					
 					roleColor={roleColors[message.authorId] || null}
 					on:react={(e) => dispatch('react', e.detail)}
 					on:edit={(e) => dispatch('edit', e.detail)}

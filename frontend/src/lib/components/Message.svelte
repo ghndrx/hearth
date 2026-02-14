@@ -228,10 +228,8 @@
 				{#each message.reactions as reaction}
 					<button 
 						class="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm transition-colors border"
-						class:bg-[#5865f2]/30={reaction.me}
-						class:border-[#5865f2]={reaction.me}
-						class:bg-[#2b2d31]={!reaction.me}
-						class:border-transparent={!reaction.me}
+						class:reaction-active={reaction.me}
+						class:reaction-inactive={!reaction.me}
 						on:click={() => handleReaction(reaction.emoji)}
 					>
 						<span>{reaction.emoji}</span>
@@ -275,3 +273,14 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+.reaction-active {
+	background-color: rgba(88, 101, 242, 0.3);
+	border-color: #5865f2;
+}
+.reaction-inactive {
+	background-color: #2b2d31;
+	border-color: transparent;
+}
+</style>

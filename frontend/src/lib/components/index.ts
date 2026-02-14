@@ -8,7 +8,7 @@ export { default as ServerFolder } from './ServerFolder.svelte';
 export { default as ServerList } from './ServerList.svelte';
 
 // Discord-style message components
-export { default as Message } from './Message.svelte';
+// Note: Import Message directly from './Message.svelte' where needed
 export { default as MessageGroup } from './MessageGroup.svelte';
 export { default as MessageInput } from './MessageInput.svelte';
 export { default as ReplyPreview } from './ReplyPreview.svelte';

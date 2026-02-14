@@ -94,8 +94,9 @@
 			expanded={folder.expanded}
 			color={folder.color}
 			on:click={(e) => {
-				if (e.detail?.server) {
-					selectServer(e.detail.server);
+				const detail = (e as unknown as CustomEvent<{server: any}>).detail;
+				if (detail?.server) {
+					selectServer(detail.server);
 				}
 			}}
 		/>
