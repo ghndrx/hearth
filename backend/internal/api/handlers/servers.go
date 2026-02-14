@@ -179,15 +179,18 @@ func (h *ServerHandler) GetMembers(c *fiber.Ctx) error {
 		})
 	}
 
-	// Parse pagination
-	limit, _ := strconv.Atoi(c.Query("limit", "100"))
-	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-
+	// Parse pagination with defaults
+	limit, err := strconv.Atoi(c.Query("limit", "100"))
+	if err != nil || limit < 1 {
+		limit = 100
+	}
 	if limit > 1000 {
 		limit = 1000
 	}
-	if limit < 1 {
-		limit = 100
+
+	offset, err := strconv.Atoi(c.Query("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
 	}
 
 	members, err := h.serverService.GetMembers(c.Context(), id, limit, offset)
@@ -362,9 +365,9 @@ func (h *ServerHandler) CreateBan(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Reason                 string `json:"reason"`
-		DeleteMessageDays      int    `json:"delete_message_days"`
-		DeleteMessageSeconds   int    `json:"delete_message_seconds"`
+		Reason               string `json:"reason"`
+		DeleteMessageDays    int    `json:"delete_message_days"`
+		DeleteMessageSeconds int    `json:"delete_message_seconds"`
 	}
 	_ = c.BodyParser(&req)
 

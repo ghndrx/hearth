@@ -1,6 +1,7 @@
 package events
 
 import (
+	"log"
 	"sync"
 )
 
@@ -34,13 +35,14 @@ func (b *Bus) Subscribe(eventType string, handler Handler) {
 	b.handlers[eventType] = append(b.handlers[eventType], handler)
 }
 
-// Unsubscribe removes a handler (simplified - removes all handlers for the type)
+// Unsubscribe removes a handler for an event type
+// Note: Due to Go's function value semantics, this removes all handlers for the type
+// Use Subscribe with caution or implement handler IDs for fine-grained control
 func (b *Bus) Unsubscribe(eventType string, handler Handler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Note: This is a simplified implementation that removes all handlers
-	// A production implementation would track handler references
+	_ = handler // Mark as used to avoid unused parameter warning
 	delete(b.handlers, eventType)
 }
 
@@ -60,7 +62,7 @@ func (b *Bus) Publish(eventType string, data interface{}) {
 		go func(h Handler) {
 			defer func() {
 				if r := recover(); r != nil {
-					// Log panic but don't crash
+					log.Printf("Event handler panic recovered: %v", r)
 				}
 			}()
 			h(event)
@@ -86,7 +88,7 @@ func (b *Bus) PublishSync(eventType string, data interface{}) {
 			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
-					// Log panic but don't crash
+					log.Printf("Event handler panic recovered: %v", r)
 				}
 			}()
 			h(event)
@@ -111,9 +113,9 @@ func (b *Bus) HasHandlers(eventType string) bool {
 // Event types
 const (
 	// User events
-	UserCreated   = "user.created"
-	UserUpdated   = "user.updated"
-	UserDeleted   = "user.deleted"
+	UserCreated    = "user.created"
+	UserUpdated    = "user.updated"
+	UserDeleted    = "user.deleted"
 	PresenceUpdate = "presence.updated"
 
 	// Server events
