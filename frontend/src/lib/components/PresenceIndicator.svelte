@@ -1,13 +1,14 @@
 <script lang="ts">
   import { presenceStore, getStatusColor, type PresenceStatus } from '$lib/stores/presence';
-  
-  export let userId: string;
+
+  export let userId: string | null = null;
+  export let status: PresenceStatus | null = null;
   export let size: 'sm' | 'md' | 'lg' = 'md';
   export let showTooltip = true;
-  
-  $: presence = presenceStore.getPresence(userId);
-  $: status = presence?.status ?? 'offline';
-  $: color = getStatusColor(status);
+
+  $: presence = userId ? presenceStore.getPresence(userId) : null;
+  $: resolvedStatus = status ?? presence?.status ?? 'offline';
+  $: color = getStatusColor(resolvedStatus);
   
   const sizes = {
     sm: 8,
@@ -23,13 +24,13 @@
   class="presence-indicator"
   class:has-tooltip={showTooltip}
   style="--size: {sizeValue}px; --color: {color}; --border: {borderWidth}px;"
-  title={showTooltip ? status.charAt(0).toUpperCase() + status.slice(1) : undefined}
+  title={showTooltip ? resolvedStatus.charAt(0).toUpperCase() + resolvedStatus.slice(1) : undefined}
 >
-  {#if status === 'idle'}
+  {#if resolvedStatus === 'idle'}
     <div class="idle-moon"></div>
-  {:else if status === 'dnd'}
+  {:else if resolvedStatus === 'dnd'}
     <div class="dnd-dash"></div>
-  {:else if status === 'offline' || status === 'invisible'}
+  {:else if resolvedStatus === 'offline' || resolvedStatus === 'invisible'}
     <div class="offline-ring"></div>
   {/if}
 </div>
