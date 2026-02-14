@@ -2,92 +2,134 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
-// MockContext implements a simple mock for context.Context.
-// We do not need the full context implementation to test logic.
-type MockContext struct{}
-
-func (m *MockContext) Deadline() (deadline time.Time, ok bool) { return }
-func (m *MockContext) Done() <-chan struct{}                 { return nil }
-func (m *MockContext) Err() error                             { return nil }
-func (m *MockContext) Value(key interface{}) interface{}      { return nil }
-func (m *MockContext) Type() string                           { return "mock" }
-
-// TestUserService_CreateUser tests the happy path and error cases for CreateUser.
-func TestUserService_CreateUser(t *testing.T) {
-	ctx := context.Background()
-	service := NewUserService()
-
-	t.Run("Happy Path", func(t *testing.T) {
-		name := "Alice"
-		email := "alice@example.com"
-
-		user, err := service.CreateUser(ctx, name, email)
-
-		if err != nil {
-			t.Fatalf("CreateUser failed: %v", err)
-		}
-
-		// Verify User fields
-		if user.Name != name {
-			t.Errorf("Expected name %s, got %s", name, user.Name)
-		}
-		if user.Email != email {
-			t.Errorf("Expected email %s, got %s", email, user.Email)
-		}
-		if user.ID != "user_"+name {
-			t.Errorf("Expected auto-generated ID, got %s", user.ID)
-		}
-
-		// Verify user exists in the store
-		if _, exists := service.(*userService).users[user.ID]; !exists {
-			t.Error("Expected user to be stored in map")
-		}
-	})
-
-	t.Run("Empty Name", func(t *testing.T) {
-		_, err := service.CreateUser(ctx, "", "test@test.com")
-		if err == nil {
-			t.Error("Expected error for empty name, got nil")
-		}
-	})
+// MockRepository implements MessageRepository for testing.
+type MockRepository struct {
+	StoreCallCount int
+	StoreError     error
+	Messages       map[string]*Message
 }
 
-// TestUserService_GetUser tests the retrieval logic.
-func TestUserService_GetUser(t *testing.T) {
+func (m *MockRepository) StoreMessage(ctx context.Context, msg *Message) error {
+	m.StoreCallCount++
+	if m.StoreError != nil {
+		return m.StoreError
+	}
+	m.Messages[msg.ID] = msg
+	return nil
+}
+
+func (m *MockRepository) GetMessages(ctx context.Context) (map[string]*Message, error) {
+	if m.Messages == nil {
+		m.Messages = make(map[string]*Message)
+	}
+	return m.Messages, nil
+}
+
+// MockLogger implements ConsoleWriter for testing.
+type MockLogger struct {
+	LogCalls []string // Stores the exact logs generated
+}
+
+func (m *MockLogger) WriteLine(format string, v ...interface{}) error {
+	// Simulate logging by storing the formatted string
+	msg := fmt.Sprintf(format, v...)
+	m.LogCalls = append(m.LogCalls, msg)
+	return nil
+}
+
+// TestGarrison_CreateMessage tests the happy path of creating a message.
+func TestGarrison_CreateMessage(t *testing.T) {
 	ctx := context.Background()
-	service := NewUserService()
+	
+	// 1. Setup Dependencies
+	mockRepo := &MockRepository{Messages: make(map[string]*Message)}
+	mockLogger := &MockLogger{LogCalls: []string{}}
+	service := NewGarrison(mockRepo, mockLogger)
 
-	// Setup: Create a user in the map first (simulating persistence)
-	svc := service.(*userService)
-	svc.users["user_Existing"] = &User{ID: "user_Existing", Name: "Bob"}
+	// 2. Execute
+	user := "TestUser"
+	content := "Hello World"
+	id, err := service.CreateMessage(ctx, user, content)
 
-	t.Run("Getting Existing User", func(t *testing.T) {
-		user, err := service.GetUser(ctx, "user_Existing")
+	// 3. Assertions
+	if err != nil {
+		t.Fatalf("CreateMessage failed unexpectedly: %v", err)
+	}
+	if id == "" {
+		t.Error("Expected a non-empty message ID")
+	}
 
-		if err != nil {
-			t.Fatalf("Could not fetch existing user: %v", err)
+	// Verify Repository interaction
+	if mockRepo.StoreCallCount != 1 {
+		t.Errorf("Expected Repo.StoreMessage to be called once, was called %d times", mockRepo.StoreCallCount)
+	}
+
+	// Verify Logger interaction (Side effect check)
+	assertTrue := func(t *testing.T, condition bool, message string) {
+		if !condition {
+			t.Errorf(message)
 		}
+	}
 
-		if user.Name != "Bob" {
-			t.Errorf("Expected Bob, got %s", user.Name)
-		}
-	})
+	assertTrue(t, strings.Contains(mockLogger.LogCalls[0], "Created message id="+id), 
+		"Log should contain the created message ID and User")
+	assertTrue(t, strings.Contains(mockLogger.LogCalls[0], user), "Log should contain the user name")
+}
 
-	t.Run("Getting Non-Existent User", func(t *testing.T) {
-		_, err := service.GetUser(ctx, "user_NonExistent")
+// TestGarrison_CreateMessage_InvalidInput tests input validation logic.
+func TestGarrison_CreateMessage_InvalidInput(t *testing.T) {
+	ctx := context.Background()
+	service := NewGarrison(&MockRepository{}, &MockLogger{})
 
-		if err == nil {
-			t.Error("Expected error for non-existent user, got nil")
-		}
-	})
+	tests := []struct {
+		name    string
+		user    string
+		content string
+		wantErr bool
+	}{
+		{"Empty Content", "User", "", true},
+		{"Empty User", "", "Hello", true},
+		{"Both Empty", "", "", true},
+		{"Valid", "ValidUser", "Valid Content", false},
+	}
 
-	t.Run("GetUser with Empty ID", func(t *testing.T) {
-		_, err := service.GetUser(ctx, "")
-		if err == nil {
-			t.Error("Expected error for empty ID, got nil")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := service.CreateMessage(ctx, tt.user, tt.content)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CreateMessage() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestGarrison_List tests retrieval logic.
+func TestGarrison_List(t *testing.T) {
+	ctx := context.Background()
+	
+	// Setup: Pre-populate some mock messages
+	mockRepo := &MockRepository{
+		Messages: map[string]*Message{
+			"msg-1": {ID: "msg-1", User: "Alice", Content: "Hi"},
+			"msg-2": {ID: "msg-2", User: "Bob", Content: "Bye"},
+		},
+	}
+	service := NewGarrison(mockRepo, &MockLogger{})
+
+	output, err := service.List(ctx)
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	// Assertions on output format
+	if !strings.Contains(output, "Alice") {
+		t.Error("Output should contain Alice")
+	}
+	if !strings.Contains(output, "Bob") {
+		t.Error("Output should contain Bob")
+	}
 }

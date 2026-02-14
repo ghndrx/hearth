@@ -1,68 +1,105 @@
+// Package services provides implementations for the Hearth application module.
 package services
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
+	"io"
 )
 
-// User represents a generic entity in our platform.
-type User struct {
-	ID    string
-	Name  string
-	Email string
+// Message represents a Discord-like interaction in the Hearth network.
+type Message struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	User    string `json:"user"`
 }
 
-// UserService defines reusable behavior for working with users. 
-// Using interfaces allows us to mock and test this service independently.
-type UserService interface {
-	GetUser(ctx context.Context, id string) (*User, error)
-	CreateUser(ctx context.Context, name, email string) (*User, error)
+// MessageRepository defines the contract for storing and retrieving messages.
+// This interface allows swapping implementations (SQL, Redis, Mock) without changing the service logic.
+type MessageRepository interface {
+	StoreMessage(ctx context.Context, msg *Message) error
+	GetMessages(ctx context.Context) (map[string]*Message, error)
 }
 
-// userService implements UserService.
-type userService struct {
-	// In a real app, you would have:
-	// - db *sql.DB
-	// - cache *redis.Client
-	users map[string]*User // In-memory storage for this example
+// ConsoleWriter defines the contract for outputting data.
+// In a real app, this would be a highly asynchronous logging service.
+type ConsoleWriter interface {
+	WriteLine(format string, v ...interface{}) error
 }
 
-// NewUserService creates a new instance of the service.
-// This factory pattern adheres to Dependency Injection.
-func NewUserService() UserService {
-	return &userService{
-		users: make(map[string]*User),
+// Garrison is the primary service component coordinating logic.
+type Garrison struct {
+	repo   MessageRepository
+	logger ConsoleWriter
+}
+
+// NewGarrison creates a new Garrison instance with the given dependencies.
+func NewGarrison(repo MessageRepository, logger ConsoleWriter) *Garrison {
+	return &Garrison{
+		repo:   repo,
+		logger: logger,
 	}
 }
 
-// GetUser retrieves a user by ID.
-func (s *userService) GetUser(ctx context.Context, id string) (*User, error) {
-	// Verify ID is not empty
-	if id == "" {
-		return nil, errors.New("user id cannot be empty")
+// Handle command execution and validation.
+// Returns the ID of the newly created message or an error.
+func (g *Garrison) CreateMessage(ctx context.Context, user, content string) (string, error) {
+	if content == "" {
+		return "", fmt.Errorf("content cannot be empty")
+	}
+	if user == "" {
+		return "", fmt.Errorf("user cannot be empty")
 	}
 
-	// Simulate simulated Get
-	if user, exists := s.users[id]; exists {
-		return user, nil
+	// Generate a pseudo-random ID
+	msg := &Message{
+		ID:      generateID(),
+		Content: content,
+		User:    user,
 	}
 
-	return nil, errors.New("user not found")
+	// Persist the message
+	if err := g.repo.StoreMessage(ctx, msg); err != nil {
+		return "", fmt.Errorf("failed to persist message: %w", err)
+	}
+
+	// Log the action
+	if err := g.logger.WriteLine("Created message ID=%s by User=%s", msg.ID, msg.User); err != nil {
+		// In production, we would likely log this error to a crash reporting system externally.
+		// For this service example, we ignore propagation errors to keep the main flow clean.
+	}
+
+	return msg.ID, nil
 }
 
-// CreateUser creates a new user.
-func (s *userService) CreateUser(ctx context.Context, name, email string) (*User, error) {
-	if name == "" {
-		return nil, errors.New("user name cannot be empty")
+// List retrieves messages from the repository.
+// Returns a Markdown-formatted string of the channel content.
+func (g *Garrison) List(ctx context.Context) (string, error) {
+	msgs, err := g.repo.GetMessages(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve messages: %w", err)
 	}
 
-	// Simulate simulated Create
-	user := &User{
-		ID:    "user_" + name, // Simple ID generation
-		Name:  name,
-		Email: email,
+	if len(msgs) == 0 {
+		return "> No messages in the garrison.", nil
 	}
-	s.users[user.ID] = user
-	
-	return user, nil
+
+	var output string
+	for _, msg := range msgs {
+		output += fmt.Sprintf("**%s:** %s\n", msg.User, msg.Content)
+	}
+
+	return output, nil
 }
+
+// --- Internal Helper ---
+
+func generateID() string {
+	// Simple implementation; in production, use crypto/rand or UUID library
+	return fmt.Sprintf("msg-%d", timeNow().UnixNano())
+}
+
+// timeNow is a helper to allow injection in tests if strictly necessary,
+// though StdLib time.Now is usually fine. Defined here for cleanliness.
+func timeNow() struct{ time } // Placeholder logic, usually uses standard library `time`
