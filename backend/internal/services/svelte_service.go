@@ -3,122 +3,99 @@ package services
 import (
 	"context"
 	"errors"
-	"sync"
-
+	"hearth/internal/models"
 	"github.com/google/uuid"
 )
 
-var ErrSvelteNotFound = errors.New("svelte component not found")
+var (
+	ErrSvelteNotFound = errors.New("svelte component not found")
+	ErrInvalidInput   = errors.New("invalid input provided")
+)
 
-// Svelte represents a Svelte component or session resource.
-type Svelte struct {
-	ID        uuid.UUID
-	Name      string
-	Component string
-	Props     map[string]interface{}
+// SvelteRepository defines the data access methods required by the service.
+// This adheres to the rule of not importing internal database packages directly.
+type SvelteRepository interface {
+	Create(ctx context.Context, svelte *models.Svelte) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Svelte, error)
+	Update(ctx context.Context, svelte *models.Svelte) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-// SvelteService manages Svelte component resources.
+// SvelteService handles business logic for Svelte components.
 type SvelteService struct {
-	mu         sync.RWMutex
-	components map[uuid.UUID]*Svelte
+	repo SvelteRepository
 }
 
-// NewSvelteService creates a new instance of the SvelteService.
-func NewSvelteService() *SvelteService {
+// NewSvelteService creates a new instance of SvelteService.
+func NewSvelteService(repo SvelteRepository) *SvelteService {
 	return &SvelteService{
-		components: make(map[uuid.UUID]*Svelte),
+		repo: repo,
 	}
 }
 
-// Create creates a new Svelte component.
-func (s *SvelteService) Create(ctx context.Context, name, component string, props map[string]interface{}) (*Svelte, error) {
-	if name == "" {
-		return nil, errors.New("name cannot be empty")
-	}
-	if component == "" {
-		return nil, errors.New("component cannot be empty")
+// CreateComponent validates and creates a new Svelte component instance.
+func (s *SvelteService) CreateComponent(ctx context.Context, name, code string) (*models.Svelte, error) {
+	if name == "" || code == "" {
+		return nil, ErrInvalidInput
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	svelte := &Svelte{
-		ID:        uuid.New(),
-		Name:      name,
-		Component: component,
-		Props:     props,
+	newSvelte := &models.Svelte{
+		ID:   uuid.New(),
+		Name: name,
+		Code: code,
 	}
-	s.components[svelte.ID] = svelte
-	return svelte, nil
+
+	if err := s.repo.Create(ctx, newSvelte); err != nil {
+		return nil, err
+	}
+
+	return newSvelte, nil
 }
 
-// Get retrieves a Svelte component by ID.
-func (s *SvelteService) Get(ctx context.Context, id uuid.UUID) (*Svelte, error) {
-	if id == uuid.Nil {
-		return nil, errors.New("invalid UUID")
+// GetComponent retrieves a component by its ID.
+func (s *SvelteService) GetComponent(ctx context.Context, id uuid.UUID) (*models.Svelte, error) {
+	component, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if svelte, ok := s.components[id]; ok {
-		return svelte, nil
-	}
-	return nil, ErrSvelteNotFound
-}
-
-// Update updates an existing Svelte component.
-func (s *SvelteService) Update(ctx context.Context, id uuid.UUID, name, component string, props map[string]interface{}) (*Svelte, error) {
-	if id == uuid.Nil {
-		return nil, errors.New("invalid UUID")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	existing, ok := s.components[id]
-	if !ok {
+	if component == nil {
 		return nil, ErrSvelteNotFound
 	}
-
-	if name != "" {
-		existing.Name = name
-	}
-	if component != "" {
-		existing.Component = component
-	}
-	if props != nil {
-		existing.Props = props
-	}
-
-	return existing, nil
+	return component, nil
 }
 
-// Delete removes a Svelte component.
-func (s *SvelteService) Delete(ctx context.Context, id uuid.UUID) error {
-	if id == uuid.Nil {
-		return errors.New("invalid UUID")
+// UpdateComponent modifies an existing component.
+func (s *SvelteService) UpdateComponent(ctx context.Context, id uuid.UUID, name, code string) error {
+	if name == "" || code == "" {
+		return ErrInvalidInput
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, ok := s.components[id]; ok {
-		delete(s.components, id)
-		return nil
+	// Check existence first
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
 	}
-	return ErrSvelteNotFound
+	if existing == nil {
+		return ErrSvelteNotFound
+	}
+
+	// Update fields
+	existing.Name = name
+	existing.Code = code
+
+	return s.repo.Update(ctx, existing)
 }
 
-// List returns all Svelte components.
-func (s *SvelteService) List(ctx context.Context) ([]*Svelte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	result := make([]*Svelte, 0, len(s.components))
-	for _, svelte := range s.components {
-		result = append(result, svelte)
+// DeleteComponent removes a component by its ID.
+func (s *SvelteService) DeleteComponent(ctx context.Context, id uuid.UUID) error {
+	// Check existence first
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
 	}
-	return result, nil
+	if existing == nil {
+		return ErrSvelteNotFound
+	}
+
+	return s.repo.Delete(ctx, id)
 }

@@ -3,261 +3,128 @@ package services
 import (
 	"context"
 	"testing"
-
+	"hearth/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/mock"
 )
 
-func TestNewSvelteService(t *testing.T) {
-	svc := NewSvelteService()
-	assert.NotNil(t, svc)
-	assert.NotNil(t, svc.components)
+// MockSvelteRepository is a mock implementation of SvelteRepository using testify/mock.
+type MockSvelteRepository struct {
+	mock.Mock
 }
 
-func TestSvelteService_Create(t *testing.T) {
-	ctx := context.Background()
-	svc := NewSvelteService()
-
-	tests := []struct {
-		name      string
-		inputName string
-		component string
-		props     map[string]interface{}
-		wantErr   bool
-		errMsg    string
-	}{
-		{
-			name:      "Success",
-			inputName: "TestComponent",
-			component: "Button",
-			props:     map[string]interface{}{"variant": "primary"},
-			wantErr:   false,
-		},
-		{
-			name:      "Success without props",
-			inputName: "SimpleComponent",
-			component: "Div",
-			props:     nil,
-			wantErr:   false,
-		},
-		{
-			name:      "Empty name",
-			inputName: "",
-			component: "Button",
-			props:     nil,
-			wantErr:   true,
-			errMsg:    "name cannot be empty",
-		},
-		{
-			name:      "Empty component",
-			inputName: "Test",
-			component: "",
-			props:     nil,
-			wantErr:   true,
-			errMsg:    "component cannot be empty",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := svc.Create(ctx, tt.inputName, tt.component, tt.props)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errMsg)
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-				assert.NotEqual(t, uuid.Nil, result.ID)
-				assert.Equal(t, tt.inputName, result.Name)
-				assert.Equal(t, tt.component, result.Component)
-			}
-		})
-	}
+func (m *MockSvelteRepository) Create(ctx context.Context, svelte *models.Svelte) error {
+	args := m.Called(ctx, svelte)
+	return args.Error(0)
 }
 
-func TestSvelteService_Get(t *testing.T) {
-	ctx := context.Background()
-	svc := NewSvelteService()
-
-	// Create a component first
-	created, err := svc.Create(ctx, "TestComponent", "Button", nil)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name    string
-		id      uuid.UUID
-		wantErr bool
-		errMsg  string
-	}{
-		{
-			name:    "Success",
-			id:      created.ID,
-			wantErr: false,
-		},
-		{
-			name:    "Not found",
-			id:      uuid.New(),
-			wantErr: true,
-			errMsg:  "not found",
-		},
-		{
-			name:    "Invalid UUID",
-			id:      uuid.Nil,
-			wantErr: true,
-			errMsg:  "invalid UUID",
-		},
+func (m *MockSvelteRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Svelte, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := svc.Get(ctx, tt.id)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errMsg)
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-				assert.Equal(t, created.ID, result.ID)
-			}
-		})
-	}
+	return args.Get(0).(*models.Svelte), args.Error(1)
 }
 
-func TestSvelteService_Update(t *testing.T) {
-	ctx := context.Background()
-	svc := NewSvelteService()
-
-	// Create a component first
-	created, err := svc.Create(ctx, "Original", "Button", map[string]interface{}{"key": "value"})
-	require.NoError(t, err)
-
-	tests := []struct {
-		name      string
-		id        uuid.UUID
-		newName   string
-		component string
-		props     map[string]interface{}
-		wantErr   bool
-		errMsg    string
-	}{
-		{
-			name:      "Update name",
-			id:        created.ID,
-			newName:   "Updated",
-			component: "",
-			props:     nil,
-			wantErr:   false,
-		},
-		{
-			name:      "Not found",
-			id:        uuid.New(),
-			newName:   "Test",
-			component: "",
-			props:     nil,
-			wantErr:   true,
-			errMsg:    "not found",
-		},
-		{
-			name:      "Invalid UUID",
-			id:        uuid.Nil,
-			newName:   "Test",
-			component: "",
-			props:     nil,
-			wantErr:   true,
-			errMsg:    "invalid UUID",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := svc.Update(ctx, tt.id, tt.newName, tt.component, tt.props)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errMsg)
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-			}
-		})
-	}
-
-	// Verify the update persisted
-	updated, err := svc.Get(ctx, created.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "Updated", updated.Name)
+func (m *MockSvelteRepository) Update(ctx context.Context, svelte *models.Svelte) error {
+	args := m.Called(ctx, svelte)
+	return args.Error(0)
 }
 
-func TestSvelteService_Delete(t *testing.T) {
-	ctx := context.Background()
-	svc := NewSvelteService()
-
-	// Create a component first
-	created, err := svc.Create(ctx, "ToDelete", "Button", nil)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name    string
-		id      uuid.UUID
-		wantErr bool
-		errMsg  string
-	}{
-		{
-			name:    "Success",
-			id:      created.ID,
-			wantErr: false,
-		},
-		{
-			name:    "Not found (already deleted)",
-			id:      created.ID,
-			wantErr: true,
-			errMsg:  "not found",
-		},
-		{
-			name:    "Invalid UUID",
-			id:      uuid.Nil,
-			wantErr: true,
-			errMsg:  "invalid UUID",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := svc.Delete(ctx, tt.id)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errMsg)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+func (m *MockSvelteRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
 }
 
-func TestSvelteService_List(t *testing.T) {
+func TestSvelteService_CreateComponent(t *testing.T) {
+	mockRepo := new(MockSvelteRepository)
+	service := NewSvelteService(mockRepo)
 	ctx := context.Background()
-	svc := NewSvelteService()
 
-	// Initially empty
-	list, err := svc.List(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, list)
+	t.Run("Success", func(t *testing.T) {
+		name := "TestComponent"
+		code := "<div>Hello</div>"
+		
+		// Setup expectation
+		mockRepo.On("Create", ctx, mock.AnythingOfType("*models.Svelte")).Return(nil).Once()
 
-	// Add some components
-	_, err = svc.Create(ctx, "Component1", "Button", nil)
-	require.NoError(t, err)
-	_, err = svc.Create(ctx, "Component2", "Input", nil)
-	require.NoError(t, err)
+		result, err := service.CreateComponent(ctx, name, code)
 
-	// Should have 2 components
-	list, err = svc.List(ctx)
-	require.NoError(t, err)
-	assert.Len(t, list, 2)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, name, result.Name)
+		assert.Equal(t, code, result.Code)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Empty Name", func(t *testing.T) {
+		_, err := service.CreateComponent(ctx, "", "code")
+		assert.Error(t, err)
+		assert.Equal(t, ErrInvalidInput, err)
+	})
+}
+
+func TestSvelteService_GetComponent(t *testing.T) {
+	mockRepo := new(MockSvelteRepository)
+	service := NewSvelteService(mockRepo)
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		id := uuid.New()
+		expected := &models.Svelte{ID: id, Name: "Test", Code: "code"}
+
+		mockRepo.On("GetByID", ctx, id).Return(expected, nil).Once()
+
+		result, err := service.GetComponent(ctx, id)
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, result)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Not Found", func(t *testing.T) {
+		id := uuid.New()
+		
+		// Simulate DB returning nil, not found error logic
+		mockRepo.On("GetByID", ctx, id).Return(nil, nil).Once()
+
+		result, err := service.GetComponent(ctx, id)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, ErrSvelteNotFound, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestSvelteService_DeleteComponent(t *testing.T) {
+	mockRepo := new(MockSvelteRepository)
+	service := NewSvelteService(mockRepo)
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		id := uuid.New()
+		existing := &models.Svelte{ID: id}
+
+		mockRepo.On("GetByID", ctx, id).Return(existing, nil).Once()
+		mockRepo.On("Delete", ctx, id).Return(nil).Once()
+
+		err := service.DeleteComponent(ctx, id)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Not Found", func(t *testing.T) {
+		id := uuid.New()
+		
+		mockRepo.On("GetByID", ctx, id).Return(nil, nil).Once()
+
+		err := service.DeleteComponent(ctx, id)
+
+		assert.Error(t, err)
+		assert.Equal(t, ErrSvelteNotFound, err)
+		mockRepo.AssertExpectations(t)
+	})
 }
