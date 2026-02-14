@@ -1,105 +1,54 @@
-// Package services provides implementations for the Hearth application module.
 package services
 
 import (
-	"context"
-	"encoding/json"
+	"database/sql"
+	"errors"
 	"fmt"
-	"io"
 )
 
-// Message represents a Discord-like interaction in the Hearth network.
-type Message struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
-	User    string `json:"user"`
+// ErrUserNotFound represents an error case when a user is not found.
+var ErrUserNotFound = errors.New("user not found")
+
+// UserService defines the contract for any user-related operations.
+// This allows for mocking in tests or swapping implementations.
+type UserService interface {
+	GetUserByID(id int) (*User, error)
 }
 
-// MessageRepository defines the contract for storing and retrieving messages.
-// This interface allows swapping implementations (SQL, Redis, Mock) without changing the service logic.
-type MessageRepository interface {
-	StoreMessage(ctx context.Context, msg *Message) error
-	GetMessages(ctx context.Context) (map[string]*Message, error)
+// User represents the data structure for a User entity.
+type User struct {
+	ID       int
+	Username string
+	Email    string
 }
 
-// ConsoleWriter defines the contract for outputting data.
-// In a real app, this would be a highly asynchronous logging service.
-type ConsoleWriter interface {
-	WriteLine(format string, v ...interface{}) error
+// UserServiceImpl is a concrete implementation of the UserService.
+type UserServiceImpl struct {
+	db *sql.DB
 }
 
-// Garrison is the primary service component coordinating logic.
-type Garrison struct {
-	repo   MessageRepository
-	logger ConsoleWriter
+// NewUserService creates a new instance of UserService.
+func NewUserService(db *sql.DB) UserService {
+	return &UserServiceImpl{db: db}
 }
 
-// NewGarrison creates a new Garrison instance with the given dependencies.
-func NewGarrison(repo MessageRepository, logger ConsoleWriter) *Garrison {
-	return &Garrison{
-		repo:   repo,
-		logger: logger,
-	}
-}
+// GetUserByID retrieves a user from the database by their ID.
+func (s *UserServiceImpl) GetUserByID(id int) (*User, error) {
+	// In a real application, sanitize the ID to prevent SQL injection.
+	// Here we perform a basic raw query for demonstration.
+	query := "SELECT id, username, email FROM users WHERE id = $1"
 
-// Handle command execution and validation.
-// Returns the ID of the newly created message or an error.
-func (g *Garrison) CreateMessage(ctx context.Context, user, content string) (string, error) {
-	if content == "" {
-		return "", fmt.Errorf("content cannot be empty")
-	}
-	if user == "" {
-		return "", fmt.Errorf("user cannot be empty")
-	}
+	row := s.db.QueryRow(query, id)
 
-	// Generate a pseudo-random ID
-	msg := &Message{
-		ID:      generateID(),
-		Content: content,
-		User:    user,
-	}
+	var user User
+	err := row.Scan(&user.ID, &user.Username, &user.Email)
 
-	// Persist the message
-	if err := g.repo.StoreMessage(ctx, msg); err != nil {
-		return "", fmt.Errorf("failed to persist message: %w", err)
-	}
-
-	// Log the action
-	if err := g.logger.WriteLine("Created message ID=%s by User=%s", msg.ID, msg.User); err != nil {
-		// In production, we would likely log this error to a crash reporting system externally.
-		// For this service example, we ignore propagation errors to keep the main flow clean.
-	}
-
-	return msg.ID, nil
-}
-
-// List retrieves messages from the repository.
-// Returns a Markdown-formatted string of the channel content.
-func (g *Garrison) List(ctx context.Context) (string, error) {
-	msgs, err := g.repo.GetMessages(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to retrieve messages: %w", err)
+		if err == sql.ErrNoRows {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
 
-	if len(msgs) == 0 {
-		return "> No messages in the garrison.", nil
-	}
-
-	var output string
-	for _, msg := range msgs {
-		output += fmt.Sprintf("**%s:** %s\n", msg.User, msg.Content)
-	}
-
-	return output, nil
+	return &user, nil
 }
-
-// --- Internal Helper ---
-
-func generateID() string {
-	// Simple implementation; in production, use crypto/rand or UUID library
-	return fmt.Sprintf("msg-%d", timeNow().UnixNano())
-}
-
-// timeNow is a helper to allow injection in tests if strictly necessary,
-// though StdLib time.Now is usually fine. Defined here for cleanliness.
-func timeNow() struct{ time } // Placeholder logic, usually uses standard library `time`
