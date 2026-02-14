@@ -6,10 +6,30 @@ export type GatewayState = 'disconnected' | 'connecting' | 'connected' | 'reconn
 
 export const gatewayState = writable<GatewayState>('disconnected');
 
-interface GatewayEvent {
-	t: string;  // Event type
-	d: any;     // Data
-	s?: number; // Sequence
+// Gateway opcodes (match backend)
+const Op = {
+	DISPATCH: 0,
+	HEARTBEAT: 1,
+	IDENTIFY: 2,
+	PRESENCE_UPDATE: 3,
+	VOICE_STATE_UPDATE: 4,
+	RESUME: 6,
+	RECONNECT: 7,
+	REQUEST_GUILD_MEMBERS: 8,
+	INVALID_SESSION: 9,
+	HELLO: 10,
+	HEARTBEAT_ACK: 11,
+} as const;
+
+interface GatewayMessage {
+	op: number;      // Opcode
+	d?: unknown;     // Data
+	s?: number;      // Sequence (for dispatch events)
+	t?: string;      // Event type (for dispatch events)
+}
+
+interface HelloPayload {
+	heartbeat_interval: number;
 }
 
 class Gateway {
@@ -18,26 +38,30 @@ class Gateway {
 	private maxReconnectAttempts = 5;
 	private reconnectDelay = 1000;
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-	private sequence = 0;
+	private heartbeatIntervalMs = 30000;
+	private sequence: number | null = null;
+	private sessionId: string | null = null;
+	private token: string | null = null;
+	private heartbeatAcked = true;
 	
 	connect(token: string) {
 		if (!browser) return;
 		
+		this.token = token;
 		gatewayState.set('connecting');
 		
 		const wsUrl = this.getWebSocketUrl();
 		this.ws = new WebSocket(`${wsUrl}?token=${token}`);
 		
 		this.ws.onopen = () => {
-			gatewayState.set('connected');
+			// Wait for HELLO before starting heartbeat
 			this.reconnectAttempts = 0;
-			this.startHeartbeat();
 		};
 		
 		this.ws.onmessage = (event) => {
 			try {
-				const data: GatewayEvent = JSON.parse(event.data);
-				this.handleEvent(data);
+				const msg: GatewayMessage = JSON.parse(event.data);
+				this.handleMessage(msg);
 			} catch (error) {
 				console.error('Failed to parse gateway message:', error);
 			}
@@ -46,8 +70,8 @@ class Gateway {
 		this.ws.onclose = (event) => {
 			this.stopHeartbeat();
 			
-			if (event.code !== 1000) {
-				this.attemptReconnect(token);
+			if (event.code !== 1000 && this.token) {
+				this.attemptReconnect();
 			} else {
 				gatewayState.set('disconnected');
 			}
@@ -59,17 +83,21 @@ class Gateway {
 	}
 	
 	disconnect() {
+		this.token = null;
 		if (this.ws) {
 			this.ws.close(1000);
 			this.ws = null;
 		}
 		this.stopHeartbeat();
+		this.sessionId = null;
+		this.sequence = null;
 		gatewayState.set('disconnected');
 	}
 	
-	send(event: GatewayEvent) {
+	send(op: number, data?: unknown) {
 		if (this.ws?.readyState === WebSocket.OPEN) {
-			this.ws.send(JSON.stringify(event));
+			const msg: GatewayMessage = { op, d: data };
+			this.ws.send(JSON.stringify(msg));
 		}
 	}
 	
@@ -82,51 +110,144 @@ class Gateway {
 		return `${protocol}//${window.location.host}/gateway`;
 	}
 	
-	private handleEvent(event: GatewayEvent) {
-		if (event.s) {
-			this.sequence = event.s;
+	private handleMessage(msg: GatewayMessage) {
+		switch (msg.op) {
+			case Op.HELLO:
+				this.handleHello(msg.d as HelloPayload);
+				break;
+				
+			case Op.HEARTBEAT_ACK:
+				this.heartbeatAcked = true;
+				break;
+				
+			case Op.HEARTBEAT:
+				// Server requests heartbeat
+				this.sendHeartbeat();
+				break;
+				
+			case Op.RECONNECT:
+				// Server wants us to reconnect
+				this.ws?.close();
+				this.attemptReconnect();
+				break;
+				
+			case Op.INVALID_SESSION:
+				// Session invalid, need to re-identify
+				this.sessionId = null;
+				this.sequence = null;
+				if (this.token) {
+					setTimeout(() => this.sendIdentify(), 1000 + Math.random() * 4000);
+				}
+				break;
+				
+			case Op.DISPATCH:
+				if (msg.s !== undefined) {
+					this.sequence = msg.s;
+				}
+				if (msg.t) {
+					this.handleDispatch(msg.t, msg.d);
+				}
+				break;
 		}
+	}
+	
+	private handleHello(data: HelloPayload) {
+		this.heartbeatIntervalMs = data.heartbeat_interval;
+		this.startHeartbeat();
 		
-		switch (event.t) {
-			case 'READY':
+		// If we have a session, try to resume
+		if (this.sessionId && this.sequence !== null) {
+			this.sendResume();
+		} else {
+			this.sendIdentify();
+		}
+	}
+	
+	private sendIdentify() {
+		this.send(Op.IDENTIFY, {
+			token: this.token,
+			properties: {
+				$os: 'browser',
+				$browser: 'hearth-web',
+				$device: 'hearth-web'
+			}
+		});
+	}
+	
+	private sendResume() {
+		this.send(Op.RESUME, {
+			token: this.token,
+			session_id: this.sessionId,
+			seq: this.sequence
+		});
+	}
+	
+	private handleDispatch(eventType: string, data: unknown) {
+		switch (eventType) {
+			case 'READY': {
+				const readyData = data as { session_id: string };
+				this.sessionId = readyData.session_id;
+				gatewayState.set('connected');
 				console.log('Gateway ready');
+				break;
+			}
+			
+			case 'RESUMED':
+				gatewayState.set('connected');
+				console.log('Gateway resumed');
 				break;
 				
 			case 'MESSAGE_CREATE':
-				handleMessageCreate(event.d);
+				handleMessageCreate(this.normalizeMessage(data));
 				break;
 				
 			case 'MESSAGE_UPDATE':
-				handleMessageUpdate(event.d);
+				handleMessageUpdate(this.normalizeMessage(data));
 				break;
 				
 			case 'MESSAGE_DELETE':
-				handleMessageDelete(event.d);
+				handleMessageDelete(data as { id: string; channel_id: string });
 				break;
 				
 			case 'TYPING_START':
-				this.handleTyping(event.d);
+				this.handleTyping(data as { channel_id: string; user_id: string });
 				break;
 				
 			case 'PRESENCE_UPDATE':
-				this.handlePresence(event.d);
+				this.handlePresence(data as { user: { id: string }; status: string });
 				break;
 				
-			case 'SERVER_CREATE':
-			case 'SERVER_UPDATE':
-			case 'SERVER_DELETE':
+			// Guild events (backend uses GUILD_ prefix)
+			case 'GUILD_CREATE':
+			case 'GUILD_UPDATE':
+			case 'GUILD_DELETE':
 			case 'CHANNEL_CREATE':
 			case 'CHANNEL_UPDATE':
 			case 'CHANNEL_DELETE':
-			case 'MEMBER_JOIN':
-			case 'MEMBER_LEAVE':
-			case 'MEMBER_UPDATE':
+			case 'GUILD_MEMBER_ADD':
+			case 'GUILD_MEMBER_REMOVE':
+			case 'GUILD_MEMBER_UPDATE':
 				// TODO: Handle these events
 				break;
 				
 			default:
-				console.log('Unknown gateway event:', event.t);
+				console.log('Unknown gateway event:', eventType, data);
 		}
+	}
+	
+	// Normalize backend message format to frontend format
+	private normalizeMessage(data: unknown): Record<string, unknown> {
+		const msg = data as Record<string, unknown>;
+		return {
+			...msg,
+			// Map backend field names to frontend expectations
+			created_at: msg.timestamp || msg.created_at,
+			edited_at: msg.edited_timestamp || msg.edited_at,
+			server_id: msg.guild_id || msg.server_id,
+			author_id: (msg.author as Record<string, unknown>)?.id || msg.author_id,
+			author: msg.author,
+			reply_to: msg.referenced_message_id || msg.reply_to,
+		};
 	}
 	
 	private handleTyping(data: { channel_id: string; user_id: string }) {
@@ -134,15 +255,33 @@ class Gateway {
 		console.log(`User ${data.user_id} is typing in ${data.channel_id}`);
 	}
 	
-	private handlePresence(data: { user_id: string; status: string }) {
+	private handlePresence(data: { user: { id: string }; status: string }) {
 		// TODO: Update presence store
-		console.log(`User ${data.user_id} is now ${data.status}`);
+		console.log(`User ${data.user.id} is now ${data.status}`);
+	}
+	
+	private sendHeartbeat() {
+		this.send(Op.HEARTBEAT, this.sequence);
 	}
 	
 	private startHeartbeat() {
-		this.heartbeatInterval = setInterval(() => {
-			this.send({ t: 'HEARTBEAT', d: { sequence: this.sequence } });
-		}, 30000);
+		this.heartbeatAcked = true;
+		// Send first heartbeat after jitter
+		const jitter = Math.random() * this.heartbeatIntervalMs;
+		setTimeout(() => {
+			this.sendHeartbeat();
+			
+			this.heartbeatInterval = setInterval(() => {
+				if (!this.heartbeatAcked) {
+					// No ack received, zombie connection
+					console.warn('Heartbeat not acknowledged, reconnecting...');
+					this.ws?.close();
+					return;
+				}
+				this.heartbeatAcked = false;
+				this.sendHeartbeat();
+			}, this.heartbeatIntervalMs);
+		}, jitter);
 	}
 	
 	private stopHeartbeat() {
@@ -152,7 +291,7 @@ class Gateway {
 		}
 	}
 	
-	private attemptReconnect(token: string) {
+	private attemptReconnect() {
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
 			gatewayState.set('disconnected');
 			console.error('Max reconnection attempts reached');
@@ -166,8 +305,20 @@ class Gateway {
 		console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
 		
 		setTimeout(() => {
-			this.connect(token);
+			if (this.token) {
+				this.connect(this.token);
+			}
 		}, delay);
+	}
+	
+	// Update presence status
+	updatePresence(status: string, activities: unknown[] = []) {
+		this.send(Op.PRESENCE_UPDATE, {
+			status,
+			activities,
+			since: status === 'idle' ? Date.now() : null,
+			afk: status === 'idle'
+		});
 	}
 }
 
