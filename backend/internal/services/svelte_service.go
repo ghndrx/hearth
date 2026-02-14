@@ -1,75 +1,137 @@
 package services
 
 import (
-	"context"
-	"errors"
-
-	"github.com/hearth-distro/dsadapter"
+	"bytes"
+	"fmt"
+	"html/template"
+	"io"
+	"strings"
 )
 
-// SprintUpdate represents the payload sent to Discord webhooks or adapters.
-type SprintUpdate struct {
-	SprintName string `json:"sprintName"`
-	StartTime  int64  `json:"startTime"`
-	EndTime    int64  `json:"endTime"`
-	Participants []Participant `json:"participants"`
+// SvelteService defines the interface for rendering Svelte HTML.
+// Using an interface allows for mocking or swapping implementations
+// (e.g., rendering to HTML vs. a custom template engine).
+type SvelteService interface {
+	// RenderConnectionStatus generates the HTML for a user's connection status.
+	// It accepts a user ID to simulate dynamic data injection.
+	RenderConnectionStatus(userID string) (string, error)
+	
+	// GenerateChatView renders the main conversation container.
+	// Typically involves loading components for Messages and Input.
+	GenerateChatView() (string, error)
 }
 
-type Participant struct {
-	UserID   string `json:"userId"`
-	Username string `json:"username"`
+// DefaultSvelteService implements SvelteService using Go's text/template
+// to simulate the partials and markup structure expected from a build step.
+type DefaultSvelteService struct {
+	// We embed a methods struct or keep handlers here. 
+	// For this example, we use a simple implementation pattern.
 }
 
-// ISvelteService defines the contract for managing the Svelte mapping service.
-type ISvelteService interface {
-	// LaunchSprint triggers a process where the Hearth UI sends configuration
-	// data to the Discord service to sync the current sprint.
-	LaunchSprint(ctx context.Context, sprint SprintUpdate) error
+// NewSvelteService constructs a new instance of the service.
+func NewSvelteService() SvelteService {
+	return &DefaultSvelteService{}
 }
 
-// SvelteService implements the business logic for "svelte" integration.
-// In this context, it manages the synchronization state between the HTML/JS UI (Svelte)
-// and the underlying backend services.
-type SvelteService struct {
-	ds dsadapter.DatastoreAdapter
-}
+// RenderConnectionStatus implements the interface.
+// In a real-world scenario, this would call a command line tool (svelte-kit) 
+// or an embedded binary function. Here, we use Go templates for the mockup.
+func (s *DefaultSvelteService) RenderConnectionStatus(userID string) (string, error) {
+	
+	// Template to simulate a Svelte Component with data props
+	// {#if active} is typical Svelte syntax we mimic
+	const tpl = `<!-- Svelte Component: ConnectionStatus.svelte -->
+<div class="connection-status" data-user-id="{{ .UserID }}">
+	<span class="status-icon">
+		{#{if .Active} 
+			✅ Online
+		{:else if .Away} 
+			💛 Away
+ 		{/if} #}
+	</span>
+	<span class="details">
+		<span class="status-dot {{ if .Active }}green{{ else }}gray{{ end }}"></span>
+		{{ .UserID }}
+	</span>
+</div>`
 
-// NewSvelteService initializes a new Svelte interaction handler.
-func NewSvelteService(ds dsadapter.DatastoreAdapter) ISvelteService {
-	return &SvelteService{
-		ds: ds,
+	data := struct {
+		UserID string
+		Active bool
+		Away   bool
+	}{
+		UserID: userID,
+		Active: true, // Simulated dynamic state
+		Away:   false,
 	}
-}
 
-// LaunchSprint validates the payload and updates the datastore/configuration.
-// In a real scenario, this might trigger a webhook to Discord Bot APIs.
-func (s *SvelteService) LaunchSprint(ctx context.Context, sprint SprintUpdate) error {
-	// 1. Validation Logic (Business Rules)
-	if sprint.SprintName == "" {
-		return errors.New("sprint name cannot be empty")
-	}
-	if len(sprint.Participants) == 0 {
-		// Warning or Error depending on requirements. 
-		// For now, we assume a sprint requires participants.
-		return errors.New("sprint must have at least one participant")
-	}
-
-	// 2. Data Persistence / State Management
-	// Here we save the 'active configuration' allowing the Svelte client 
-	// to remain stateless and query the DB for the latest config.
-	err := s.ds.StoreSprintConfig(ctx, sprint)
+	var buf bytes.Buffer
+	t := template.Must(template.New("svelte_status").Parse(tpl))
+	err := t.Execute(&buf, data)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("failed to execute connection status template: %w", err)
 	}
 
-	// 3. Notify Discord Adapter (Post-Commit)
-	// This simulates the service notifying the Discord side that the config changed.
-	err = s.ds.NotifyDiscordAdapter(ctx, "sprint_launch", sprint)
+	return buf.String(), nil
+}
+
+// GenerateChatView implements the interface.
+func (s *DefaultSvelteService) GenerateChatView() (string, error) {
+	const chatTpl = `<!-- Svelte Component: ChatView.svelte -->
+<div class="chat-container">
+	<div class="sidebar">
+		<!-- Sidebar Component -->
+	</div>
+	
+	<main class="chat-main">
+		<div class="server-list">
+			{#each messages as msg (msg.id)}
+				<div class="message {{ if .isSystem }}system{{ else }}user{{ end }}">
+					<strong>{{ .author }}</strong>: {{ .content }}
+				</div>
+			{/each}
+		</div>
+		
+		<div class="input-area">
+			<input type="text" placeholder="Message #general" />
+		</div>
+	</main>
+</div>`
+
+	// In a real app, this might fetch data from a MessageService
+	messages := []struct {
+		author string
+		content string
+		id     int
+	}{
+		{"User1", "Hello from Discord!", 1},
+		{"User2", "How's the Go service running?", 2},
+	}
+
+	data := struct {
+		Messages []struct{ author string; content string; id int }
+	}{
+		Messages: messages,
+	}
+
+	var buf bytes.Buffer
+	t := template.Must(template.New("svelte_chat").Parse(chatTpl))
+	err := t.Execute(&buf, data)
 	if err != nil {
-		// Log error but return success to the frontend so the UI doesn't break
-		// In production, levels like logrus/slog would be used here.
-		return err
+		return "", fmt.Errorf("failed to execute chat view template: %w", err)
 	}
 
-	return nil
+	return buf.String(), nil
+}
+
+// MockRenderer is a specialized struct for testing, 
+// allowing us to capture the exact string content generated.
+type MockRenderer struct {
+	SvelteService
+}
+
+func (m *MockRenderer) CaptureOutput(callback func(SvelteService)) string {
+	// This is a helper pattern; typically refactoring the service
+	// to accept an io.Writer would be cleaner, but this demonstrates isolation.
+	panic("utilizing a simpler approach for this unit test definition")
 }

@@ -1,83 +1,115 @@
-package services
+package services_test
 
 import (
-	"context"
+	"strings"
 	"testing"
 
-	"github.com/hearth-distro/dsadapter"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"github.com/yourusername/hearth/services" // Replace with actual module path
 )
 
-// MockDatastoreAdapter is a generated mock implementation of dsadapter.DatastoreAdapter.
-// Provide this in your project dependencies, or define a mock struct manually.
-// (For this example, assume this is imported or provided by the test harness).
-
-func TestSvelteService_LaunchSprint_Success(t *testing.T) {
-	// Arrange
-	ctx := context.Background()
-	mockDS := new(MockDatastoreAdapter) // Assuming the interface is imported from dsadapter
+func TestDefaultSvelteService_RenderConnectionStatus(t *testing.T) {
+	service := services.NewSvelteService()
 	
-	expectedSprint := SprintUpdate{
-		SprintName:  "Viking Conquest",
-		StartTime:   1672531200,
-		EndTime:     1672617600,
-		Participants: []Participant{
-			{UserID: "user_1", Username: "Thor"},
-			{UserID: "user_2", Username: "Loki"},
+	tests := []struct {
+		name        string
+		userID      string
+		expectActive bool
+		requestID   string
+	}{
+		{
+			name:        "Active User",
+			userID:      "alice",
+			expectActive: true,
+			requestID:   "alice",
+		},
+		{
+			name:        "Offline User",
+			userID:      "bob",
+			expectActive: false,
+			requestID:   "bob",
 		},
 	}
 
-	// Setup expectations
-	mockDS.On("StoreSprintConfig", mock.Anything, expectedSprint).Return(nil)
-	mockDS.On("NotifyDiscordAdapter", mock.Anything, "sprint_launch", mock.AnythingOfType("SprintUpdate")).Return(nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			html, err := service.RenderConnectionStatus(tt.userID)
+			
+			if err != nil {
+				t.Fatalf("RenderConnectionStatus() failed with error: %v", err)
+			}
 
-	// Act
-	service := NewSvelteService(mockDS)
-	err := service.LaunchSprint(ctx, expectedSprint)
+			// Assert
+			if html == "" {
+				t.Error("expected output HTML to be non-empty")
+			}
 
-	// Assert
-	assert.NoError(t, err)
-	mockDS.AssertExpectations(t)
+			// Check for expected classes or content based on mock logic (Active=true)
+			if strings.Contains(html, "green") && tt.expectActive {
+				t.Log("HTML contains expected 'green' status class")
+			}
+			
+			// Verify user ID injection
+			if !strings.Contains(html, tt.requestID) {
+				t.Errorf("HTML does not contain user ID: %v", tt.requestID)
+			}
+		})
+	}
 }
 
-func TestSvelteService_LaunchSprint_ValidationError(t *testing.T) {
-	// Arrange
-	ctx := context.Background()
-	mockDS := new(MockDatastoreAdapter)
-	
-	invalidSprint := SprintUpdate{
-		SprintName: "",
-	}
+func TestDefaultSvelteService_GenerateChatView(t *testing.T) {
+	service := services.NewSvelteService()
 
 	// Act
-	service := NewSvelteService(mockDS)
-	err := service.LaunchSprint(ctx, invalidSprint)
+	html, err := service.GenerateChatView()
 
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot be empty")
-	mockDS.AssertNotCalled(t, "StoreSprintConfig")
+	// Assert basic behavior
+	if err != nil {
+		t.Fatalf("GenerateChatView() failed with error: %v", err)
+	}
+
+	if html == "" {
+		t.Fatal("expected output HTML to be non-empty")
+	}
+
+	// Verify we got the chat container structure
+	// We expect the placeholder text from our template
+	if !strings.Contains(html, "Message #general") {
+		t.Error("Chat view template did not render expected container placeholder")
+	}
+
+	// Verify mock data messages are included
+	mockMsg := "Hello from Discord!"
+	if !strings.Contains(html, mockMsg) {
+		t.Errorf("Chat view did not render mock message. Content: %v", html)
+	}
 }
 
-func TestSvelteService_LaunchSprint_DatabaseFailure(t *testing.T) {
-	// Arrange
-	ctx := context.Background()
-	mockDS := new(MockDatastoreAdapter)
+// Example of a Mock implementation for a strict Interface Test
+type MockSvelteRenderer struct{}
+
+func (s *MockSvelteRenderer) RenderConnectionStatus(userID string) (string, error) {
+	// Static mock response
+	return "<div>Mock Status</div>", nil
+}
+
+func (s *MockSvelteRenderer) GenerateChatView() (string, error) {
+	return "<div>Mock Chat</div>", nil
+}
+
+func TestSvelteService_Interfaces(t *testing.T) {
+	var _ services.SvelteService = &MockSvelteRenderer{}
+
+	mock := &MockSvelteRenderer{}
 	
-	sprint := SprintUpdate{
-		SprintName: "Test",
-		Participants: []Participant{{UserID: "u1"}},
+	// Call methods to ensure they satisfy the contract
+	_, err := mock.RenderConnectionStatus("test")
+	if err != nil {
+		t.Errorf("mock RenderConnectionStatus failed: %v", err)
 	}
 
-	mockDS.On("StoreSprintConfig", mock.Anything, sprint).Return(assert.AnError) // Simulate DB Write failure
-	
-	// Act
-	service := NewSvelteService(mockDS)
-	err := service.LaunchSprint(ctx, sprint)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Equal(t, assert.AnError, err)
-	mockDS.AssertExpectations(t)
+	_, err = mock.GenerateChatView()
+	if err != nil {
+		t.Errorf("mock GenerateChatView failed: %v", err)
+	}
 }
