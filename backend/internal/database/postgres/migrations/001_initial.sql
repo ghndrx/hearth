@@ -105,7 +105,7 @@ CREATE TABLE channels (
     parent_id UUID REFERENCES channels(id) ON DELETE SET NULL,
     owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
     name VARCHAR(100),
-    type INTEGER NOT NULL DEFAULT 0,
+    type VARCHAR(32) NOT NULL DEFAULT 'text',
     topic VARCHAR(1024),
     position INTEGER DEFAULT 0,
     slowmode INTEGER DEFAULT 0,
