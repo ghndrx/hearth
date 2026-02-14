@@ -109,6 +109,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	// Channel invites
 	channels.Post("/:id/invites", h.Channels.CreateInvite)
 	
+	// Search
+	search := api.Group("/search")
+	search.Get("/", h.Search.SearchAll)
+	search.Get("/messages", h.Search.SearchMessages)
+	search.Get("/users", h.Search.SearchUsers)
+	search.Get("/channels", h.Search.SearchChannels)
+	
 	// Voice
 	voice := api.Group("/voice")
 	voice.Get("/regions", h.Voice.GetRegions)

@@ -120,6 +120,14 @@ func main() {
 		nil, // cache
 		serviceBus,
 	)
+	searchService := services.NewSearchService(
+		nil, // search repo - TODO: add full-text search
+		repos.Messages,
+		repos.Channels,
+		repos.Servers,
+		repos.Users,
+		nil, // cache
+	)
 
 	// Initialize Fiber app with security settings
 	app := fiber.New(fiber.Config{
@@ -180,7 +188,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, wsGateway)
+	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, searchService, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
