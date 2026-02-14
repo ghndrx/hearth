@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 	"errors"
-	"hearth/internal/models"
+	"time"
+
 	"github.com/google/uuid"
+	"hearth/internal/models"
 )
 
 var (
@@ -12,49 +14,54 @@ var (
 	ErrInvalidInput   = errors.New("invalid input provided")
 )
 
-// SvelteRepository defines the data access methods required by the service.
-// This adheres to the rule of not importing internal database packages directly.
+// SvelteRepository defines the data access methods for Svelte components.
+// This decouples the service layer from the database implementation.
 type SvelteRepository interface {
-	Create(ctx context.Context, svelte *models.Svelte) error
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Svelte, error)
-	Update(ctx context.Context, svelte *models.Svelte) error
+	Create(ctx context.Context, component *models.SvelteComponent) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.SvelteComponent, error)
+	Update(ctx context.Context, component *models.SvelteComponent) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	List(ctx context.Context, limit, offset int) ([]*models.SvelteComponent, error)
 }
 
-// SvelteService handles business logic for Svelte components.
+// SvelteService handles business logic related to Svelte components
+// within the Hearth application.
 type SvelteService struct {
 	repo SvelteRepository
 }
 
-// NewSvelteService creates a new instance of SvelteService.
+// NewSvelteService creates a new SvelteService instance.
 func NewSvelteService(repo SvelteRepository) *SvelteService {
 	return &SvelteService{
 		repo: repo,
 	}
 }
 
-// CreateComponent validates and creates a new Svelte component instance.
-func (s *SvelteService) CreateComponent(ctx context.Context, name, code string) (*models.Svelte, error) {
-	if name == "" || code == "" {
+// CreateComponent attempts to register a new Svelte component.
+func (s *SvelteService) CreateComponent(ctx context.Context, name, content string, userID uuid.UUID) (*models.SvelteComponent, error) {
+	if name == "" || content == "" {
 		return nil, ErrInvalidInput
 	}
 
-	newSvelte := &models.Svelte{
-		ID:   uuid.New(),
-		Name: name,
-		Code: code,
+	component := &models.SvelteComponent{
+		ID:        uuid.New(),
+		Name:      name,
+		Content:   content,
+		AuthorID:  userID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
-	if err := s.repo.Create(ctx, newSvelte); err != nil {
+	if err := s.repo.Create(ctx, component); err != nil {
 		return nil, err
 	}
 
-	return newSvelte, nil
+	return component, nil
 }
 
-// GetComponent retrieves a component by its ID.
-func (s *SvelteService) GetComponent(ctx context.Context, id uuid.UUID) (*models.Svelte, error) {
-	component, err := s.repo.GetByID(ctx, id)
+// GetComponent retrieves a specific component by its ID.
+func (s *SvelteService) GetComponent(ctx context.Context, componentID uuid.UUID) (*models.SvelteComponent, error) {
+	component, err := s.repo.GetByID(ctx, componentID)
 	if err != nil {
 		return nil, err
 	}
@@ -64,38 +71,34 @@ func (s *SvelteService) GetComponent(ctx context.Context, id uuid.UUID) (*models
 	return component, nil
 }
 
-// UpdateComponent modifies an existing component.
-func (s *SvelteService) UpdateComponent(ctx context.Context, id uuid.UUID, name, code string) error {
-	if name == "" || code == "" {
-		return ErrInvalidInput
+// UpdateComponent modifies an existing component's content.
+func (s *SvelteService) UpdateComponent(ctx context.Context, componentID uuid.UUID, newContent string) (*models.SvelteComponent, error) {
+	if newContent == "" {
+		return nil, ErrInvalidInput
 	}
 
-	// Check existence first
-	existing, err := s.repo.GetByID(ctx, id)
+	component, err := s.GetComponent(ctx, componentID)
 	if err != nil {
-		return err
-	}
-	if existing == nil {
-		return ErrSvelteNotFound
+		return nil, err
 	}
 
-	// Update fields
-	existing.Name = name
-	existing.Code = code
+	component.Content = newContent
+	component.UpdatedAt = time.Now()
 
-	return s.repo.Update(ctx, existing)
+	if err := s.repo.Update(ctx, component); err != nil {
+		return nil, err
+	}
+
+	return component, nil
 }
 
-// DeleteComponent removes a component by its ID.
-func (s *SvelteService) DeleteComponent(ctx context.Context, id uuid.UUID) error {
-	// Check existence first
-	existing, err := s.repo.GetByID(ctx, id)
+// DeleteComponent removes a component from the system.
+func (s *SvelteService) DeleteComponent(ctx context.Context, componentID uuid.UUID) error {
+	// Check existence first usually good practice, or rely on DB count
+	_, err := s.repo.GetByID(ctx, componentID)
 	if err != nil {
 		return err
 	}
-	if existing == nil {
-		return ErrSvelteNotFound
-	}
 
-	return s.repo.Delete(ctx, id)
+	return s.repo.Delete(ctx, componentID)
 }
