@@ -1,185 +1,165 @@
-package services // Package defined as "services" as requested
+package services
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net"
 	"sync"
 	"time"
 )
 
-// --- Domain / Models ---
+// ErrChannelNotFound is returned when a channel ID does not exist.
+var ErrChannelNotFound = errors.New("channel not found")
 
-// Represents a Discord-like Guild core structure
-type Guild struct {
-	ID    string
-	Name  string
-	MemberCount int
+// ErrUserNotFound is returned when trying to send a message to a non-existent user channel.
+var ErrUserNotFound = errors.New("user not found")
+
+// Message represents a single text message in the chat.
+type Message struct {
+	ID        string
+	Content   string
+	Timestamp time.Time
+	SenderID  string
+	// ChannelID is optional for direct messages, required for guild channels
+	ChannelID *string 
 }
 
-// Represents the handler for a specific connection
-// This aligns with Discord's Gateway pattern
-type GuildHandler interface {
-	GetGuilds(ctx context.Context, limit int) ([]Guild, error)
+// ChatService is the core business logic for the chat.
+// It satisfies the Service interface.
+type ChatService struct {
+	mux sync.RWMutex
+
+	// Database abstraction: In-memory map for demonstration.
+	channels map[string]*ServiceChannel
+	messages map[string][]Message 
 }
 
-// --- Interfaces ---
-
-// Gateway defines the contract for connecting clients
-// It mimics net.Conn properties for simplicity in testing
-type Gateway interface {
-	WriteJSON(v interface{}) error
-	Close() error
-	RemoteAddr() net.Addr
+// ServiceChannel holds the state for a single channel (e.g., a Discord guild text channel).
+// This allows for auto-generation of IDs in a real scenario.
+type ServiceChannel struct {
+	ID          string
+	Name        string
+	Type        string // e.g., "TEXT", "VOICE"
+	Description string
 }
 
-// UserService handles application-specific logic
-type UserService interface {
-	GetMemberGuilds(userID int64) ([]Guild, error)
+// ChannelService defines the public contract for creating and retrieving channels.
+type ChannelService interface {
+	GetChannel(ctx context.Context, id string) (*ServiceChannel, error)
+	CreateChannel(ctx context.Context, name string, channelType string) (string, error)
 }
 
-// --- Services ---
-
-// HearthService orchestrates the connection lifecycle
-type HearthService struct {
-	us UserService
-	wg sync.WaitGroup
+// MessageService defines the public contract for sending and retrieving messages.
+type MessageService interface {
+	SendMessage(ctx context.Context, msg *Message) error
+	GetMessages(ctx context.Context, channelID string) ([]Message, error)
+	DeleteMessage(ctx context.Context, msgID string) error
 }
 
-func NewHearthService(userSvc UserService) *HearthService {
-	return &HearthService{
-		us: userSvc,
+// ChatService implements ChannelService and MessageService.
+func NewChatService() *ChatService {
+	return &ChatService{
+		channels: make(map[string]*ServiceChannel),
+		messages: make(map[string][]Message),
 	}
 }
 
-// ManageClient handles an incoming connection
-// This is a simplified listener that accepts TCP connections
-func (s *HearthService) ManageClient(ctx context.Context, conn Gateway) {
-	defer s.wg.Done()
+// --- Channel Operations ---
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+// CreateChannel initializes a new service channel.
+func (s *ChatService) CreateChannel(ctx context.Context, name string, channelType string) (string, error) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 
-	logger.Printf("[Service] New client connected from: %v", conn.RemoteAddr())
+	chID := "ch_" + name + "_" + time.Now().Format("micro")
+	
+	s.channels[chID] = &ServiceChannel{
+		ID:          chID,
+		Name:        name,
+		Type:        channelType,
+		Description: "Automatically created via service layer",
+	}
 
-	// Treat the connection as a periodic heartbeat loop
-	// In a real production service, this would upgrade to WebSocket here
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Printf("[Service] Client %v context cancelled, closing.", conn.RemoteAddr())
-			return
-		default:
-			if err := s.handleLoop(ctx, conn); err != nil {
-				logger.Printf("[Service] Error with client %v: %v", conn.RemoteAddr(), err)
-				return
-			}
-			time.Sleep(1 * time.Second) // Simulate polling duty cycle
+	return chID, nil
+}
+
+// GetChannel retrieves channel details by ID.
+func (s *ChatService) GetChannel(ctx context.Context, id string) (*ServiceChannel, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+	
+	channel, exists := s.channels[id]
+	if !exists {
+		return nil, ErrChannelNotFound
+	}
+	return channel, nil
+}
+
+// --- Message Operations ---
+
+// SendMessage records a new message in the memory store.
+func (s *ChatService) SendMessage(ctx context.Context, msg *Message) error {
+	if msg.Content == "" {
+		return errors.New("message content cannot be empty")
+	}
+	if msg.SenderID == "" {
+		return errors.New("sender ID cannot be empty")
+	}
+
+	// Optional: Validate channel exists if ChannelID is provided.
+	if msg.ChannelID != nil {
+		s.mux.RLock()
+		_, exists := s.channels[*msg.ChannelID]
+		s.mux.RUnlock()
+		if !exists {
+			return ErrChannelNotFound
 		}
 	}
-}
 
-// handleLoop performs the logic specific to the connection
-func (s *HearthService) handleLoop(ctx context.Context, conn Gateway) error {
-	// Determine remote IP to simulate "User ID"
-	host, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-	// Parse ID (if hex string)
-	var userID int64
-	fmt.Sscanf(host, "%d", &userID) // Basic conversion for demo
+	s.mux.Lock()
+	defer s.mux.Unlock()
 
-	// 1. Heartbeat Logic (Simulated)
-	if err := conn.WriteJSON(map[string]string{"type": "heartbeat"}); err != nil {
-		return fmt.Errorf("failed to send heartbeat: %w", err)
-	}
+	msg.ID = "msg_" + time.Now().Format("nano")
+	msg.Timestamp = time.Now()
 
-	// 2. Fetch Application Logic
-	guilds, err := s.us.GetMemberGuilds(userID)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil
-		}
-		return fmt.Errorf("failed to fetch guilds: %w", err)
-	}
-
-	// 3. Send data to client
-	if err := conn.WriteJSON(map[string]interface{}{
-		"type":    "guild_update",
-		"user_id": userID,
-		"data":    guilds,
-	}); err != nil {
-		return fmt.Errorf("failed to send data: %w", err)
+	s.messages[msg.SenderID] = append(s.messages[msg.SenderID], *msg)
+	if msg.ChannelID != nil {
+		s.messages[*msg.ChannelID] = append(s.messages[*msg.ChannelID], *msg)
 	}
 
 	return nil
 }
 
-// Serve starts the listener service
-func (s *HearthService) Serve(ctx context.Context, address string) error {
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		return err
+// GetMessages retrieves the message history for a specific source.
+// A "source" acts as the key. This could be a Channel ID or a User ID (Private Message).
+func (s *ChatService) GetMessages(ctx context.Context, sourceID string) ([]Message, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+
+	msgs, exists := s.messages[sourceID]
+	if !exists {
+		// Returning an empty list is often preferred over an error for "history of non-existent channel"
+		return []Message{}, nil
 	}
-	defer listener.Close()
+	
+	// Return a copy to prevent external modification of internal state
+	customCopy := make([]Message, len(msgs))
+	copy(customCopy, msgs)
+	return customCopy, nil
+}
 
-	logger.Println("Hearth Service listening on", address)
+// DeleteMessage removes a message from history.
+func (s *ChatService) DeleteMessage(ctx context.Context, msgID string) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Println("Hearth Service shutting down")
-			return ctx.Err()
-		default:
-			conn, err := listener.Accept()
-			if err != nil {
-				// Handle non-critical accept errors
-				if !errors.Is(err, context.Canceled) {
-					return fmt.Errorf("accept error: %w", err)
-				}
-				return err
+	for key, msgs := range s.messages {
+		for i, m := range msgs {
+			if m.ID == msgID {
+				// Remove element
+				s.messages[key] = append(msgs[:i], msgs[i+1:]...)
+				return nil
 			}
-
-			s.wg.Add(1)
-			// Handle the client in a goroutine
-			go s.ManageClient(ctx, &loggingWrapper{Gateway: conn})
 		}
 	}
-}
-
-// --- Adaptors / Implementations ---
-
-type loggingWrapper struct {
-	Gateway
-}
-
-func (l *loggingWrapper) WriteJSON(v interface{}) error {
-	if err := l.Gateway.WriteJSON(v); err != nil {
-		return err
-	}
-	logger.Printf("[Log] JSON sent to %s: %+v", l.RemoteAddr(), v)
-	return nil
-}
-
-// In-memory implementation of UserService for demo purposes
-type InMemoryUserService struct {
-	guilds map[int64][]Guild
-}
-
-func NewInMemoryUserService() *InMemoryUserService {
-	return &InMemoryUserService{
-		guilds: map[int64][]Guild{
-			1: {ID: "801", Name: "Community Hub", MemberCount: 120},
-			2: {ID: "802", Name: "Dev Team", MemberCount: 5},
-		},
-	}
-}
-
-func (m *InMemoryUserService) GetMemberGuilds(userID int64) ([]Guild, error) {
-	time.Sleep(10 * time.Millisecond) // Simulate DB latency
-
-	gs, ok := m.guilds[userID]
-	if !ok {
-		return nil, fmt.Errorf("user not found")
-	}
-	return gs, nil
+	return errors.New("message not found")
 }
