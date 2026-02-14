@@ -13,10 +13,10 @@ import (
 
 // AuthService handles authentication
 type AuthService struct {
-	userRepo     UserRepository
-	jwtService   *auth.JWTService
-	cache        CacheService
-	
+	userRepo   UserRepository
+	jwtService *auth.JWTService
+	cache      CacheService
+
 	registrationEnabled bool
 	inviteOnly          bool
 }
@@ -59,14 +59,14 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 	if !s.registrationEnabled {
 		return nil, nil, ErrRegistrationClosed
 	}
-	
+
 	// Check if invite is required
 	if s.inviteOnly && req.InviteCode == "" {
 		return nil, nil, ErrInviteRequired
 	}
-	
+
 	// TODO: Validate invite code if provided
-	
+
 	// Check if email is taken
 	existing, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
@@ -75,7 +75,7 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 	if existing != nil {
 		return nil, nil, ErrEmailTaken
 	}
-	
+
 	// Check if username is taken
 	existing, err = s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
@@ -84,17 +84,17 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 	if existing != nil {
 		return nil, nil, ErrUsernameTaken
 	}
-	
+
 	// Hash password
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Generate discriminator (random 4-digit number)
 	id := uuid.New()
 	discriminator := fmt.Sprintf("%04d", (int(id[0])<<8|int(id[1]))%10000)
-	
+
 	// Create user
 	user := &models.User{
 		ID:            uuid.New(),
@@ -106,24 +106,24 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
-	
+
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Generate tokens
 	accessToken, refreshToken, err := s.jwtService.GenerateTokenPair(user.ID, user.Username)
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	tokens := &TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    s.jwtService.GetExpirySeconds(),
 		TokenType:    "Bearer",
 	}
-	
+
 	return user, tokens, nil
 }
 
@@ -137,12 +137,12 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*model
 	if user == nil {
 		return nil, nil, ErrInvalidCredentials
 	}
-	
+
 	// Check password
 	if err := auth.CheckPassword(password, user.PasswordHash); err != nil {
 		return nil, nil, ErrInvalidCredentials
 	}
-	
+
 	// Check if password needs rehash
 	if auth.NeedsRehash(user.PasswordHash) {
 		if newHash, err := auth.HashPassword(password); err == nil {
@@ -150,20 +150,20 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*model
 			_ = s.userRepo.Update(ctx, user)
 		}
 	}
-	
+
 	// Generate tokens
 	accessToken, refreshToken, err := s.jwtService.GenerateTokenPair(user.ID, user.Username)
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	tokens := &TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    s.jwtService.GetExpirySeconds(),
 		TokenType:    "Bearer",
 	}
-	
+
 	return user, tokens, nil
 }
 
@@ -174,28 +174,28 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*T
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check if token is revoked
 	revoked, _ := s.isTokenRevoked(ctx, claims.ID)
 	if revoked {
 		return nil, auth.ErrInvalidToken
 	}
-	
+
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, claims.UserID)
 	if err != nil || user == nil {
 		return nil, auth.ErrInvalidToken
 	}
-	
+
 	// Revoke old refresh token
 	_ = s.revokeToken(ctx, claims.ID, claims.ExpiresAt.Time)
-	
+
 	// Generate new tokens
 	accessToken, newRefreshToken, err := s.jwtService.GenerateTokenPair(user.ID, user.Username)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
@@ -210,12 +210,12 @@ func (s *AuthService) Logout(ctx context.Context, accessToken, refreshToken stri
 	if claims, err := s.jwtService.ValidateAccessToken(accessToken); err == nil {
 		_ = s.revokeToken(ctx, claims.ID, claims.ExpiresAt.Time)
 	}
-	
+
 	// Revoke refresh token
 	if claims, err := s.jwtService.ValidateRefreshToken(refreshToken); err == nil {
 		_ = s.revokeToken(ctx, claims.ID, claims.ExpiresAt.Time)
 	}
-	
+
 	return nil
 }
 
@@ -225,13 +225,13 @@ func (s *AuthService) ValidateToken(ctx context.Context, token string) (uuid.UUI
 	if err != nil {
 		return uuid.Nil, err
 	}
-	
+
 	// Check if token is revoked
 	revoked, _ := s.isTokenRevoked(ctx, claims.ID)
 	if revoked {
 		return uuid.Nil, auth.ErrInvalidToken
 	}
-	
+
 	return claims.UserID, nil
 }
 
@@ -242,7 +242,7 @@ func (s *AuthService) revokeToken(ctx context.Context, tokenID string, expiresAt
 	if ttl <= 0 {
 		return nil // Already expired
 	}
-	
+
 	key := "revoked:" + tokenID
 	return s.cache.Set(ctx, key, []byte("1"), ttl)
 }

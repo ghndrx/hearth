@@ -22,7 +22,7 @@ func TestAttachmentService_GetAndDelete(t *testing.T) {
 	ctx := context.Background()
 
 	a, _ := svc.Upload(ctx, uuid.New(), "test.pdf", "application/pdf", 2048)
-	
+
 	found, err := svc.Get(ctx, a.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, a.ID, found.ID)

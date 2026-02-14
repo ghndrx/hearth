@@ -47,7 +47,7 @@ func (s *TypingService) GetTypingUsers(ctx context.Context, channelID string) ([
 
 	var users []string
 	now := time.Now()
-	
+
 	if channelUsers, ok := s.typing[channelID]; ok {
 		for userID, ts := range channelUsers {
 			if now.Sub(ts) < s.ttl {
