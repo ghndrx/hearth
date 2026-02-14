@@ -28,8 +28,30 @@ func TestVoiceStateService_Mute(t *testing.T) {
 	userID, channelID := uuid.New(), uuid.New()
 
 	svc.Join(ctx, userID, channelID, uuid.New())
-	svc.SetMuted(ctx, userID, true)
+	err := svc.SetMuted(ctx, userID, true)
+	assert.NoError(t, err)
 
 	users, _ := svc.GetChannelUsers(ctx, channelID)
 	assert.True(t, users[0].Muted)
+}
+
+func TestVoiceStateService_Mute_NotInVoice(t *testing.T) {
+	svc := NewVoiceStateService()
+	ctx := context.Background()
+
+	err := svc.SetMuted(ctx, uuid.New(), true)
+	assert.ErrorIs(t, err, ErrUserNotInVoice)
+}
+
+func TestVoiceStateService_Deafen(t *testing.T) {
+	svc := NewVoiceStateService()
+	ctx := context.Background()
+	userID, channelID := uuid.New(), uuid.New()
+
+	svc.Join(ctx, userID, channelID, uuid.New())
+	err := svc.SetDeafened(ctx, userID, true)
+	assert.NoError(t, err)
+
+	users, _ := svc.GetChannelUsers(ctx, channelID)
+	assert.True(t, users[0].Deafened)
 }

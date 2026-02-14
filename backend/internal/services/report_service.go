@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -44,6 +45,8 @@ func (s *ReportService) Create(ctx context.Context, reporterID, targetID uuid.UU
 	return &r, nil
 }
 
+var ErrReportNotFound = errors.New("report not found")
+
 func (s *ReportService) UpdateStatus(ctx context.Context, reportID uuid.UUID, status string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -54,7 +57,7 @@ func (s *ReportService) UpdateStatus(ctx context.Context, reportID uuid.UUID, st
 			return nil
 		}
 	}
-	return nil
+	return ErrReportNotFound
 }
 
 func (s *ReportService) GetPending(ctx context.Context) ([]Report, error) {

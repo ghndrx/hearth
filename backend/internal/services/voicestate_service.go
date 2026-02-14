@@ -2,10 +2,13 @@ package services
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/google/uuid"
 )
+
+var ErrUserNotInVoice = errors.New("user not in voice channel")
 
 type VoiceState struct {
 	UserID    uuid.UUID
@@ -42,9 +45,22 @@ func (s *VoiceStateService) Leave(ctx context.Context, userID uuid.UUID) error {
 func (s *VoiceStateService) SetMuted(ctx context.Context, userID uuid.UUID, muted bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if state, ok := s.states[userID]; ok {
-		state.Muted = muted
+	state, ok := s.states[userID]
+	if !ok {
+		return ErrUserNotInVoice
 	}
+	state.Muted = muted
+	return nil
+}
+
+func (s *VoiceStateService) SetDeafened(ctx context.Context, userID uuid.UUID, deafened bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.states[userID]
+	if !ok {
+		return ErrUserNotInVoice
+	}
+	state.Deafened = deafened
 	return nil
 }
 
