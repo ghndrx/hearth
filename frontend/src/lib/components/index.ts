@@ -17,3 +17,8 @@ export { default as EmojiPicker } from './EmojiPicker.svelte';
 
 // User components
 export { default as UserPopout } from './UserPopout.svelte';
+
+// Settings components
+export { default as SettingsLayout } from './SettingsLayout.svelte';
+export { default as UserSettings } from './UserSettings.svelte';
+export { default as ServerSettings } from './ServerSettings.svelte';
