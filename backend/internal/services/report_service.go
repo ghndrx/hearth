@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,7 @@ type Report struct {
 }
 
 type ReportService struct {
+	mu      sync.RWMutex
 	reports []Report
 }
 
@@ -26,6 +28,9 @@ func NewReportService() *ReportService {
 }
 
 func (s *ReportService) Create(ctx context.Context, reporterID, targetID uuid.UUID, targetType, reason string) (*Report, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	r := Report{
 		ID:         uuid.New(),
 		ReporterID: reporterID,
@@ -40,6 +45,9 @@ func (s *ReportService) Create(ctx context.Context, reporterID, targetID uuid.UU
 }
 
 func (s *ReportService) UpdateStatus(ctx context.Context, reportID uuid.UUID, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	for i := range s.reports {
 		if s.reports[i].ID == reportID {
 			s.reports[i].Status = status
@@ -50,6 +58,9 @@ func (s *ReportService) UpdateStatus(ctx context.Context, reportID uuid.UUID, st
 }
 
 func (s *ReportService) GetPending(ctx context.Context) ([]Report, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var pending []Report
 	for _, r := range s.reports {
 		if r.Status == "pending" {

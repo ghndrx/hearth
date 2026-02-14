@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ type ModerationAction struct {
 }
 
 type ModerationService struct {
+	mu      sync.RWMutex
 	actions []ModerationAction
 }
 
@@ -27,6 +29,9 @@ func NewModerationService() *ModerationService {
 }
 
 func (s *ModerationService) Warn(ctx context.Context, serverID, userID, modID uuid.UUID, reason string) (*ModerationAction, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	action := ModerationAction{
 		ID:        uuid.New(),
 		ServerID:  serverID,
@@ -41,6 +46,9 @@ func (s *ModerationService) Warn(ctx context.Context, serverID, userID, modID uu
 }
 
 func (s *ModerationService) Timeout(ctx context.Context, serverID, userID, modID uuid.UUID, duration time.Duration, reason string) (*ModerationAction, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	expires := time.Now().Add(duration)
 	action := ModerationAction{
 		ID:        uuid.New(),
@@ -57,6 +65,9 @@ func (s *ModerationService) Timeout(ctx context.Context, serverID, userID, modID
 }
 
 func (s *ModerationService) GetHistory(ctx context.Context, serverID, userID uuid.UUID) ([]ModerationAction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var history []ModerationAction
 	for _, a := range s.actions {
 		if a.ServerID == serverID && a.UserID == userID {
