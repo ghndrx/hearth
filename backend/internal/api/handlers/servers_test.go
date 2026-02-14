@@ -220,10 +220,11 @@ func setupServerTestApp(serverSvc *mockServerService, channelSvc *mockChannelSer
 	servers.Patch("/:id", h.Update)
 	servers.Delete("/:id", h.Delete)
 	servers.Get("/:id/members", h.GetMembers)
+	// @me route must come before :userId to avoid being matched as a UUID
+	servers.Delete("/:id/members/@me", h.Leave)
 	servers.Get("/:id/members/:userId", h.GetMember)
 	servers.Patch("/:id/members/:userId", h.UpdateMember)
 	servers.Delete("/:id/members/:userId", h.RemoveMember)
-	servers.Delete("/:id/members/@me", h.Leave)
 	servers.Get("/:id/bans", h.GetBans)
 	servers.Put("/:id/bans/:userId", h.CreateBan)
 	servers.Delete("/:id/bans/:userId", h.RemoveBan)
@@ -1319,4 +1320,1064 @@ func TestServerHandler_Channels(t *testing.T) {
 			t.Errorf("expected 400, got %d", resp.StatusCode)
 		}
 	})
+}
+
+// Additional comprehensive tests for CreateServer
+
+func TestServerHandler_Create_InvalidJSON(t *testing.T) {
+	userID := uuid.New()
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("POST", "/servers/", bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	bodyData, _ := io.ReadAll(resp.Body)
+	json.Unmarshal(bodyData, &body)
+
+	if body["error"] != "invalid request body" {
+		t.Errorf("expected 'invalid request body' error, got %v", body["error"])
+	}
+}
+
+func TestServerHandler_Create_WithIcon(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	iconURL := "https://example.com/icon.png"
+
+	serverSvc := &mockServerService{
+		createServerFunc: func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error) {
+			if icon != iconURL {
+				t.Errorf("expected icon %s, got %s", iconURL, icon)
+			}
+			return &models.Server{
+				ID:      serverID,
+				Name:    name,
+				OwnerID: ownerID,
+				IconURL: &icon,
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "My Server",
+		"icon": iconURL,
+	})
+	req := httptest.NewRequest("POST", "/servers/", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Create_InternalError(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{
+		createServerFunc: func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error) {
+			return nil, services.ErrServerNotFound // Simulating an unexpected error
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "Test Server",
+	})
+	req := httptest.NewRequest("POST", "/servers/", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Create_ExactlyTwoCharacterName(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{
+		createServerFunc: func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error) {
+			return &models.Server{
+				ID:      serverID,
+				Name:    name,
+				OwnerID: ownerID,
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "AB", // Exactly 2 characters - should be valid
+	})
+	req := httptest.NewRequest("POST", "/servers/", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for GetServer
+
+func TestServerHandler_Get_InternalError(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{
+		getServerFunc: func(ctx context.Context, id uuid.UUID) (*models.Server, error) {
+			return nil, services.ErrNotServerMember // Some internal error
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/"+serverID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Get_ResponseBody(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	description := "Test description"
+
+	serverSvc := &mockServerService{
+		getServerFunc: func(ctx context.Context, id uuid.UUID) (*models.Server, error) {
+			return &models.Server{
+				ID:          serverID,
+				Name:        "Test Server",
+				OwnerID:     userID,
+				Description: &description,
+				Features:    []string{"COMMUNITY"},
+				CreatedAt:   time.Now(),
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/"+serverID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	bodyData, _ := io.ReadAll(resp.Body)
+	json.Unmarshal(bodyData, &body)
+
+	if body["name"] != "Test Server" {
+		t.Errorf("expected name 'Test Server', got %v", body["name"])
+	}
+	if body["description"] != description {
+		t.Errorf("expected description '%s', got %v", description, body["description"])
+	}
+}
+
+// Additional comprehensive tests for UpdateServer
+
+func TestServerHandler_Update_InvalidJSON(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String(), bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Update_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "New Name",
+	})
+	req := httptest.NewRequest("PATCH", "/servers/not-a-uuid", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Update_AllFields(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	newName := "Updated Server"
+	newIcon := "https://example.com/new-icon.png"
+	newBanner := "https://example.com/banner.png"
+	newDescription := "New description"
+
+	serverSvc := &mockServerService{
+		updateServerFunc: func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ServerUpdate) (*models.Server, error) {
+			if *updates.Name != newName {
+				t.Errorf("expected name %s, got %s", newName, *updates.Name)
+			}
+			if *updates.IconURL != newIcon {
+				t.Errorf("expected icon %s, got %s", newIcon, *updates.IconURL)
+			}
+			if *updates.BannerURL != newBanner {
+				t.Errorf("expected banner %s, got %s", newBanner, *updates.BannerURL)
+			}
+			if *updates.Description != newDescription {
+				t.Errorf("expected description %s, got %s", newDescription, *updates.Description)
+			}
+			return &models.Server{
+				ID:          serverID,
+				Name:        *updates.Name,
+				OwnerID:     userID,
+				IconURL:     updates.IconURL,
+				BannerURL:   updates.BannerURL,
+				Description: updates.Description,
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name":        newName,
+		"icon":        newIcon,
+		"banner":      newBanner,
+		"description": newDescription,
+	})
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Update_InternalError(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{
+		updateServerFunc: func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ServerUpdate) (*models.Server, error) {
+			return nil, services.ErrNotServerOwner // Some unexpected error falling to default
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "New Name",
+	})
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	// ErrNotServerOwner is not handled specifically in Update, so it should fall through to InternalServerError
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for DeleteServer
+
+func TestServerHandler_Delete_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/not-a-uuid", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Delete_InternalError(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{
+		deleteServerFunc: func(ctx context.Context, id, requesterID uuid.UUID) error {
+			return services.ErrNotServerMember // Unexpected error falling to default
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for Members
+
+func TestServerHandler_GetMembers_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/invalid-uuid/members", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_GetMember_InvalidUserID(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/members/invalid-uuid", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateMember_Success(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	targetID := uuid.New()
+	nickname := "NewNick"
+
+	serverSvc := &mockServerService{
+		updateMemberFunc: func(ctx context.Context, sid, reqID, tarID uuid.UUID, nick *string, roles []uuid.UUID) (*models.Member, error) {
+			if *nick != nickname {
+				t.Errorf("expected nickname %s, got %s", nickname, *nick)
+			}
+			return &models.Member{
+				UserID:   tarID,
+				ServerID: sid,
+				Nickname: nick,
+				JoinedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"nick": nickname,
+	})
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String()+"/members/"+targetID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateMember_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("PATCH", "/servers/invalid-uuid/members/"+uuid.New().String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateMember_InvalidUserID(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String()+"/members/invalid-uuid", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_RemoveMember_Success(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	targetID := uuid.New()
+
+	serverSvc := &mockServerService{
+		kickMemberFunc: func(ctx context.Context, sid, reqID, tarID uuid.UUID, reason string) error {
+			return nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/members/"+targetID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Errorf("expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_RemoveMember_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	targetID := uuid.New()
+
+	serverSvc := &mockServerService{
+		kickMemberFunc: func(ctx context.Context, sid, reqID, tarID uuid.UUID, reason string) error {
+			return services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/members/"+targetID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Leave_Success(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{
+		leaveServerFunc: func(ctx context.Context, sid, uid uuid.UUID) error {
+			return nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/members/@me", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Errorf("expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Leave_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/invalid-uuid/members/@me", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_Leave_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{
+		leaveServerFunc: func(ctx context.Context, sid, uid uuid.UUID) error {
+			return services.ErrNotServerOwner // Owner cannot leave their own server
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/members/@me", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for Bans
+
+func TestServerHandler_GetBans_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/invalid-uuid/bans", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_GetBans_WithBans(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	bannedID := uuid.New()
+	reason := "Spam"
+
+	serverSvc := &mockServerService{
+		getBansFunc: func(ctx context.Context, sid uuid.UUID) ([]*models.Ban, error) {
+			return []*models.Ban{
+				{
+					ServerID: sid,
+					UserID:   bannedID,
+					Reason:   &reason,
+				},
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/bans", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var bans []map[string]interface{}
+	bodyData, _ := io.ReadAll(resp.Body)
+	json.Unmarshal(bodyData, &bans)
+
+	if len(bans) != 1 {
+		t.Errorf("expected 1 ban, got %d", len(bans))
+	}
+}
+
+func TestServerHandler_CreateBan_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("PUT", "/servers/invalid-uuid/bans/"+uuid.New().String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateBan_InvalidUserID(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("PUT", "/servers/"+serverID.String()+"/bans/invalid-uuid", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateBan_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	targetID := uuid.New()
+
+	serverSvc := &mockServerService{
+		banMemberFunc: func(ctx context.Context, sid, rid, tid uuid.UUID, reason string, deleteDays int) error {
+			return services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("PUT", "/servers/"+serverID.String()+"/bans/"+targetID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_RemoveBan_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/invalid-uuid/bans/"+uuid.New().String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_RemoveBan_InvalidUserID(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/bans/invalid-uuid", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_RemoveBan_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	targetID := uuid.New()
+
+	serverSvc := &mockServerService{
+		unbanMemberFunc: func(ctx context.Context, sid, rid, tid uuid.UUID) error {
+			return services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/bans/"+targetID.String(), nil)
+	resp, _ := app.Test(req)
+
+	// RemoveBan returns 500 for any error, as per the handler implementation
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for Invites
+
+func TestServerHandler_GetInvites_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	serverSvc := &mockServerService{}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/invalid-uuid/invites", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_GetInvites_Success(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	inviteCode := "testcode"
+
+	serverSvc := &mockServerService{
+		getInvitesFunc: func(ctx context.Context, sid uuid.UUID) ([]*models.Invite, error) {
+			return []*models.Invite{
+				{
+					Code:     inviteCode,
+					ServerID: sid,
+				},
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/invites", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for Roles
+
+func TestServerHandler_GetRoles_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/invalid-uuid/roles", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateRole_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "Moderator",
+	})
+	req := httptest.NewRequest("POST", "/servers/invalid-uuid/roles", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateRole_DefaultName(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	roleSvc := &mockRoleService{
+		createRoleFunc: func(ctx context.Context, sid, cid uuid.UUID, name string, color int, perms int64) (*models.Role, error) {
+			if name != "new role" {
+				t.Errorf("expected default name 'new role', got %s", name)
+			}
+			return &models.Role{
+				ID:       uuid.New(),
+				ServerID: sid,
+				Name:     name,
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, roleSvc, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		// No name provided - should use default
+	})
+	req := httptest.NewRequest("POST", "/servers/"+serverID.String()+"/roles", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateRole_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	roleSvc := &mockRoleService{
+		createRoleFunc: func(ctx context.Context, sid, cid uuid.UUID, name string, color int, perms int64) (*models.Role, error) {
+			return nil, services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, roleSvc, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "Admin",
+	})
+	req := httptest.NewRequest("POST", "/servers/"+serverID.String()+"/roles", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateRole_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "New Name",
+	})
+	req := httptest.NewRequest("PATCH", "/servers/invalid-uuid/roles/"+uuid.New().String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateRole_InvalidRoleID(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "New Name",
+	})
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String()+"/roles/invalid-uuid", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateRole_Success(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	roleID := uuid.New()
+	newName := "Updated Role"
+	newColor := 0xFF0000
+
+	roleSvc := &mockRoleService{
+		updateRoleFunc: func(ctx context.Context, rid, reqID uuid.UUID, updates *models.RoleUpdate) (*models.Role, error) {
+			return &models.Role{
+				ID:       rid,
+				ServerID: serverID,
+				Name:     *updates.Name,
+				Color:    *updates.Color,
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, roleSvc, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name":  newName,
+		"color": newColor,
+	})
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String()+"/roles/"+roleID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_UpdateRole_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	roleID := uuid.New()
+
+	roleSvc := &mockRoleService{
+		updateRoleFunc: func(ctx context.Context, rid, reqID uuid.UUID, updates *models.RoleUpdate) (*models.Role, error) {
+			return nil, services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, roleSvc, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "New Name",
+	})
+	req := httptest.NewRequest("PATCH", "/servers/"+serverID.String()+"/roles/"+roleID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_DeleteRole_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/invalid-uuid/roles/"+uuid.New().String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_DeleteRole_InvalidRoleID(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/roles/invalid-uuid", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_DeleteRole_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	roleID := uuid.New()
+
+	roleSvc := &mockRoleService{
+		deleteRoleFunc: func(ctx context.Context, rid, reqID uuid.UUID) error {
+			return services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, roleSvc, userID)
+
+	req := httptest.NewRequest("DELETE", "/servers/"+serverID.String()+"/roles/"+roleID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+// Additional comprehensive tests for Channels
+
+func TestServerHandler_GetChannels_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("GET", "/servers/invalid-uuid/channels", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateChannel_InvalidServerID(t *testing.T) {
+	userID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "new-channel",
+	})
+	req := httptest.NewRequest("POST", "/servers/invalid-uuid/channels", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateChannel_InvalidJSON(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	app := setupServerTestApp(&mockServerService{}, &mockChannelService{}, &mockRoleService{}, userID)
+
+	req := httptest.NewRequest("POST", "/servers/"+serverID.String()+"/channels", bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateChannel_WithParent(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	parentID := uuid.New()
+
+	channelSvc := &mockChannelService{
+		createChannelFunc: func(ctx context.Context, sid, cid uuid.UUID, name string, chanType models.ChannelType, pid *uuid.UUID) (*models.Channel, error) {
+			if pid == nil || *pid != parentID {
+				t.Errorf("expected parent_id %s", parentID)
+			}
+			return &models.Channel{
+				ID:       uuid.New(),
+				ServerID: &sid,
+				Name:     name,
+				Type:     chanType,
+				ParentID: pid,
+			}, nil
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, channelSvc, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name":      "sub-channel",
+		"type":      "text",
+		"parent_id": parentID.String(),
+	})
+	req := httptest.NewRequest("POST", "/servers/"+serverID.String()+"/channels", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("expected 201, got %d", resp.StatusCode)
+	}
+}
+
+func TestServerHandler_CreateChannel_Forbidden(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	channelSvc := &mockChannelService{
+		createChannelFunc: func(ctx context.Context, sid, cid uuid.UUID, name string, chanType models.ChannelType, pid *uuid.UUID) (*models.Channel, error) {
+			return nil, services.ErrNotServerOwner
+		},
+	}
+
+	app := setupServerTestApp(&mockServerService{}, channelSvc, &mockRoleService{}, userID)
+
+	bodyBytes, _ := json.Marshal(map[string]interface{}{
+		"name": "new-channel",
+	})
+	req := httptest.NewRequest("POST", "/servers/"+serverID.String()+"/channels", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
 }
