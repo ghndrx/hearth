@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { currentServer } from '$lib/stores/servers';
+	import { presenceStore, type PresenceStatus, type Activity, getActivityLabel } from '$lib/stores/presence';
 	import { writable } from 'svelte/store';
-	
+	import Avatar from './Avatar.svelte';
+
 	interface Member {
 		id: string;
 		user: {
@@ -12,203 +14,278 @@
 		};
 		nickname: string | null;
 		roles: string[];
-		status: 'online' | 'idle' | 'dnd' | 'offline';
 	}
-	
+
 	interface Role {
 		id: string;
 		name: string;
 		color: string;
 		position: number;
+		hoist: boolean;
 	}
-	
+
 	// TODO: Load from API
 	const members = writable<Member[]>([]);
 	const roles = writable<Role[]>([]);
-	
+
+	// Get presence status for a member
+	function getMemberStatus(userId: string): PresenceStatus {
+		return presenceStore.getPresence(userId).status;
+	}
+
+	// Get activity for a member
+	function getMemberActivity(userId: string): Activity | null {
+		const presence = presenceStore.getPresence(userId);
+		return presence.activities?.[0] || null;
+	}
+
+	// Get the highest role color for a member
+	function getMemberColor(member: Member, rolesList: Role[]): string {
+		const memberRoles = rolesList
+			.filter(r => member.roles.includes(r.id) && r.color && r.color !== '#000000')
+			.sort((a, b) => b.position - a.position);
+
+		return memberRoles[0]?.color || 'var(--text-normal)';
+	}
+
+	// Group members by role (hoisted roles) and status
 	$: groupedMembers = groupMembersByRole($members, $roles);
-	
-	function groupMembersByRole(members: Member[], roles: Role[]) {
-		const groups: { role: Role | null; members: Member[] }[] = [];
-		const roleMap = new Map(roles.map(r => [r.id, r]));
+
+	function groupMembersByRole(membersList: Member[], rolesList: Role[]) {
+		const groups: {
+			role: Role | null;
+			members: Member[];
+			label: string;
+			isOffline?: boolean;
+		}[] = [];
+
 		const usedMembers = new Set<string>();
-		
-		// Sort roles by position
-		const sortedRoles = [...roles].sort((a, b) => b.position - a.position);
-		
-		// Group members by their highest role
-		for (const role of sortedRoles) {
-			if (role.name === '@everyone') continue;
-			
-			const roleMembers = members.filter(m => 
-				m.roles.includes(role.id) && !usedMembers.has(m.id)
-			);
-			
+
+		// Get status for all members
+		const memberStatuses = new Map<string, PresenceStatus>();
+		for (const member of membersList) {
+			memberStatuses.set(member.id, getMemberStatus(member.user.id));
+		}
+
+		// Only show hoisted roles (roles that should be displayed separately)
+		const hoistedRoles = rolesList
+			.filter(r => r.hoist && r.name !== '@everyone')
+			.sort((a, b) => b.position - a.position);
+
+		// Group members by their highest hoisted role
+		for (const role of hoistedRoles) {
+			const roleMembers = membersList.filter(m => {
+				if (usedMembers.has(m.id)) return false;
+				if (!m.roles.includes(role.id)) return false;
+				const status = memberStatuses.get(m.id);
+				return status && status !== 'offline' && status !== 'invisible';
+			});
+
 			if (roleMembers.length > 0) {
-				groups.push({ role, members: roleMembers });
+				// Sort members alphabetically within role
+				roleMembers.sort((a, b) => {
+					const nameA = a.nickname || a.user.display_name || a.user.username;
+					const nameB = b.nickname || b.user.display_name || b.user.username;
+					return nameA.localeCompare(nameB);
+				});
+
+				groups.push({
+					role,
+					members: roleMembers,
+					label: role.name.toUpperCase()
+				});
 				roleMembers.forEach(m => usedMembers.add(m.id));
 			}
 		}
-		
-		// Online members without special roles
-		const onlineMembers = members.filter(m => 
-			!usedMembers.has(m.id) && m.status !== 'offline'
-		);
+
+		// Online members without hoisted roles
+		const onlineMembers = membersList.filter(m => {
+			if (usedMembers.has(m.id)) return false;
+			const status = memberStatuses.get(m.id);
+			return status && status !== 'offline' && status !== 'invisible';
+		});
+
 		if (onlineMembers.length > 0) {
-			groups.push({ role: null, members: onlineMembers });
+			onlineMembers.sort((a, b) => {
+				const nameA = a.nickname || a.user.display_name || a.user.username;
+				const nameB = b.nickname || b.user.display_name || b.user.username;
+				return nameA.localeCompare(nameB);
+			});
+
+			groups.push({
+				role: null,
+				members: onlineMembers,
+				label: 'ONLINE'
+			});
+			onlineMembers.forEach(m => usedMembers.add(m.id));
 		}
-		
+
 		// Offline members
-		const offlineMembers = members.filter(m => 
-			!usedMembers.has(m.id) && m.status === 'offline'
-		);
+		const offlineMembers = membersList.filter(m => {
+			if (usedMembers.has(m.id)) return false;
+			const status = memberStatuses.get(m.id);
+			return !status || status === 'offline' || status === 'invisible';
+		});
+
 		if (offlineMembers.length > 0) {
-			groups.push({ 
-				role: { id: 'offline', name: 'Offline', color: '', position: -1 }, 
-				members: offlineMembers 
+			offlineMembers.sort((a, b) => {
+				const nameA = a.nickname || a.user.display_name || a.user.username;
+				const nameB = b.nickname || b.user.display_name || b.user.username;
+				return nameA.localeCompare(nameB);
+			});
+
+			groups.push({
+				role: null,
+				members: offlineMembers,
+				label: 'OFFLINE',
+				isOffline: true
 			});
 		}
-		
+
 		return groups;
 	}
-	
-	function getStatusColor(status: string) {
-		switch (status) {
-			case 'online': return 'var(--status-online)';
-			case 'idle': return 'var(--status-idle)';
-			case 'dnd': return 'var(--status-dnd)';
-			default: return 'var(--status-offline)';
+
+	// Format activity display
+	function formatActivity(activity: Activity): string {
+		const prefix = getActivityLabel(activity.type);
+		if (prefix) {
+			return `${prefix} ${activity.name}`;
 		}
+		return activity.state || activity.name;
 	}
 </script>
 
 {#if $currentServer}
-	<div class="member-list">
+	<aside class="member-list">
 		{#each groupedMembers as group}
 			<div class="member-group">
-				<div class="group-header">
-					{group.role?.name || 'Online'} — {group.members.length}
-				</div>
-				
+				<!-- Group Header -->
+				<h3 class="group-header">
+					{group.label} — {group.members.length}
+				</h3>
+
+				<!-- Members -->
 				{#each group.members as member}
-					<button class="member">
-						<div class="avatar">
-							{#if member.user.avatar}
-								<img src={member.user.avatar} alt="" />
-							{:else}
-								<div class="avatar-placeholder">
-									{(member.user.username)[0].toUpperCase()}
-								</div>
-							{/if}
-							<div 
-								class="status-indicator"
-								style="background: {getStatusColor(member.status)}"
-							></div>
-						</div>
-						
+					{@const activity = getMemberActivity(member.user.id)}
+					{@const memberColor = getMemberColor(member, $roles)}
+					<button
+						class="member-item"
+						class:offline={group.isOffline}
+					>
+						<!-- Avatar with status indicator -->
+						<Avatar
+							src={member.user.avatar}
+							username={member.user.username}
+							size="sm"
+							userId={member.user.id}
+							showPresence={true}
+						/>
+
+						<!-- Member info -->
 						<div class="member-info">
-							<span 
-								class="name"
-								style="color: {group.role?.color || 'inherit'}"
+							<span
+								class="member-name"
+								style="color: {memberColor}"
 							>
 								{member.nickname || member.user.display_name || member.user.username}
 							</span>
+
+							{#if activity && !group.isOffline}
+								<span class="member-activity">
+									{formatActivity(activity)}
+								</span>
+							{/if}
 						</div>
 					</button>
 				{/each}
 			</div>
 		{/each}
-	</div>
+	</aside>
 {/if}
 
 <style>
 	.member-list {
 		width: 240px;
-		background: var(--bg-secondary);
+		height: 100%;
+		background-color: var(--bg-secondary, #2b2d31);
 		overflow-y: auto;
-		padding: 8px 8px 8px 0;
+		overflow-x: hidden;
+		padding: 8px 0;
+		flex-shrink: 0;
 	}
-	
+
 	.member-group {
 		margin-bottom: 8px;
 	}
-	
+
 	.group-header {
-		padding: 16px 8px 4px 16px;
+		padding: 24px 8px 4px 16px;
 		font-size: 12px;
 		font-weight: 600;
-		color: var(--text-muted);
+		color: var(--text-muted, #949ba4);
 		text-transform: uppercase;
 		letter-spacing: 0.02em;
+		line-height: 1.3;
 	}
-	
-	.member {
+
+	.member-group:first-child .group-header {
+		padding-top: 8px;
+	}
+
+	.member-item {
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		width: 100%;
-		padding: 6px 8px;
-		margin-left: 8px;
+		width: calc(100% - 16px);
+		margin: 0 8px;
+		padding: 4px 8px;
 		border-radius: 4px;
-		background: none;
+		background: transparent;
 		border: none;
 		cursor: pointer;
+		transition: background-color 0.1s ease;
 		text-align: left;
 	}
-	
-	.member:hover {
-		background: var(--bg-modifier-hover);
+
+	.member-item:hover {
+		background-color: var(--bg-modifier-hover, #35373c);
 	}
-	
-	.avatar {
-		position: relative;
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		overflow: visible;
+
+	.member-item:active {
+		background-color: var(--bg-modifier-active, #404249);
 	}
-	
-	.avatar img {
-		width: 100%;
-		height: 100%;
-		border-radius: 50%;
-		object-fit: cover;
+
+	.member-item.offline {
+		opacity: 0.3;
 	}
-	
-	.avatar-placeholder {
-		width: 100%;
-		height: 100%;
-		border-radius: 50%;
-		background: var(--brand-primary);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: white;
-		font-weight: 600;
-		font-size: 14px;
+
+	.member-item.offline:hover {
+		opacity: 0.6;
 	}
-	
-	.status-indicator {
-		position: absolute;
-		bottom: -2px;
-		right: -2px;
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		border: 3px solid var(--bg-secondary);
-	}
-	
+
 	.member-info {
 		flex: 1;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
 	}
-	
-	.name {
-		display: block;
+
+	.member-name {
 		font-size: 14px;
 		font-weight: 500;
+		line-height: 1.3;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.member-activity {
+		font-size: 12px;
+		color: var(--text-muted, #b5bac1);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		line-height: 1.3;
 	}
 </style>
