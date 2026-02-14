@@ -2,256 +2,93 @@ package services
 
 import (
 	"context"
-	"fmt"
-	"time"
+	"errors"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 
-	"hearth/internal/auth"
 	"hearth/internal/models"
 )
 
-// AuthService handles authentication
-type AuthService struct {
-	userRepo     UserRepository
-	jwtService   *auth.JWTService
-	cache        CacheService
-	
-	registrationEnabled bool
-	inviteOnly          bool
+var (
+	ErrUserNotFound      = errors.New("user not found")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserExists        = errors.New("user already exists")
+)
+
+// AuthService defines the business logic for authentication.
+type AuthService interface {
+	Register(ctx context.Context, email, username, password string) (*models.User, error)
+	Login(ctx context.Context, email, password string) (string, *models.User, error) // Returns session token and user
 }
 
-// NewAuthService creates a new auth service
-func NewAuthService(
-	userRepo UserRepository,
-	jwtService *auth.JWTService,
-	cache CacheService,
-	registrationEnabled, inviteOnly bool,
-) *AuthService {
-	return &AuthService{
-		userRepo:            userRepo,
-		jwtService:          jwtService,
-		cache:               cache,
-		registrationEnabled: registrationEnabled,
-		inviteOnly:          inviteOnly,
+// authRepository defines the storage interface required by the auth service.
+type authRepository interface {
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	// Ideally, we would have a CreateSession method here, but for simplicity
+	// we will return a generated token in the service layer for this implementation.
+}
+
+type authService struct {
+	repo authRepository
+}
+
+// NewAuthService creates a new auth service instance.
+func NewAuthService(repo authRepository) AuthService {
+	return &authService{
+		repo: repo,
 	}
 }
 
-// RegisterRequest represents a registration request
-type RegisterRequest struct {
-	Email      string
-	Username   string
-	Password   string
-	InviteCode string
-}
+// Register handles new user registration.
+func (s *authService) Register(ctx context.Context, email, username, password string) (*models.User, error) {
+	// Check if user already exists
+	_, err := s.repo.GetUserByEmail(ctx, email)
+	if err == nil {
+		return nil, ErrUserExists
+	}
+	if !errors.Is(err, ErrUserNotFound) {
+		return nil, err // Return unexpected database errors
+	}
 
-// TokenResponse represents authentication tokens
-type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
-}
-
-// Register creates a new user account
-func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error) {
-	// Check if registration is enabled
-	if !s.registrationEnabled {
-		return nil, nil, ErrRegistrationClosed
-	}
-	
-	// Check if invite is required
-	if s.inviteOnly && req.InviteCode == "" {
-		return nil, nil, ErrInviteRequired
-	}
-	
-	// TODO: Validate invite code if provided
-	
-	// Check if email is taken
-	existing, err := s.userRepo.GetByEmail(ctx, req.Email)
-	if err != nil {
-		return nil, nil, err
-	}
-	if existing != nil {
-		return nil, nil, ErrEmailTaken
-	}
-	
-	// Check if username is taken
-	existing, err = s.userRepo.GetByUsername(ctx, req.Username)
-	if err != nil {
-		return nil, nil, err
-	}
-	if existing != nil {
-		return nil, nil, ErrUsernameTaken
-	}
-	
 	// Hash password
-	passwordHash, err := auth.HashPassword(req.Password)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	
-	// Generate discriminator (random 4-digit number)
-	id := uuid.New()
-	discriminator := fmt.Sprintf("%04d", (int(id[0])<<8|int(id[1]))%10000)
-	
-	// Create user
+
 	user := &models.User{
-		ID:            uuid.New(),
-		Username:      req.Username,
-		Discriminator: discriminator,
-		Email:         req.Email,
-		PasswordHash:  passwordHash,
-		Status:        models.StatusOffline,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		ID:       uuid.New(),
+		Email:    email,
+		Username: username,
+		Password: string(hashedPassword),
 	}
-	
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		return nil, nil, err
+
+	if err := s.repo.CreateUser(ctx, user); err != nil {
+		return nil, err
 	}
-	
-	// Generate tokens
-	accessToken, refreshToken, err := s.jwtService.GenerateTokenPair(user.ID, user.Username)
-	if err != nil {
-		return nil, nil, err
-	}
-	
-	tokens := &TokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    s.jwtService.GetExpirySeconds(),
-		TokenType:    "Bearer",
-	}
-	
-	return user, tokens, nil
+
+	return user, nil
 }
 
-// Login authenticates a user
-func (s *AuthService) Login(ctx context.Context, email, password string) (*models.User, *TokenResponse, error) {
-	// Get user by email
-	user, err := s.userRepo.GetByEmail(ctx, email)
+// Login handles user login and credentials verification.
+func (s *authService) Login(ctx context.Context, email, password string) (string, *models.User, error) {
+	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
-		return nil, nil, err
-	}
-	if user == nil {
-		return nil, nil, ErrInvalidCredentials
-	}
-	
-	// Check password
-	if err := auth.CheckPassword(password, user.PasswordHash); err != nil {
-		return nil, nil, ErrInvalidCredentials
-	}
-	
-	// Check if password needs rehash
-	if auth.NeedsRehash(user.PasswordHash) {
-		if newHash, err := auth.HashPassword(password); err == nil {
-			user.PasswordHash = newHash
-			_ = s.userRepo.Update(ctx, user)
+		if errors.Is(err, ErrUserNotFound) {
+			return "", nil, ErrInvalidCredentials
 		}
+		return "", nil, err
 	}
-	
-	// Generate tokens
-	accessToken, refreshToken, err := s.jwtService.GenerateTokenPair(user.ID, user.Username)
-	if err != nil {
-		return nil, nil, err
-	}
-	
-	tokens := &TokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    s.jwtService.GetExpirySeconds(),
-		TokenType:    "Bearer",
-	}
-	
-	return user, tokens, nil
-}
 
-// RefreshToken generates new tokens from a refresh token
-func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*TokenResponse, error) {
-	// Validate refresh token
-	claims, err := s.jwtService.ValidateRefreshToken(refreshToken)
-	if err != nil {
-		return nil, err
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return "", nil, ErrInvalidCredentials
 	}
-	
-	// Check if token is revoked
-	revoked, _ := s.isTokenRevoked(ctx, claims.ID)
-	if revoked {
-		return nil, auth.ErrInvalidToken
-	}
-	
-	// Get user
-	user, err := s.userRepo.GetByID(ctx, claims.UserID)
-	if err != nil || user == nil {
-		return nil, auth.ErrInvalidToken
-	}
-	
-	// Revoke old refresh token
-	_ = s.revokeToken(ctx, claims.ID, claims.ExpiresAt.Time)
-	
-	// Generate new tokens
-	accessToken, newRefreshToken, err := s.jwtService.GenerateTokenPair(user.ID, user.Username)
-	if err != nil {
-		return nil, err
-	}
-	
-	return &TokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: newRefreshToken,
-		ExpiresIn:    s.jwtService.GetExpirySeconds(),
-		TokenType:    "Bearer",
-	}, nil
-}
 
-// Logout invalidates tokens
-func (s *AuthService) Logout(ctx context.Context, accessToken, refreshToken string) error {
-	// Revoke access token
-	if claims, err := s.jwtService.ValidateAccessToken(accessToken); err == nil {
-		_ = s.revokeToken(ctx, claims.ID, claims.ExpiresAt.Time)
-	}
-	
-	// Revoke refresh token
-	if claims, err := s.jwtService.ValidateRefreshToken(refreshToken); err == nil {
-		_ = s.revokeToken(ctx, claims.ID, claims.ExpiresAt.Time)
-	}
-	
-	return nil
-}
+	// Generate a simple session token (in a real app, use JWT or refresh tokens)
+	sessionToken := uuid.New().String()
 
-// ValidateToken validates an access token and returns the user ID
-func (s *AuthService) ValidateToken(ctx context.Context, token string) (uuid.UUID, error) {
-	claims, err := s.jwtService.ValidateAccessToken(token)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	
-	// Check if token is revoked
-	revoked, _ := s.isTokenRevoked(ctx, claims.ID)
-	if revoked {
-		return uuid.Nil, auth.ErrInvalidToken
-	}
-	
-	return claims.UserID, nil
-}
-
-// Token revocation helpers
-
-func (s *AuthService) revokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error {
-	ttl := time.Until(expiresAt)
-	if ttl <= 0 {
-		return nil // Already expired
-	}
-	
-	key := "revoked:" + tokenID
-	return s.cache.Set(ctx, key, []byte("1"), ttl)
-}
-
-func (s *AuthService) isTokenRevoked(ctx context.Context, tokenID string) (bool, error) {
-	key := "revoked:" + tokenID
-	_, err := s.cache.Get(ctx, key)
-	if err != nil {
-		return false, nil // Not found = not revoked
-	}
-	return true, nil
+	return sessionToken, user, nil
 }
