@@ -25,6 +25,8 @@
 		on:click={() => currentServer.set(null)}
 		class:bg-hearth-500={!$currentServer}
 		class:rounded-[16px]={!$currentServer}
+		aria-label="Home"
+		title="Direct Messages"
 	>
 		<svg
 			class="w-7 h-7 text-gray-400 group-hover:text-white transition-colors"
@@ -46,6 +48,7 @@
 			class:bg-hearth-500={$currentServer?.id === server.id}
 			class:rounded-[16px]={$currentServer?.id === server.id}
 			on:click={() => selectServer(server)}
+			aria-label={server.name}
 		>
 			{#if server.icon}
 				<img
@@ -79,6 +82,8 @@
 	<button
 		class="w-12 h-12 rounded-[24px] bg-dark-700 hover:bg-green-600 hover:rounded-[16px]
 		       flex items-center justify-center transition-all duration-200 group"
+		aria-label="Add a Server"
+		title="Add a Server"
 	>
 		<svg
 			class="w-6 h-6 text-green-500 group-hover:text-white transition-colors"
