@@ -238,6 +238,10 @@ func (s *AuthService) ValidateToken(ctx context.Context, token string) (uuid.UUI
 // Token revocation helpers
 
 func (s *AuthService) revokeToken(ctx context.Context, tokenID string, expiresAt time.Time) error {
+	if s.cache == nil {
+		return nil
+	}
+	
 	ttl := time.Until(expiresAt)
 	if ttl <= 0 {
 		return nil // Already expired
@@ -248,6 +252,10 @@ func (s *AuthService) revokeToken(ctx context.Context, tokenID string, expiresAt
 }
 
 func (s *AuthService) isTokenRevoked(ctx context.Context, tokenID string) (bool, error) {
+	if s.cache == nil {
+		return false, nil
+	}
+	
 	key := "revoked:" + tokenID
 	_, err := s.cache.Get(ctx, key)
 	if err != nil {

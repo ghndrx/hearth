@@ -34,8 +34,10 @@ func NewChannelService(
 // GetChannel retrieves a channel by ID
 func (s *ChannelService) GetChannel(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
 	// Try cache first
-	if cached, err := s.cache.GetChannel(ctx, id); err == nil && cached != nil {
-		return cached, nil
+	if s.cache != nil {
+		if cached, err := s.cache.GetChannel(ctx, id); err == nil && cached != nil {
+			return cached, nil
+		}
 	}
 
 	channel, err := s.channelRepo.GetByID(ctx, id)
@@ -47,7 +49,9 @@ func (s *ChannelService) GetChannel(ctx context.Context, id uuid.UUID) (*models.
 	}
 
 	// Cache for next time
-	_ = s.cache.SetChannel(ctx, channel, 5*time.Minute)
+	if s.cache != nil {
+		_ = s.cache.SetChannel(ctx, channel, 5*time.Minute)
+	}
 
 	return channel, nil
 }
@@ -91,7 +95,9 @@ func (s *ChannelService) CreateChannel(
 	}
 
 	// Invalidate cache
-	_ = s.cache.DeleteServer(ctx, serverID)
+	if s.cache != nil {
+		_ = s.cache.DeleteServer(ctx, serverID)
+	}
 
 	s.eventBus.Publish("channel.created", &ChannelCreatedEvent{
 		Channel:  channel,
@@ -150,7 +156,9 @@ func (s *ChannelService) UpdateChannel(
 	}
 
 	// Invalidate cache
-	_ = s.cache.DeleteChannel(ctx, id)
+	if s.cache != nil {
+		_ = s.cache.DeleteChannel(ctx, id)
+	}
 
 	s.eventBus.Publish("channel.updated", &ChannelUpdatedEvent{
 		Channel: channel,
@@ -188,7 +196,9 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, id uuid.UUID, reques
 	}
 
 	// Invalidate cache
-	_ = s.cache.DeleteChannel(ctx, id)
+	if s.cache != nil {
+		_ = s.cache.DeleteChannel(ctx, id)
+	}
 
 	s.eventBus.Publish("channel.deleted", &ChannelDeletedEvent{
 		ChannelID: id,

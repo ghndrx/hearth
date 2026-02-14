@@ -51,8 +51,10 @@ func NewUserService(repo UserRepository, cache CacheService, eventBus EventBus) 
 // GetUser retrieves a user by ID
 func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	// Try cache first
-	if cached, err := s.cache.GetUser(ctx, id); err == nil && cached != nil {
-		return cached, nil
+	if s.cache != nil {
+		if cached, err := s.cache.GetUser(ctx, id); err == nil && cached != nil {
+			return cached, nil
+		}
 	}
 	
 	user, err := s.repo.GetByID(ctx, id)
@@ -64,7 +66,9 @@ func (s *UserService) GetUser(ctx context.Context, id uuid.UUID) (*models.User, 
 	}
 	
 	// Cache for next time
-	_ = s.cache.SetUser(ctx, user, 5*time.Minute)
+	if s.cache != nil {
+		_ = s.cache.SetUser(ctx, user, 5*time.Minute)
+	}
 	
 	return user, nil
 }
@@ -121,7 +125,9 @@ func (s *UserService) UpdateUser(ctx context.Context, id uuid.UUID, updates *mod
 	}
 	
 	// Invalidate cache
-	_ = s.cache.DeleteUser(ctx, id)
+	if s.cache != nil {
+		_ = s.cache.DeleteUser(ctx, id)
+	}
 	
 	// Emit event
 	s.eventBus.Publish("user.updated", &UserUpdatedEvent{
