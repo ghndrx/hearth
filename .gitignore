@@ -14,9 +14,8 @@ data/
 *.db-wal
 # Dependencies
 dist/
-docs/
-docs/*
-# Documentation (generated docs, but keep research)
+# Documentation - keep API docs, exclude generated
+docs/performance/*-results.json
 .DS_Store
 .env
 # Environment
