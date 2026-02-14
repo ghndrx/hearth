@@ -38,9 +38,36 @@ export async function updateServer(id: string, updates: Partial<Server>) {
 	try {
 		const server = await api.patch(`/servers/${id}`, updates);
 		servers.update(s => s.map(srv => srv.id === id ? server : srv));
+		currentServer.update(s => s?.id === id ? server : s);
 		return server;
 	} catch (error) {
 		console.error('Failed to update server:', error);
+		throw error;
+	}
+}
+
+export async function updateServerIcon(id: string, iconFile: File) {
+	try {
+		const formData = new FormData();
+		formData.append('icon', iconFile);
+		const server = await api.patch(`/servers/${id}`, formData);
+		servers.update(s => s.map(srv => srv.id === id ? server : srv));
+		currentServer.update(s => s?.id === id ? server : s);
+		return server;
+	} catch (error) {
+		console.error('Failed to update server icon:', error);
+		throw error;
+	}
+}
+
+export async function removeServerIcon(id: string) {
+	try {
+		const server = await api.patch(`/servers/${id}`, { icon: null });
+		servers.update(s => s.map(srv => srv.id === id ? server : srv));
+		currentServer.update(s => s?.id === id ? server : s);
+		return server;
+	} catch (error) {
+		console.error('Failed to remove server icon:', error);
 		throw error;
 	}
 }

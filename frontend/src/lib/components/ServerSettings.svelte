@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import { createEventDispatcher } from 'svelte';
-	import { currentServer, updateServer, deleteServer } from '$lib/stores/servers';
+	import { currentServer, updateServer, updateServerIcon, removeServerIcon, deleteServer } from '$lib/stores/servers';
 	import { serverChannels, createChannel, updateChannel, deleteChannel, type Channel } from '$lib/stores/channels';
 	import { user } from '$lib/stores/auth';
 	import Avatar from './Avatar.svelte';
@@ -13,28 +13,47 @@
 	
 	let activeSection = 'overview';
 	let saving = false;
+	let uploadingIcon = false;
 	let deleteConfirmation = '';
 	let showDeleteModal = false;
 	let showCreateChannelModal = false;
 	let editingChannel: Channel | null = null;
+	let iconInput: HTMLInputElement;
 	
 	interface ServerForm {
 		name: string;
 		description: string;
+		region: string;
 		verification_level: number;
 		explicit_content_filter: number;
 		default_notifications: number;
 		afk_timeout: number;
 	}
-	
+
 	let serverForm: ServerForm = {
 		name: '',
 		description: '',
+		region: 'us-east',
 		verification_level: 0,
 		explicit_content_filter: 0,
 		default_notifications: 0,
 		afk_timeout: 300
 	};
+
+	const regions = [
+		{ value: 'us-east', label: 'US East', flag: '🇺🇸' },
+		{ value: 'us-west', label: 'US West', flag: '🇺🇸' },
+		{ value: 'us-central', label: 'US Central', flag: '🇺🇸' },
+		{ value: 'us-south', label: 'US South', flag: '🇺🇸' },
+		{ value: 'eu-west', label: 'Europe West', flag: '🇪🇺' },
+		{ value: 'eu-central', label: 'Europe Central', flag: '🇪🇺' },
+		{ value: 'singapore', label: 'Singapore', flag: '🇸🇬' },
+		{ value: 'japan', label: 'Japan', flag: '🇯🇵' },
+		{ value: 'sydney', label: 'Sydney', flag: '🇦🇺' },
+		{ value: 'brazil', label: 'Brazil', flag: '🇧🇷' },
+		{ value: 'india', label: 'India', flag: '🇮🇳' },
+		{ value: 'south-africa', label: 'South Africa', flag: '🇿🇦' }
+	];
 	
 	let newChannel = {
 		name: '',
@@ -113,6 +132,7 @@
 		serverForm = {
 			name: $currentServer.name || '',
 			description: $currentServer.description || '',
+			region: ($currentServer as any).region || 'us-east',
 			verification_level: 0,
 			explicit_content_filter: 0,
 			default_notifications: 0,
@@ -160,12 +180,54 @@
 		try {
 			await updateServer($currentServer.id, {
 				name: serverForm.name,
-				description: serverForm.description || null
-			});
+				description: serverForm.description || null,
+				region: serverForm.region
+			} as any);
 		} catch (error) {
 			console.error('Failed to save server settings:', error);
 		} finally {
 			saving = false;
+		}
+	}
+
+	async function handleIconUpload(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file || !$currentServer) return;
+
+		// Validate file type
+		if (!file.type.startsWith('image/')) {
+			alert('Please select an image file.');
+			return;
+		}
+
+		// Validate file size (max 8MB)
+		if (file.size > 8 * 1024 * 1024) {
+			alert('Image must be less than 8MB.');
+			return;
+		}
+
+		uploadingIcon = true;
+		try {
+			await updateServerIcon($currentServer.id, file);
+		} catch (error) {
+			console.error('Failed to upload icon:', error);
+			alert('Failed to upload icon. Please try again.');
+		} finally {
+			uploadingIcon = false;
+			input.value = '';
+		}
+	}
+
+	async function handleRemoveIcon() {
+		if (!$currentServer) return;
+		uploadingIcon = true;
+		try {
+			await removeServerIcon($currentServer.id);
+		} catch (error) {
+			console.error('Failed to remove icon:', error);
+		} finally {
+			uploadingIcon = false;
 		}
 	}
 	
@@ -297,11 +359,28 @@
 										{/if}
 									</div>
 									<p class="icon-hint">Min 128x128. Recommended 512x512.</p>
-									<button class="btn btn-secondary" disabled={!isOwner}>
-										Upload Image
+									<input
+										type="file"
+										accept="image/*"
+										bind:this={iconInput}
+										on:change={handleIconUpload}
+										class="hidden-input"
+									/>
+									<button
+										class="btn btn-secondary"
+										disabled={!isOwner || uploadingIcon}
+										on:click={() => iconInput?.click()}
+									>
+										{uploadingIcon ? 'Uploading...' : 'Upload Image'}
 									</button>
 									{#if $currentServer.icon}
-										<button class="btn btn-text" disabled={!isOwner}>Remove</button>
+										<button
+											class="btn btn-text"
+											disabled={!isOwner || uploadingIcon}
+											on:click={handleRemoveIcon}
+										>
+											Remove
+										</button>
 									{/if}
 								</div>
 								
@@ -319,7 +398,7 @@
 									
 									<div class="form-field">
 										<label for="server-description">Server Description</label>
-										<textarea 
+										<textarea
 											id="server-description"
 											bind:value={serverForm.description}
 											placeholder="Tell people what this server is about"
@@ -329,11 +408,30 @@
 										></textarea>
 										<span class="char-count">{serverForm.description.length}/1024</span>
 									</div>
-									
+
+									<div class="form-field">
+										<label for="server-region">Server Region</label>
+										<p class="field-hint">Select the region closest to your members for optimal voice quality.</p>
+										<div class="region-select-wrapper">
+											<select
+												id="server-region"
+												bind:value={serverForm.region}
+												disabled={!isOwner}
+												class="region-select"
+											>
+												{#each regions as region}
+													<option value={region.value}>
+														{region.flag} {region.label}
+													</option>
+												{/each}
+											</select>
+										</div>
+									</div>
+
 									{#if isOwner}
 										<div class="form-actions">
-											<button 
-												class="btn btn-primary" 
+											<button
+												class="btn btn-primary"
 												on:click={saveOverview}
 												disabled={saving || !serverForm.name.trim()}
 											>
@@ -1002,6 +1100,10 @@
 		color: var(--text-muted);
 		margin-bottom: 12px;
 	}
+
+	.hidden-input {
+		display: none;
+	}
 	
 	/* Form */
 	.form-field {
@@ -1053,6 +1155,48 @@
 		font-size: 12px;
 		color: var(--text-muted);
 		margin-top: 4px;
+	}
+
+	.field-hint {
+		font-size: 14px;
+		color: var(--text-muted);
+		margin-bottom: 8px;
+	}
+
+	.region-select-wrapper {
+		position: relative;
+	}
+
+	.region-select {
+		width: 100%;
+		padding: 10px 12px;
+		background: var(--bg-tertiary);
+		border: none;
+		border-radius: 4px;
+		color: var(--text-primary);
+		font-size: 16px;
+		font-family: inherit;
+		cursor: pointer;
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23b5bac1' d='M6 8.5L1.5 4h9L6 8.5z'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 12px center;
+		padding-right: 36px;
+	}
+
+	.region-select:focus {
+		outline: 2px solid var(--brand-primary);
+	}
+
+	.region-select:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.region-select option {
+		background: var(--bg-tertiary);
+		color: var(--text-primary);
+		padding: 8px;
 	}
 	
 	.form-actions {
