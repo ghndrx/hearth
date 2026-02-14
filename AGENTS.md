@@ -1,246 +1,315 @@
 # AGENTS.md - Hearth Development Guide
 
-## Quick Context
-- **Backend:** 15+ services exist, most not wired to handlers yet
-- **Frontend:** 20+ components, 11 stores exist
-- **Goal:** Wire everything together for working MVP
+> **READ THIS FIRST.** Copy code patterns exactly. Don't explore - just build.
 
 ---
 
-## BACKEND TASKS
+## B1: Wire Services in main.go
 
-### B1: Wire Services in main.go
-**Goal:** Instantiate all services and inject into handlers
+**File:** `backend/cmd/hearth/main.go`
+**Goal:** All services instantiated after repos, passed to handlers
 
-**File to modify:** `backend/cmd/hearth/main.go`
-
-**Services that exist (need wiring):**
-```
-attachment_service.go   bookmark_service.go    channel_service.go
-emoji_service.go        invite_service.go      message_service.go
-moderation_service.go   notification_service.go presence_service.go
-reaction_service.go     readstate_service.go   report_service.go
-thread_service.go       typing_service.go      voicestate_service.go
-auditlog_service.go     auth_service.go
-```
-
-**Pattern to follow:**
+**Current state (line ~55):**
 ```go
-// In main.go
+// Initialize repositories
+repos := postgres.NewRepositories(db)
+```
+
+**ADD THIS after repos (copy exactly):**
+```go
+// Initialize services
+authSvc := services.NewAuthService(repos.Users, cfg.JWTSecret)
+userSvc := services.NewUserService(repos.Users)
+serverSvc := services.NewServerService(repos.Servers, repos.Members)
+channelSvc := services.NewChannelService(repos.Channels)
+messageSvc := services.NewMessageService(repos.Messages)
+inviteSvc := services.NewInviteService(repos.Invites)
 attachmentSvc := services.NewAttachmentService()
 bookmarkSvc := services.NewBookmarkService()
-// ... etc
-
-handlers := api.NewHandlers(
-    authSvc,
-    channelSvc,
-    messageSvc,
-    attachmentSvc,
-    // ... pass all services
-)
+emojiSvc := services.NewEmojiService()
+moderationSvc := services.NewModerationService()
+notificationSvc := services.NewNotificationService()
+presenceSvc := services.NewPresenceService()
+reactionSvc := services.NewReactionService()
+readstateSvc := services.NewReadStateService()
+threadSvc := services.NewThreadService()
+typingSvc := services.NewTypingService()
+voicestateSvc := services.NewVoiceStateService()
+auditlogSvc := services.NewAuditLogService()
+reportSvc := services.NewReportService()
 ```
 
-**Verify:** `go build ./...` must pass
+**Verify:** `go build ./...`
 
 ---
 
-### B2: Ban/Mute API Routes
-**Goal:** Moderation endpoints
+## B2: Moderation Handler
 
 **Create:** `backend/internal/api/handlers/moderation.go`
 
-**Existing services to use:**
-- `services.BanService` (if exists) or `services.ModerationService`
-
-**Existing handler pattern (copy from):** `handlers/users.go`
-
-**Endpoints needed:**
+**Copy this entire file:**
 ```go
-POST   /api/servers/{serverId}/bans          → BanUser(serverID, userID, reason)
-DELETE /api/servers/{serverId}/bans/{userId} → UnbanUser(serverID, userID)
-GET    /api/servers/{serverId}/bans          → GetBans(serverID)
-```
+package handlers
 
-**Wire in:** `handlers/handlers.go` router setup
+import (
+	"context"
 
----
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
-### B3: Poll API Routes
-**Goal:** Polls in channels
+	"hearth/internal/services"
+)
 
-**Create:** `backend/internal/api/handlers/polls.go`
+type ModerationHandler struct {
+	modService *services.ModerationService
+}
 
-**Existing service:** Check if `poll_service.go` exists, else create
+func NewModerationHandler(modService *services.ModerationService) *ModerationHandler {
+	return &ModerationHandler{modService: modService}
+}
 
-**Endpoints:**
-```go
-POST /api/channels/{channelId}/polls     → CreatePoll(channelID, question, options)
-POST /api/polls/{pollId}/vote            → Vote(pollID, optionIndex)
-GET  /api/polls/{pollId}                 → GetPoll(pollID)
-```
+// POST /api/servers/:serverId/bans
+func (h *ModerationHandler) BanUser(c *fiber.Ctx) error {
+	serverID, err := uuid.Parse(c.Params("serverId"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid server id"})
+	}
 
----
+	var body struct {
+		UserID uuid.UUID `json:"user_id"`
+		Reason string    `json:"reason"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
+	}
 
-### B4: File Upload Handler
-**Goal:** Upload attachments
+	if err := h.modService.BanUser(c.Context(), serverID, body.UserID, body.Reason); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
 
-**Create:** `backend/internal/api/handlers/upload.go`
+	return c.Status(204).Send(nil)
+}
 
-**Existing service:** `attachment_service.go`
+// DELETE /api/servers/:serverId/bans/:userId
+func (h *ModerationHandler) UnbanUser(c *fiber.Ctx) error {
+	serverID, _ := uuid.Parse(c.Params("serverId"))
+	userID, _ := uuid.Parse(c.Params("userId"))
 
-**Endpoint:**
-```go
-POST /api/upload  (multipart/form-data)
-Response: {"url": "...", "filename": "...", "size": 12345, "contentType": "image/png"}
-```
+	if err := h.modService.UnbanUser(c.Context(), serverID, userID); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
 
-**Storage:** Use local `./uploads/` dir for MVP, return `/uploads/{filename}` URL
+	return c.Status(204).Send(nil)
+}
 
----
+// GET /api/servers/:serverId/bans
+func (h *ModerationHandler) GetBans(c *fiber.Ctx) error {
+	serverID, _ := uuid.Parse(c.Params("serverId"))
 
-## FRONTEND TASKS
+	bans, err := h.modService.GetBans(c.Context(), serverID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
 
-### F1: ServerSettings Modal
-**Goal:** Server owners edit settings
-
-**Create:** `frontend/src/lib/components/ServerSettings.svelte`
-
-**Existing components to use:**
-- `Modal.svelte` - wrapper
-- `Button.svelte` - actions
-- `Avatar.svelte` - server icon preview
-
-**Existing stores:**
-- `servers.ts` - has `updateServer()`, `deleteServer()`
-
-**Props:** `export let server: Server; export let onClose: () => void;`
-
-**Features:**
-- Input for server name (bind to local state)
-- Icon upload with preview
-- Delete button → ConfirmDialog → deleteServer()
-- Save button → updateServer()
-
----
-
-### F2: MemberList Sidebar  
-**Goal:** Show server members
-
-**File exists:** `frontend/src/lib/components/MemberList.svelte` (enhance it)
-
-**Existing stores:**
-- `presence.ts` - has user online status
-- `servers.ts` - has members
-
-**Enhance to include:**
-- Group by role (Admin → Mod → Member)
-- Show colored dot: green=online, yellow=idle, gray=offline
-- Click member → show mini profile
-
----
-
-### F3: UserSettings Modal
-**Goal:** User preferences
-
-**Create:** `frontend/src/lib/components/UserSettings.svelte`
-
-**Existing stores:**
-- `settings.ts` - theme, notifications
-- `auth.ts` - user info
-
-**Tabs (use simple div toggle):**
-1. **Account:** avatar, username, email (readonly for MVP)
-2. **Appearance:** theme select (dark/light)
-3. **Notifications:** toggles for sounds, desktop notifs
-
----
-
-### F4: VoiceChannel Component
-**Goal:** Voice UI (no WebRTC yet - just UI)
-
-**Create:** `frontend/src/lib/components/VoiceChannel.svelte`
-
-**Show:**
-- List of users in voice channel
-- Join / Leave button
-- Mute mic toggle
-- Deafen audio toggle
-- Speaking indicator (just visual, no real audio)
-
----
-
-## INTEGRATION TASKS
-
-### I1: Auth Flow
-**Files to check/wire:**
-1. `frontend/src/routes/login/+page.svelte` → form submit
-2. `frontend/src/lib/api.ts` → POST /api/auth/login
-3. `frontend/src/lib/stores/auth.ts` → store token
-4. `frontend/src/lib/gateway.ts` → connect with token
-5. Redirect to `/` after login
-
-**Test:** Login with test user, verify WebSocket connects
-
----
-
-### I2: Message Send Flow
-**Files:**
-1. `components/MessageInput.svelte` → on submit
-2. `stores/messages.ts` → sendMessage()
-3. `api.ts` → POST /api/channels/{id}/messages
-4. `gateway.ts` → receive MESSAGE_CREATE
-5. `components/MessageList.svelte` → shows new message
-
----
-
-### I3: Typing Indicators
-**Files:**
-1. `components/MessageInput.svelte` → on keypress emit typing
-2. `stores/typing.ts` → track who's typing
-3. `gateway.ts` → send/receive TYPING_START
-4. Show "{user} is typing..." below MessageList
-
----
-
-## TEST TASKS
-
-### T1: Service Unit Tests
-**Add tests for:** Any service in `services/` missing `_test.go`
-
-**Pattern:**
-```go
-func TestXxxService_Method(t *testing.T) {
-    svc := NewXxxService(mockRepo)
-    result, err := svc.Method(ctx, input)
-    assert.NoError(t, err)
-    assert.Equal(t, expected, result)
+	return c.JSON(bans)
 }
 ```
 
+**Then add routes in `handlers.go`:**
+```go
+// Moderation routes
+servers.Post("/:serverId/bans", h.moderation.BanUser)
+servers.Delete("/:serverId/bans/:userId", h.moderation.UnbanUser)
+servers.Get("/:serverId/bans", h.moderation.GetBans)
+```
+
 ---
 
-### T2: WebSocket Integration Tests
-**File:** `backend/internal/gateway/gateway_test.go`
+## F1: ServerSettings Modal
 
-**Test:** Two clients connect, client A sends message, client B receives
+**Create:** `frontend/src/lib/components/ServerSettings.svelte`
+
+**Copy this:**
+```svelte
+<script lang="ts">
+	import { createEventDispatcher } from 'svelte';
+	import Modal from './Modal.svelte';
+	import Button from './Button.svelte';
+	import Avatar from './Avatar.svelte';
+	import ConfirmDialog from './ConfirmDialog.svelte';
+	import { servers, deleteServer, updateServer } from '$lib/stores/servers';
+
+	export let server: { id: string; name: string; icon?: string };
+	export let open = false;
+
+	const dispatch = createEventDispatcher<{ close: void }>();
+
+	let name = server.name;
+	let iconFile: File | null = null;
+	let iconPreview = server.icon || '';
+	let showDeleteConfirm = false;
+	let saving = false;
+
+	function handleIconChange(e: Event) {
+		const input = e.target as HTMLInputElement;
+		if (input.files?.[0]) {
+			iconFile = input.files[0];
+			iconPreview = URL.createObjectURL(iconFile);
+		}
+	}
+
+	async function handleSave() {
+		saving = true;
+		try {
+			await updateServer(server.id, { name, icon: iconPreview });
+			dispatch('close');
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function handleDelete() {
+		await deleteServer(server.id);
+		dispatch('close');
+	}
+</script>
+
+<Modal {open} title="Server Settings" on:close>
+	<div class="space-y-4">
+		<div class="flex items-center gap-4">
+			<Avatar src={iconPreview} size="lg" />
+			<input type="file" accept="image/*" on:change={handleIconChange} />
+		</div>
+
+		<label class="block">
+			<span class="text-sm text-gray-400">Server Name</span>
+			<input
+				type="text"
+				bind:value={name}
+				class="w-full mt-1 px-3 py-2 bg-[#1e1f22] rounded border border-gray-700"
+			/>
+		</label>
+
+		<div class="flex justify-between pt-4">
+			<Button variant="danger" on:click={() => (showDeleteConfirm = true)}>
+				Delete Server
+			</Button>
+			<div class="flex gap-2">
+				<Button variant="secondary" on:click={() => dispatch('close')}>Cancel</Button>
+				<Button on:click={handleSave} disabled={saving}>
+					{saving ? 'Saving...' : 'Save'}
+				</Button>
+			</div>
+		</div>
+	</div>
+</Modal>
+
+<ConfirmDialog
+	open={showDeleteConfirm}
+	title="Delete Server"
+	message="This cannot be undone. All channels and messages will be deleted."
+	confirmText="Delete"
+	on:confirm={handleDelete}
+	on:cancel={() => (showDeleteConfirm = false)}
+/>
+```
 
 ---
 
-## Coding Standards
+## F2: Enhance MemberList
 
-### Go
-- Package `services`, import `hearth/internal/models`
-- Always use `context.Context` first param
-- Use `sync.RWMutex` for in-memory state
-- Don't import `database/postgres` in services
+**File:** `frontend/src/lib/components/MemberList.svelte`
 
-### Svelte
-- TypeScript for all components
-- Export props at top
-- Use existing stores, don't create new ones
-- Forward events with `on:click`
+**Add to existing (or replace):**
+```svelte
+<script lang="ts">
+	import { presence } from '$lib/stores/presence';
+	import Avatar from './Avatar.svelte';
+	import PresenceIndicator from './PresenceIndicator.svelte';
 
-## Git
-- Commit: `feat|fix|test: description`
-- Always `go build ./...` or `npm run check` before commit
-- Push immediately after commit
+	export let members: Array<{
+		id: string;
+		username: string;
+		avatar?: string;
+		role: 'admin' | 'moderator' | 'member';
+	}> = [];
+
+	// Group by role
+	$: admins = members.filter((m) => m.role === 'admin');
+	$: mods = members.filter((m) => m.role === 'moderator');
+	$: regularMembers = members.filter((m) => m.role === 'member');
+
+	// Sort by online status
+	function sortByPresence(list: typeof members) {
+		return [...list].sort((a, b) => {
+			const aOnline = $presence[a.id]?.status === 'online' ? 0 : 1;
+			const bOnline = $presence[b.id]?.status === 'online' ? 0 : 1;
+			return aOnline - bOnline;
+		});
+	}
+</script>
+
+<aside class="w-60 bg-[#2b2d31] p-3 overflow-y-auto">
+	{#if admins.length}
+		<div class="mb-4">
+			<h3 class="text-xs uppercase text-gray-400 mb-2">Admin — {admins.length}</h3>
+			{#each sortByPresence(admins) as member}
+				<button class="flex items-center gap-2 w-full p-2 rounded hover:bg-[#35373c]">
+					<div class="relative">
+						<Avatar src={member.avatar} size="sm" />
+						<PresenceIndicator status={$presence[member.id]?.status || 'offline'} />
+					</div>
+					<span class="text-sm">{member.username}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
+
+	{#if mods.length}
+		<div class="mb-4">
+			<h3 class="text-xs uppercase text-gray-400 mb-2">Moderator — {mods.length}</h3>
+			{#each sortByPresence(mods) as member}
+				<button class="flex items-center gap-2 w-full p-2 rounded hover:bg-[#35373c]">
+					<div class="relative">
+						<Avatar src={member.avatar} size="sm" />
+						<PresenceIndicator status={$presence[member.id]?.status || 'offline'} />
+					</div>
+					<span class="text-sm">{member.username}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
+
+	<div>
+		<h3 class="text-xs uppercase text-gray-400 mb-2">Members — {regularMembers.length}</h3>
+		{#each sortByPresence(regularMembers) as member}
+			<button class="flex items-center gap-2 w-full p-2 rounded hover:bg-[#35373c]">
+				<div class="relative">
+					<Avatar src={member.avatar} size="sm" />
+					<PresenceIndicator status={$presence[member.id]?.status || 'offline'} />
+				</div>
+				<span class="text-sm">{member.username}</span>
+			</button>
+		{/each}
+	</div>
+</aside>
+```
+
+---
+
+## Common Mistakes (DON'T)
+
+1. ❌ `import "hearth/internal/database/postgres"` in services
+2. ❌ Creating new stores when one exists
+3. ❌ Using `any` type in TypeScript  
+4. ❌ Forgetting `go build ./...` before commit
+5. ❌ Creating files that already exist (check first!)
+
+## Done Checklist
+
+Before commit:
+- [ ] Code compiles (`go build ./...` or `npm run check`)
+- [ ] Follows existing patterns exactly
+- [ ] No new dependencies added without reason
+- [ ] Commit message: `feat|fix|test: description`
+- [ ] Push immediately
