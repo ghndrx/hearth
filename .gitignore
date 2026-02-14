@@ -55,3 +55,5 @@ data/
 # Documentation (generated docs, but keep research)
 docs/*
 !docs/research/
+TASK_QUEUE.md
+PROJECT_STATUS.md
