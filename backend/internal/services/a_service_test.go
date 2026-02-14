@@ -1,175 +1,130 @@
 package services
 
 import (
-	"sync"
+	"context"
+	"errors"
 	"testing"
-	"time"
 )
 
-// TestNewHeartService checks if the service initializes correctly.
-func TestNewHeartService(t *testing.T) {
-	service := NewHeartService()
-	if service == nil {
-		t.Fatal("NewHeartService returned nil")
-	}
+// mockRepository is an in-memory implementation of IChannelRepository
+// used strictly for testing purposes.
+type mockRepository struct {
+	channels map[string][]string // guildID -> list of channels
+}
 
-	// Ensure internal maps are initialized
-	if len(service.handlers) != 0 {
-		t.Error("Expected empty handlers map initially")
+func newMockRepository() *mockRepository {
+	return &mockRepository{
+		channels: make(map[string][]string),
 	}
 }
 
-// MockHandler is a test double (Stub) that allows us to track if Handle was called.
-type MockHandler struct {
-	Calls  []HeartbeatEvent
-	Error  error
-	Locked bool // To simulate a handler that blocks/stalls
+func (m *mockRepository) FindChannelsByGuildID(ctx context.Context, guildID string) ([]string, error) {
+	if m.channels[guildID] == nil {
+		return []string{}, nil // Empty list if no channels found
+	}
+	return m.channels[guildID], nil
 }
 
-func (m *MockHandler) Handle(event HeartbeatEvent) error {
-	m.Calls = append(m.Calls, event)
-	if m.Error != nil {
-		return m.Error
+func (m *mockRepository) AddChannel(ctx context.Context, guildID, channelName string) error {
+	if m.channels[guildID] == nil {
+		m.channels[guildID] = make([]string, 0)
 	}
-	// Simulate a heavy operation if locked is true
-	if m.Locked {
-		time.Sleep(10 * time.Millisecond)
-	}
+	m.channels[guildID] = append(m.channels[guildID], channelName)
 	return nil
 }
 
-// TestRegisterHandler ensures handlers can be added and retrieved.
-func TestRegisterHandler(t *testing.T) {
-	s := NewHeartService()
-	mock := &MockHandler{Calls: []HeartbeatEvent{}}
+// Test_GetChannels_Success tests the happy path.
+func Test_GetChannels_Success(t *testing.T) {
+	repo := newMockRepository()
+	// Mock Data
+	repo.channels["guild-123"] = []string{"general", "random"}
+	service := NewChannelService(repo)
 
-	s.RegisterHandler("alice", mock)
+	got, err := service.GetChannels(context.Background(), "guild-123")
 
-	// Retrieve handler to check state
-	s.mu.RLock()
-	h := s.handlers["alice"]
-	s.mu.RUnlock()
-
-	if h == nil {
-		t.Fatal("Handler was not registered")
-	}
-	if h != mock {
-		t.Error("Registered handler is not the same instance")
-	}
-}
-
-// TestSendEvent tests that events are routed and handled asynchronously.
-func TestSendEvent(t *testing.T) {
-	s := NewHeartService()
-	mock := &MockHandler{}
-
-	s.RegisterHandler("bob", mock)
-
-	// Send an event
-	event := HeartbeatEvent{
-		User:    "bob",
-		Content: "test message",
-	}
-
-	s.SendEvent(event)
-
-	// Wait a moment for the goroutine to execute
-	time.Sleep(10 * time.Millisecond)
-
-	// Assert
-	if len(mock.Calls) != 1 {
-		t.Errorf("Expected 1 call, got %d", len(mock.Calls))
-	}
-
-	if mock.Calls[0].Content != "test message" {
-		t.Errorf("Expected content 'test message', got '%s'", mock.Calls[0].Content)
-	}
-}
-
-// TestSendEvent_NoHandler tests behavior when no handler exists for an event user.
-func TestSendEvent_NoHandler(t *testing.T) {
-	s := NewHeartService()
-
-	event := HeartbeatEvent{User: "void"}
-
-	// Should not panic
-	s.SendEvent(event)
-}
-
-// TestSendEvent_MultipleConcurrent sends multiple events to the same handler to check thread safety.
-func TestSendEvent_MultipleConcurrent(t *testing.T) {
-	s := NewHeartService()
-	mock := &MockHandler{}
-
-	s.RegisterHandler("charlie", mock)
-	event := HeartbeatEvent{User: "charlie"}
-
-	var wg sync.WaitGroup
-	start := time.Now()
-
-	// Fire 100 events concurrently (simulating high load traffic)
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s.SendEvent(event)
-		}()
-	}
-
-	wg.Wait()
-	elapsed := time.Since(start)
-
-	// We expect roughly 100 calls.
-	// Note: Since events might be processed out of order or very fast,
-	// we allow some slack but generally expect them to be registered.
-	if len(mock.Calls) < 95 {
-		t.Errorf("Expected at least 95 calls, got %d", len(mock.Calls))
-	}
-	
-	// If the handler simulated a deadlock (Locked=true above), 
-	// this test would likely timeout (Set timeout in `go test -timeout ...`).
-	// Here we ensure it handles queueing reasonably well by finishing in < 1 second.
-	if elapsed > 100*time.Millisecond {
-		t.Errorf("Handler took too long to process load: %v", elapsed)
-	}
-}
-
-// TestExampleCommandHandler ensures the provided example handlers work.
-func TestExampleCommandHandler(t *testing.T) {
-	cmd := &ChatCommandHandler{Prefix: "/"}
-	
-	handler := IEventHandler(cmd)
-
-	// Valid command
-	err := handler.Handle(HeartbeatEvent{Content: "/hello"})
 	if err != nil {
-		t.Errorf("Command handler failed on valid input: %v", err)
+		t.Errorf("unexpected error: %v", err)
 	}
 
-	// Invalid command
-	err = handler.Handle(HeartbeatEvent{Content: "/bye"})
-	if err == nil {
-		t.Error("Expected error for invalid command")
+	if len(got) != 2 {
+		t.Errorf("expected 2 channels, got %d", len(got))
+	}
+	if got[0] != "general" || got[1] != "random" {
+		t.Errorf("unexpected channel list: %v", got)
 	}
 }
 
-// TestExampleFilterHandler ensures the provided example anti-spam handler works.
-func TestExampleFilterHandler(t *testing.T) {
-	filter := &AntiSpamHandler{
-		Regexp: regexp.MustCompile("badword"),
-	}
+// Test_GetChannels_EmptyGuildID tests error handling for invalid input.
+func Test_GetChannels_EmptyGuildID(t *testing.T) {
+	repo := newMockRepository()
+	service := NewChannelService(repo)
 
-	handler := IEventHandler(filter)
+	_, err := service.GetChannels(context.Background(), "")
 
-	// Valid content
-	err := handler.Handle(HeartbeatEvent{Content: "good content"})
-	if err != nil {
-		t.Errorf("Handler should not block valid content: %v", err)
-	}
-
-	// Filtered content
-	err = handler.Handle(HeartbeatEvent{Content: "some badword here"})
 	if err == nil {
-		t.Error("Expected error for filtered content")
+		t.Error("expected error for empty guildID, but got nil")
+	}
+	// More granular check depends on how you want to check error strings vs types
+	if err.Error() != "guildID cannot be empty" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// Test_CreateChannel_Success tests business logic execution.
+func Test_CreateChannel_Success(t *testing.T) {
+	repo := newMockRepository()
+	service := NewChannelService(repo)
+
+	err := service.CreateChannel(context.Background(), "guild-123", "music")
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify the repo was called correctly using mock properties
+	channels, _ := repo.FindChannelsByGuildID(context.Background(), "guild-123")
+	if len(channels) != 1 {
+		t.Fatalf("Expected 1 channel, got %d", len(channels))
+	}
+	if channels[0] != "music" {
+		t.Errorf("Expected 'music', got %s", channels[0])
+	}
+}
+
+// Test_CreateChannel_ValidationError tests the guard clause in the service.
+func Test_CreateChannel_ValidationError(t *testing.T) {
+	repo := newMockRepository()
+	service := NewChannelService(repo)
+
+	// Test empty name
+	err := service.CreateChannel(context.Background(), "guild-123", "")
+	if err == nil || err.Error() != "channelName cannot be empty" {
+		t.Errorf("expected validation error for empty name, got: %v", err)
+	}
+	// Test empty guildID
+	err = service.CreateChannel(context.Background(), "", "general")
+	if err == nil || err.Error() != "guildID cannot be empty" {
+		t.Errorf("expected validation error for empty guildID, got: %v", err)
+	}
+}
+
+// Test_CreateChannel_RepositoryError tests error propagation from the repository.
+func Test_CreateChannel_RepositoryError(t *testing.T) {
+	// Create a mock that *always* returns an error
+	repo := newMockRepository()
+	service := NewChannelService(repo)
+
+	// Overriding the repo method locally for this test instance
+	repo.AddChannel = func(ctx context.Context, guildID, channelName string) error {
+		return errors.New("database connection failed")
+	}
+
+	err := service.CreateChannel(context.Background(), "guild-123", "test")
+
+	if err == nil {
+		t.Error("expected error from repository, but got nil")
+	}
+	if err.Error() != "failed to add channel: database connection failed" {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
