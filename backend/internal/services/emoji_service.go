@@ -52,6 +52,9 @@ func (s *EmojiService) GetServerEmojis(ctx context.Context, serverID uuid.UUID) 
 func (s *EmojiService) Delete(ctx context.Context, emojiID uuid.UUID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.emojis[emojiID]; !ok {
+		return ErrEmojiNotFound
+	}
 	delete(s.emojis, emojiID)
 	return nil
 }

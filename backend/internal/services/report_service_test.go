@@ -22,8 +22,17 @@ func TestReportService_UpdateStatus(t *testing.T) {
 	ctx := context.Background()
 
 	r, _ := svc.Create(ctx, uuid.New(), uuid.New(), "user", "Harassment")
-	svc.UpdateStatus(ctx, r.ID, "resolved")
+	err := svc.UpdateStatus(ctx, r.ID, "resolved")
+	assert.NoError(t, err)
 
 	pending, _ := svc.GetPending(ctx)
 	assert.Len(t, pending, 0)
+}
+
+func TestReportService_UpdateStatus_NotFound(t *testing.T) {
+	svc := NewReportService()
+	ctx := context.Background()
+
+	err := svc.UpdateStatus(ctx, uuid.New(), "resolved")
+	assert.ErrorIs(t, err, ErrReportNotFound)
 }
