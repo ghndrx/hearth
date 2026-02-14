@@ -2,70 +2,123 @@ package services
 
 import (
 	"context"
-	"fmt"
-	"hearth/internal/models"
+	"errors"
+	"sync"
+
+	"github.com/google/uuid"
 )
 
-// SvelteRepository defines the storage contract for svelte data.
-type SvelteRepository interface {
-	// GetUserSettings retrieves user preferences.
-	GetUserSettings(ctx context.Context, userID models.UserID) (*models.SvelteUserSettings, error)
-	
-	// UpdateUserSettings persists user preferences.
-	UpdateUserSettings(ctx context.Context, settings *models.SvelteUserSettings) error
-	
-	// GetAvatarData retrieves image data for a specific server.
-	GetAvatarData(ctx context.Context, serverID models.ServerID) ([]byte, error)
+var ErrSvelteNotFound = errors.New("svelte component not found")
+
+// Svelte represents a Svelte component or session resource.
+type Svelte struct {
+	ID        uuid.UUID
+	Name      string
+	Component string
+	Props     map[string]interface{}
 }
 
-// SvelteService manages svelte-specific operations.
+// SvelteService manages Svelte component resources.
 type SvelteService struct {
-	repo SvelteRepository
+	mu         sync.RWMutex
+	components map[uuid.UUID]*Svelte
 }
 
 // NewSvelteService creates a new instance of the SvelteService.
-func NewSvelteService(repo SvelteRepository) *SvelteService {
+func NewSvelteService() *SvelteService {
 	return &SvelteService{
-		repo: repo,
+		components: make(map[uuid.UUID]*Svelte),
 	}
 }
 
-// GetSettings retrieves the configuration for a user.
-func (s *SvelteService) GetSettings(ctx context.Context, userID models.UserID) (*models.SvelteUserSettings, error) {
-	if userID == "" {
-		return nil, errors.New("user id cannot be empty")
+// Create creates a new Svelte component.
+func (s *SvelteService) Create(ctx context.Context, name, component string, props map[string]interface{}) (*Svelte, error) {
+	if name == "" {
+		return nil, errors.New("name cannot be empty")
 	}
-	return s.repo.GetUserSettings(ctx, userID)
+	if component == "" {
+		return nil, errors.New("component cannot be empty")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	svelte := &Svelte{
+		ID:        uuid.New(),
+		Name:      name,
+		Component: component,
+		Props:     props,
+	}
+	s.components[svelte.ID] = svelte
+	return svelte, nil
 }
 
-// UpdateSettings persists updates to the user's settings.
-func (s *SvelteService) UpdateSettings(ctx context.Context, settings *models.SvelteUserSettings) error {
-	if settings == nil {
-		return errors.New("settings cannot be nil")
+// Get retrieves a Svelte component by ID.
+func (s *SvelteService) Get(ctx context.Context, id uuid.UUID) (*Svelte, error) {
+	if id == uuid.Nil {
+		return nil, errors.New("invalid UUID")
 	}
-	// Simple validation logic
-	if settings.AutoSaveMessages && settings.MessageRetentionDays < 1 {
-		return fmt.Errorf("invalid retention period: %d", settings.MessageRetentionDays)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if svelte, ok := s.components[id]; ok {
+		return svelte, nil
 	}
-	return s.repo.UpdateUserSettings(ctx, settings)
+	return nil, ErrSvelteNotFound
 }
 
-// SetServerAvatar uploads and stores a new avatar for a server.
-func (s *SvelteService) SetServerAvatar(ctx context.Context, serverID models.ServerID, imageData []byte) error {
-	if serverID == "" {
-		return errors.New("server id cannot be empty")
+// Update updates an existing Svelte component.
+func (s *SvelteService) Update(ctx context.Context, id uuid.UUID, name, component string, props map[string]interface{}) (*Svelte, error) {
+	if id == uuid.Nil {
+		return nil, errors.New("invalid UUID")
 	}
-	if len(imageData) == 0 {
-		return errors.New("image data cannot be empty")
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.components[id]
+	if !ok {
+		return nil, ErrSvelteNotFound
 	}
-	
-	_, err := s.repo.GetAvatarData(ctx, serverID) // Mock successful check
-	if err != nil {
-		// Assuming repository handles existence check or creates if missing
-		return fmt.Errorf("failed to validate server avatar storage: %w", err)
+
+	if name != "" {
+		existing.Name = name
 	}
-	
-	// In a real implementation, this might involve resizing/compressing
-	// For the sake of the service layer, we pass it directly to the repo.
-	return s.repo.CreateOrUpdateAvatar(ctx, serverID, imageData)
+	if component != "" {
+		existing.Component = component
+	}
+	if props != nil {
+		existing.Props = props
+	}
+
+	return existing, nil
+}
+
+// Delete removes a Svelte component.
+func (s *SvelteService) Delete(ctx context.Context, id uuid.UUID) error {
+	if id == uuid.Nil {
+		return errors.New("invalid UUID")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.components[id]; ok {
+		delete(s.components, id)
+		return nil
+	}
+	return ErrSvelteNotFound
+}
+
+// List returns all Svelte components.
+func (s *SvelteService) List(ctx context.Context) ([]*Svelte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]*Svelte, 0, len(s.components))
+	for _, svelte := range s.components {
+		result = append(result, svelte)
+	}
+	return result, nil
 }
