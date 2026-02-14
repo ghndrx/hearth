@@ -1,187 +1,135 @@
 package services
 
 import (
-	"context"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
+	"reflect"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 )
 
-// setupTest creates a temporary directory structure to simulate a Svelte build.
-func setupTest(t *testing.T) (tmpDir string, cleanup func()) {
-	tempDir, err := ioutil.TempDir("", "svelte-test-")
+// mockRepository implements IComponentRepository in memory for testing.
+type mockRepository struct {
+	storage map[FileHash]*ComponentMetadata
+}
+
+func newMockRepository() *mockRepository {
+	return &mockRepository{storage: make(map[FileHash]*ComponentMetadata)}
+}
+
+func (m *mockRepository) GetByHash(hash FileHash) (*ComponentMetadata, error) {
+	if comp, exists := m.storage[hash]; exists {
+		return comp, nil
+	}
+	return nil, nil // Return nil error and nil component on "not found"
+}
+
+func (m *mockRepository) Save(hash FileHash, meta *ComponentMetadata) error {
+	m.storage[hash] = meta
+	return nil
+}
+
+// mockParser implements IComponentParser with static responses.
+type mockParser struct {
+	readHash   []byte
+	parseName  string
+	parseError error
+}
+
+func newMockParser(read []byte, parse string, err error) *mockParser {
+	return &mockParser{
+		readHash:  read,
+		parseName: parse,
+		parseError: err,
+	}
+}
+
+func (m *mockParser) ReadHash(hash FileHash) ([]byte, error) {
+	return m.readHash, m.parseError
+}
+
+func (m *mockParser) ParseNames(content []byte) (string, error) {
+	return m.parseName, m.parseError
+}
+
+func TestRegisterComponent_Success(t *testing.T) {
+	// Arrange
+	repo := newMockRepository()
+	parser := newMockParser([]byte("<script>let count = 0;</script>"), "Dashboard", nil)
+	service := NewSvelteService(repo, parser)
+
+	hash := FileHash("abc123hash")
+
+	// Act
+	err := service.RegisterComponent(hash, "/components/Dashboard", "1.0.0")
+
+	// Assert
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	
-	// Create a dummy index.html
-	indexContent := `<html><body>Hearth Clone</body></html>`
-	if err := ioutil.WriteFile(filepath.Join(tempDir, "index.html"), []byte(indexContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-	
-	// Create a dummy asset (css/js)
-	assetContent := `body { color: red; }`
-	if err := ioutil.WriteFile(filepath.Join(tempDir, "bundle.css"), []byte(assetContent), 0644); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RegisterComponent failed: %v", err)
 	}
 
-	return tempDir, func() {
-		os.RemoveAll(tempDir)
+	// Verify persistence
+	metadata, _ := repo.GetByHash(hash)
+	if metadata == nil {
+		t.Fatal("Expected component to be saved, but it was not found in repository.")
+	}
+	if metadata.FileName != "Dashboard" {
+		t.Errorf("Expected FileName 'Dashboard', got '%s'", metadata.FileName)
 	}
 }
 
-func TestNewSvelteService(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+func TestRegisterComponent_ParseFailure_UpdatesHash(t *testing.T) {
+	// Arrange
+	repo := newMockRepository()
+	// Simulate a parser that rejects broken HTML-like content
+	parser := newMockParser([]byte("<script>broken-tag"), "", errors.New("invalid syntax"))
+	service := NewSvelteService(repo, parser)
 
-	service := NewSvelteService(logger, ":8080", "/tmp/build", "/assets")
+	// Act
+	err := service.RegisterComponent(FileHash("ignored_hash"), "/bad/file", "0.0.0")
 
-	assert.Equal(t, "svelte_frontend", service.Name())
-	assert.Equal(t, ":8080", service.address)
-	assert.Equal(t, "/tmp/build", service.buildPath)
-}
-
-func TestSvelteService_Route(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
-	buildDir, cleanup := setupTest(t)
-	defer cleanup()
-
-	service := NewSvelteService(logger, ":8090", buildDir, "/assets")
-
-	// Register a dynamic route (simulating login callback)
-	var requestRecieved bool
-	service.Route("/auth/callback", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		requestRecieved = true
-		w.WriteHeader(http.StatusOK)
-	})
-
-	// Check if route exists by testing a dummy request
-	req := httptest.NewRequest("GET", "http://example.com/auth/callback", nil)
-	w := httptest.NewRecorder()
-
-	// We can't easily trigger the inner handler directly without reflection or 
-	// accessing the internal router state, but we use the ServeMux pattern in production.
-	// Here we verify the service registered a router but we just assert existence in memory structure conceptual
-	// or by ensuring no panic during construction.
-	// For better unit testing, we would spawn the server, send request to temp addr, and check response.
-}
-
-func TestSvelteService_Run_Stop(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
-
-	buildDir, cleanup := setupTest(t)
-	defer cleanup()
-
-	service := NewSvelteService(logger, "127.0.0.1:18891", buildDir, "/assets")
-	
-	ctx := context.Background()
-
-	// Start the server in a goroutine
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- service.Run(ctx)
-	}()
-
-	// Give server a moment to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Ensure Run didn't error immediately
-	select {
-	case err := <-errCh:
-		t.Fatalf("Run failed immediately: %v", err)
-	default:
+	// Assert
+	// The service should return an error and NOT save to repo
+	if err == nil {
+		t.Fatal("Expected an error for invalid syntax.")
 	}
 
-	// Stop the server
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	if err := service.Stop(ctx); err != nil {
-		t.Fatalf("Stop failed: %v", err)
-	}
-
-	// Verify server actually stopped
-	select {
-	case err := <-errCh:
-		if err == nil {
-			t.Fatal("Expected error when connecting to stopped server, got nil")
-		}
-	case <-time.After(500 * time.Millisecond):
-		// Expected nil error on Stop, but server must be gone
+	_, err = repo.GetByHash("ignored_hash")
+	if err == nil {
+		t.Fatal("Expected repository to not contain the invalid file.")
 	}
 }
 
-func TestSvelteServeStatic(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+func TestGetComponent_CacheHit(t *testing.T) {
+	// Arrange
+	repo := newMockRepository()
+	service := NewSvelteService(repo, nil)
 
-	buildDir, cleanup := setupTest(t)
-	defer cleanup()
+	// Manually preload the cache to simulate a hit
+	cachedItem := &ComponentMetadata{Hash: "hit123", FileName: "Cached.svelte"}
+	repo.storage["hit123"] = cachedItem
 
-	service := NewSvelteService(logger, ":9999", buildDir, "/assets")
+	// Act
+	result, err := service.GetComponent("hit123")
 
-	// Start the service
-	ctx := context.Background()
-	go service.Run(ctx)
-	time.Sleep(100 * time.Millisecond) // Wait for server startup
-
-	// Test 1: Access Index
-	resp, err := http.Get("http://127.0.0.1:9999/")
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	indexBody, _ := ioutil.ReadAll(resp.Body)
-	assert.Contains(t, string(indexBody), "Hearth Clone")
-
-	// Test 2: Access Asset
-	resp, err = http.Get("http://127.0.0.1:9999/bundle.css")
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	cssBody, _ := ioutil.ReadAll(resp.Body)
-	assert.Contains(t, string(cssBody), "body { color: red; }")
-
-	// Test 3: Non-existent route (Routing Fallback)
-	resp, err = http.Get("http://127.0.0.1:9999/channels/12345/messages")
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	// Should return index.html
-	fallbackBody, _ := ioutil.ReadAll(resp.Body)
-	assert.Contains(t, string(fallbackBody), "Hearth Clone")
-
-	// Test 4: Directory Traversal Protection
-	// Request ../../ from build dir
-	resp, err = http.Get("http://127.0.0.1:9999/../etc/passwd")
-	if err == nil && resp.StatusCode < 400 {
-		t.Error("Allowed directory traversal request")
+	// Assert
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result.Hash != "hit123" {
+		t.Errorf("Expected hash 'hit123', got '%s'", result.Hash)
 	}
 }
 
-func TestSvelteService_CORS(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+func TestGetComponent_Missing(t *testing.T) {
+	// Arrange
+	repo := newMockRepository()
+	service := NewSvelteService(repo, nil)
 
-	buildDir, cleanup := setupTest(t)
-	defer cleanup()
+	// Act
+	// Check for a hash we know doesn't exist
+	_, err := service.GetComponent("nonexistent_hash")
 
-	service := NewSvelteService(logger, ":9900", buildDir, "/assets")
-	ctx := context.Background()
-	go service.Run(ctx)
-	time.Sleep(100 * time.Millisecond)
-
-	resp, err := http.Get("http://127.0.0.1:9900/")
-	assert.NoError(t, err)
-	
-	// Check for CORS headers
-	header := resp.Header.Get("Access-Control-Allow-Origin")
-	assert.Equal(t, "*", header)
+	// Assert
+	// According to our mock repository, GetByHash returns nil component with nil error.
+	// The service logic treats nil component as Cache Miss and constructs a placeholder.
+	// It does NOT error out based on the signature of GetComponent.
+	// If strict breaking changes were needed, the interface could return an explicit NotFoundError.
 }

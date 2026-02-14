@@ -1,163 +1,110 @@
 package services
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/julienschmidt/httprouter"
-	"go.uber.org/zap"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 )
 
-// Service defines the interface for engine services.
-type Service interface {
-	Run(ctx context.Context) error
-	Stop(ctx context.Context) error
-	Name() string
+// FileHash represents the SHA256 checksum of a Svelte component file.
+type FileHash string
+
+// ComponentMetadata defines the data returned for a component context.
+type ComponentMetadata struct {
+	Hash     FileHash
+	Path     string
+	Version  string // e.g., "4.2.0"
+	FileName string // e.g., "Dashboard.svelte"
 }
 
-// SvelteService implements a static file server with Serve-Middleware capabilities for a Discord voice clone.
+// IComponentRepository defines the interface for managing component data.
+// This abstraction allows us to mock the storage layer (DB, FS, etc.) during testing.
+type IComponentRepository interface {
+	GetByHash(hash FileHash) (*ComponentMetadata, error)
+	Save(hash FileHash, meta *ComponentMetadata) error
+}
+
+// IComponentParser defines the interface for reading raw file content.
+// In a real scenario, this might involve AST parsing to validate component syntax.
+type IComponentParser interface {
+	ReadHash(hash FileHash) ([]byte, error)
+	ParseNames(content []byte) (string, error)
+}
+
+// SvelteService handles the high-level logic for component retrieval.
 type SvelteService struct {
-	logger     *zap.Logger
-	address    string
-	buildPath  string
-	staticPath string
-	httpServer *http.Server
-	server     *httprouter.Router
-	mu         sync.RWMutex
+	repo     IComponentRepository
+	parser   IComponentParser
 }
 
-// NewSvelteService creates a new SvelteService instance.
-func NewSvelteService(logger *zap.Logger, addr, buildPath, staticPath string) *SvelteService {
+// NewSvelteService creates a new instance of the service.
+func NewSvelteService(repo IComponentRepository, parser IComponentParser) *SvelteService {
 	return &SvelteService{
-		logger:     logger,
-		address:    addr,
-		buildPath:  buildPath,
-		staticPath: staticPath,
-		server:     httprouter.New(),
+		repo:     repo,
+		parser:   parser,
 	}
 }
 
-// Name returns the identifier of the service.
-func (s *SvelteService) Name() string {
-	return "svelte_frontend"
-}
-
-// Run starts the HTTP server. 
-// It decompresses or sets up static file serving based on the buildPath.
-func (s *SvelteService) Run(ctx context.Context) error {
-	s.logger.Info("Initializing Svelte Service", 
-		zap.String("address", s.address),
-		zap.String("build_directory", s.buildPath),
-	)
-
-	// Middleware: Add CORS headers for WebSocket/WebRTC connection origins
-	s.server.Use(func(h httprouter.Handler) httprouter.Handler {
-		return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-			
-			h.ServeHTTP(w, r, ps)
-		}
-	})
-
-	// Middleware: Serve static assets (React Router fallback)
-	s.server.GET("/*any", s.handleReroute)
-
-	s.httpServer = &http.Server{
-		Addr:         s.address,
-		Handler:      s.server,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	go func() {
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.logger.Error("Svelte Service stopped unexpectedly", zap.Error(err))
-		}
-	}()
-
-	s.logger.Info("Svelte Service started")
-	return nil
-}
-
-// Stop gracefully shuts down the HTTP server.
-func (s *SvelteService) Stop(ctx context.Context) error {
-	s.logger.Info("Stopping Svelte Service")
-	
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	if s.httpServer != nil {
-		if err := s.httpServer.Shutdown(ctx); err != nil {
-			return fmt.Errorf("failed to shutdown HTTP server: %w", err)
-		}
-	}
-	return nil
-}
-
-// handleReroute handles basic static file serving and catch-all for client side routing.
-// In a production scenario, this would check if `file` exists. If not, serve index.html.
-func (s *SvelteService) handleReroute(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// Construct the requested path
-	file := ps.ByName("any")
-	
-	// Security: Prevent directory traversal
-	// Ensure the requested file/folder is inside the static path
-	reqPath := filepath.Join(s.buildPath, file)
-	
-	absPath, err := filepath.Abs(reqPath)
+// RegisterComponent is the entry point for persisting new components.
+func (s *SvelteService) RegisterComponent(rawHash FileHash, path string, version string) error {
+	// 1. Pre-validate logic (e.g., check if the file exists/is parsable)
+	// Note: IComponentParser is used to verify existence.
+	content, err := s.parser.ReadHash(rawHash)
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+		return errors.New("failed to access component source file")
 	}
 
-	absBuildPath, err := filepath.Abs(s.buildPath)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	// We could extract the file name here or estimate it based on the content/name
+	info := &ComponentMetadata{
+		Hash:    rawHash,
+		Path:    path,
+		Version: version,
 	}
 
-	if !strings.HasPrefix(absPath, absBuildPath) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
+	// 2. Business Logic: Ensure the file is a valid Svelte component
+	// (This is a simplistic check, normally we would use a proper Svelte parser library)
+	if _, err := s.parser.ParseNames(content); err != nil {
+		return errors.New("failed to parse component; not a valid Svelte file")
 	}
 
-	// Check if file exists
-	info, err := os.Stat(reqPath)
-	if err != nil {
-		// If file not found, handle React/Svelte Router fallback by serving index.html
-		if os.IsNotExist(err) {
-			// Note: gsap (Gateway-Serving) intentions: Static files usually need file watcher.
-			// For this scenario, we assume "build_path" contains the built assets.
-			// We serve index.html for all non-existent files to handle client routing.
-			w.Header().Set("Content-Type", "text/html")
-			http.ServeFile(w, r, filepath.Join(s.buildPath, "index.html"))
-			return
-		}
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Serve static
-	http.ServeFile(w, r, reqPath)
+	// 3. Persist
+	return s.repo.Save(rawHash, info)
 }
 
-// Route dynamically registers a handler for a specific Svelte route path (e.g., `/channels/1234`)
-// Note: This is a hook for the backend to inject dynamic data into the front end context.
-func (s *SvelteService) Route(route string, handler func(http.ResponseWriter, *http.Request, httprouter.Params)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.server.GET(route, handler)
+// GetComponent retrieves a component by its hash, preferring cache/storage over re-calculating.
+func (s *SvelteService) GetComponent(hash FileHash) (*ComponentMetadata, error) {
+	// 1. Check Cache/Storage
+	component, err := s.repo.GetByHash(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Cache Hit
+	if component != nil {
+		return component, nil
+	}
+
+	// 3. Cache Miss: Re-calculate or fetch from source (placeholder logic)
+	// In a real scenario, this might look up a remote CDN by hash.
+	
+	// For this example, since GetByHash returned nil (no error), we construct a placeholder.
+	// A production service would handle this differently.
+	component = &ComponentMetadata{
+		Hash:    hash,
+		FileName: "Unknown.svelte",
+		Version: "dev",
+		Path:    "/unknown",
+	}
+
+	// Update Storage/Cache (assume it was lost)
+	_ = s.repo.Save(hash, component)
+
+	return component, nil
+}
+
+// GenerateHash calculates the SHA256 hash of a string using standard Svelte asset naming rules.
+// Note: In SvelteKit, this is usually handled internally, but we implement it for clarity.
+func GenerateHash(content []byte) FileHash {
+	hash := sha256.Sum256(content)
+	return FileHash(hex.EncodeToString(hash[:]))
 }
