@@ -14,11 +14,18 @@ export function clearAuthToken() {
 	authToken = null;
 }
 
+interface ApiErrorData {
+	message?: string;
+	error?: string;
+	code?: string;
+	details?: Record<string, unknown>;
+}
+
 class ApiError extends Error {
 	status: number;
-	data: any;
+	data: ApiErrorData | undefined;
 	
-	constructor(message: string, status: number, data?: any) {
+	constructor(message: string, status: number, data?: ApiErrorData) {
 		super(message);
 		this.name = 'ApiError';
 		this.status = status;
@@ -26,10 +33,10 @@ class ApiError extends Error {
 	}
 }
 
-async function request<T>(
+async function request<T, B = unknown>(
 	method: string,
 	path: string,
-	body?: any,
+	body?: B | FormData,
 	options: RequestInit = {}
 ): Promise<T> {
 	const headers: Record<string, string> = {
@@ -82,11 +89,11 @@ async function request<T>(
 }
 
 export const api = {
-	get: <T = any>(path: string) => request<T>('GET', path),
-	post: <T = any>(path: string, body?: any) => request<T>('POST', path, body),
-	put: <T = any>(path: string, body?: any) => request<T>('PUT', path, body),
-	patch: <T = any>(path: string, body?: any) => request<T>('PATCH', path, body),
-	delete: <T = any>(path: string) => request<T>('DELETE', path),
+	get: <T = unknown>(path: string) => request<T>('GET', path),
+	post: <T = unknown, B = unknown>(path: string, body?: B | FormData) => request<T, B>('POST', path, body),
+	put: <T = unknown, B = unknown>(path: string, body?: B | FormData) => request<T, B>('PUT', path, body),
+	patch: <T = unknown, B = unknown>(path: string, body?: B | FormData) => request<T, B>('PATCH', path, body),
+	delete: <T = unknown>(path: string) => request<T>('DELETE', path),
 };
 
 export { ApiError };
