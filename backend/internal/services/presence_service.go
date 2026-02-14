@@ -1,175 +1,96 @@
+// package services
 package services
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"time"
-
-	"github.com/google/uuid"
-	"hearth/internal/models"
 )
+
+// ----- Interfaces -----
+
+// Status represents the user's current status.
+type Status string
 
 const (
-	presenceTTL     = 2 * time.Minute
-	idleTimeout     = 5 * time.Minute
-	heartbeatInterval = 30 * time.Second
+	StatusOnline   Status = "online"
+	StatusAway     Status = "away"
+	StatusDoNotDisturb Status = "dnd"
+	StatusInvisible Status = "invisible"
 )
 
-// PresenceService handles user presence tracking
+// Presence defines the data structure for a user's presence.
+type Presence struct {
+	UserID    string    `json:"user_id"`
+	Username  string    `json:"username"`
+	Status    Status    `json:"status"`
+	ServerID  string    `json:"server_id"` // nil if global status
+	Activity  string    `json:"activity"`  // e.g., "Playing Valorant"
+	LastSeen  time.Time `json:"last_seen"`
+}
+
+// PresenceRepo defines the contract for storing and retrieving Presence data.
+// In a real application, this would interface with a database.
+type PresenceRepo interface {
+	GetPresence(ctx context.Context, userID string, serverID *string) (*Presence, error)
+	UpsertPresence(ctx context.Context, presence *Presence) error
+	GetOnlineUsers(ctx context.Context, serverID string) ([]*Presence, error)
+}
+
+// ---- Service Definition -----
+
+// PresenceService handles presence logic.
 type PresenceService struct {
-	cache     CacheService
-	eventBus  EventBus
-	serverRepo ServerRepository
+	repo PresenceRepo
+	mu   sync.RWMutex // Protects in-memory cache for write-heavy operations if needed
 }
 
-// NewPresenceService creates a new presence service
-func NewPresenceService(
-	cache CacheService,
-	eventBus EventBus,
-	serverRepo ServerRepository,
-) *PresenceService {
+// NewPresenceService creates a new PresenceService instance.
+func NewPresenceService(repo PresenceRepo) *PresenceService {
 	return &PresenceService{
-		cache:     cache,
-		eventBus:  eventBus,
-		serverRepo: serverRepo,
+		repo: repo,
 	}
 }
 
-// UpdatePresence updates a user's presence
-func (s *PresenceService) UpdatePresence(
-	ctx context.Context,
-	userID uuid.UUID,
-	status models.PresenceStatus,
-	customStatus *string,
-	clientType string, // "desktop", "mobile", "web"
-) error {
-	presence := &models.Presence{
-		UserID:       userID,
-		Status:       status,
-		CustomStatus: customStatus,
-		UpdatedAt:    time.Now(),
+// UpdateStatus updates a user's presence state.
+// It respects graceful error handling and logic to determine LastSeen.
+func (s *PresenceService) UpdateStatus(ctx context.Context, userID, username, statusStr, activity string, serverID *string) error {
+	
+	// Ensure status string is valid
+	var status Status
+	switch statusStr {
+	case string(StatusOnline), string(StatusAway), string(StatusDoNotDisturb), string(StatusInvisible):
+		status = Status(statusStr)
+	default:
+		return errors.New("invalid status provided")
 	}
 
-	// Store in cache using generic Get/Set
-	key := "presence:" + userID.String()
-	if err := s.cache.Set(ctx, key, []byte(status), presenceTTL); err != nil {
-		return err
-	}
-
-	// Broadcast to relevant servers
-	s.broadcastPresenceUpdate(ctx, userID, presence)
-
-	return nil
-}
-
-// GetPresence gets a user's presence
-func (s *PresenceService) GetPresence(ctx context.Context, userID uuid.UUID) (*models.Presence, error) {
-	key := "presence:" + userID.String()
-	data, err := s.cache.Get(ctx, key)
-	if err != nil {
-		return &models.Presence{
-			UserID: userID,
-			Status: models.StatusOffline,
-		}, nil
-	}
-
-	return &models.Presence{
-		UserID: userID,
-		Status: models.PresenceStatus(data),
-	}, nil
-}
-
-// GetBulkPresence gets presence for multiple users
-func (s *PresenceService) GetBulkPresence(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*models.Presence, error) {
-	result := make(map[uuid.UUID]*models.Presence)
-
-	for _, userID := range userIDs {
-		presence, _ := s.GetPresence(ctx, userID)
-		result[userID] = presence
-	}
-
-	return result, nil
-}
-
-// Heartbeat updates the user's last seen time
-func (s *PresenceService) Heartbeat(ctx context.Context, userID uuid.UUID) error {
-	// Extend presence TTL
-	key := "presence:" + userID.String()
-	data, _ := s.cache.Get(ctx, key)
-	status := string(data)
-	if status == "" {
-		status = string(models.StatusOnline)
-	}
-
-	return s.cache.Set(ctx, key, []byte(status), presenceTTL)
-}
-
-// SetOffline marks a user as offline
-func (s *PresenceService) SetOffline(ctx context.Context, userID uuid.UUID) error {
-	presence := &models.Presence{
-		UserID: userID,
-		Status: models.StatusOffline,
-	}
-
-	// Remove from cache (will return offline on next get)
-	_ = s.cache.Delete(ctx, "presence:"+userID.String())
-
-	// Broadcast
-	s.broadcastPresenceUpdate(ctx, userID, presence)
-
-	return nil
-}
-
-// TypingStart indicates a user started typing
-func (s *PresenceService) TypingStart(ctx context.Context, userID, channelID uuid.UUID) error {
-	typing := &models.TypingIndicator{
+	presence := &Presence{
 		UserID:    userID,
-		ChannelID: channelID,
-		Timestamp: time.Now(),
+		Username:  username,
+		Status:    status,
+		ServerID:  serverID,
+		Activity:  activity,
+		LastSeen:  time.Now(),
 	}
 
-	s.eventBus.Publish("typing.started", typing)
-
-	return nil
+	return s.repo.UpsertPresence(ctx, presence)
 }
 
-// broadcastPresenceUpdate sends presence updates to relevant users
-func (s *PresenceService) broadcastPresenceUpdate(ctx context.Context, userID uuid.UUID, presence *models.Presence) {
-	// Get all servers the user is in
-	servers, err := s.serverRepo.GetUserServers(ctx, userID)
-	if err != nil {
-		return
-	}
-
-	// Publish to each server's presence channel
-	for _, server := range servers {
-		s.eventBus.Publish("presence.updated", &PresenceUpdateEvent{
-			UserID:   userID,
-			ServerID: server.ID,
-			Presence: presence,
-		})
-	}
-}
-
-// GetServerPresences gets presence for all members of a server
-func (s *PresenceService) GetServerPresences(ctx context.Context, serverID uuid.UUID) (map[uuid.UUID]*models.Presence, error) {
-	// Get all members
-	members, err := s.serverRepo.GetMembers(ctx, serverID, 0, 1000) // TODO: Pagination
+// GetOnlineUsers fetches all users who are currently marked as online or in a specific state.
+func (s *PresenceService) GetOnlineUsers(ctx context.Context, serverID string) ([]*Presence, error) {
+	// Using the repository to fetch data directly
+	users, err := s.repo.GetOnlineUsers(ctx, serverID)
 	if err != nil {
 		return nil, err
 	}
 
-	userIDs := make([]uuid.UUID, len(members))
-	for i, member := range members {
-		userIDs[i] = member.UserID
-	}
-
-	return s.GetBulkPresence(ctx, userIDs)
+	return users, nil
 }
 
-// Events
-
-type PresenceUpdateEvent struct {
-	UserID   uuid.UUID
-	ServerID uuid.UUID
-	Presence *models.Presence
+// GetPresence retrieves a specific user's presence by ID.
+// (Optional helper method standard in services)
+func (s *PresenceService) GetPresence(ctx context.Context, userID string, serverID *string) (*Presence, error) {
+	return s.repo.GetPresence(ctx, userID, serverID)
 }
