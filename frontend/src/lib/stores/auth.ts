@@ -49,7 +49,7 @@ function createAuthStore() {
 			setAuthToken(token);
 			
 			try {
-				const user = await api.get('/users/@me');
+				const user = await api.get<User>('/users/@me');
 				setCurrentUserId(user.id);
 				update(s => ({
 					...s,
@@ -71,7 +71,7 @@ function createAuthStore() {
 			update(s => ({ ...s, loading: true }));
 			
 			try {
-				const { access_token, refresh_token } = await api.post('/auth/login', {
+				const { access_token, refresh_token } = await api.post<{ access_token: string; refresh_token: string }>('/auth/login', {
 					email,
 					password
 				});
@@ -80,7 +80,7 @@ function createAuthStore() {
 				localStorage.setItem('hearth_refresh_token', refresh_token);
 				setAuthToken(access_token);
 				
-				const user = await api.get('/users/@me');
+				const user = await api.get<User>('/users/@me');
 				setCurrentUserId(user.id);
 				
 				update(s => ({
@@ -101,7 +101,7 @@ function createAuthStore() {
 			update(s => ({ ...s, loading: true }));
 			
 			try {
-				const { access_token, refresh_token } = await api.post('/auth/register', {
+				const { access_token, refresh_token } = await api.post<{ access_token: string; refresh_token: string }>('/auth/register', {
 					email,
 					username,
 					password
@@ -111,7 +111,7 @@ function createAuthStore() {
 				localStorage.setItem('hearth_refresh_token', refresh_token);
 				setAuthToken(access_token);
 				
-				const user = await api.get('/users/@me');
+				const user = await api.get<User>('/users/@me');
 				setCurrentUserId(user.id);
 				
 				update(s => ({
@@ -150,7 +150,7 @@ function createAuthStore() {
 				throw new Error('No refresh token');
 			}
 			
-			const { access_token, refresh_token } = await api.post('/auth/refresh', {
+			const { access_token, refresh_token } = await api.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
 				refresh_token: refreshToken
 			});
 			
@@ -162,7 +162,7 @@ function createAuthStore() {
 		},
 		
 		async updateProfile(updates: Partial<User>) {
-			const user = await api.patch('/users/@me', updates);
+			const user = await api.patch<User>('/users/@me', updates);
 			update(s => ({ ...s, user }));
 			return user;
 		}

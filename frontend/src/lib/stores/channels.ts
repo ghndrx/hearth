@@ -44,7 +44,7 @@ export const dmChannels = derived(channels, $channels =>
 
 export async function loadServerChannels(serverId: string) {
 	try {
-		const data = await api.get(`/servers/${serverId}/channels`);
+		const data = await api.get<Channel[]>(`/servers/${serverId}/channels`);
 		channels.update(c => {
 			// Remove old channels for this server, add new ones
 			const other = c.filter(ch => ch.server_id !== serverId);
@@ -57,7 +57,7 @@ export async function loadServerChannels(serverId: string) {
 
 export async function loadDMChannels() {
 	try {
-		const data = await api.get('/users/@me/channels');
+		const data = await api.get<Channel[]>('/users/@me/channels');
 		channels.update(c => {
 			// Remove old DM channels, add new ones
 			const serverChs = c.filter(ch => ch.server_id !== null);
@@ -70,7 +70,7 @@ export async function loadDMChannels() {
 
 export async function createChannel(serverId: string, name: string, type: number = 0) {
 	try {
-		const channel = await api.post(`/servers/${serverId}/channels`, { name, type });
+		const channel = await api.post<Channel>(`/servers/${serverId}/channels`, { name, type });
 		channels.update(c => [...c, channel]);
 		return channel;
 	} catch (error) {
@@ -81,7 +81,7 @@ export async function createChannel(serverId: string, name: string, type: number
 
 export async function updateChannel(id: string, updates: Partial<Channel>) {
 	try {
-		const channel = await api.patch(`/channels/${id}`, updates);
+		const channel = await api.patch<Channel>(`/channels/${id}`, updates);
 		channels.update(c => c.map(ch => ch.id === id ? channel : ch));
 		return channel;
 	} catch (error) {
@@ -103,7 +103,7 @@ export async function deleteChannel(id: string) {
 
 export async function createDM(userId: string) {
 	try {
-		const channel = await api.post('/users/@me/channels', { recipient_id: userId });
+		const channel = await api.post<Channel>('/users/@me/channels', { recipient_id: userId });
 		channels.update(c => {
 			if (c.find(ch => ch.id === channel.id)) return c;
 			return [...c, channel];
