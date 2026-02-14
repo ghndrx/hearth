@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
-	
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -45,15 +45,15 @@ func (m *MockFriendRepository) PendingRequests(ctx context.Context, userID uuid.
 }
 
 // Test valid addition
-func TestAddFriend_Success(t *testing.T) {
+func TestFriendService_AddFriend_Success(t *testing.T) {
 	mockClient := new(MockFriendRepository)
 	ctx := context.Background()
 	userA := uuid.New()
 	userB := uuid.New()
 	expectedFriendship := &models.Friendship{
-		ID:    uuid.New(),
-		UserID1: userA,
-		UserID2: userB,
+		ID:        uuid.New(),
+		UserID1:   userA,
+		UserID2:   userB,
 		CreatedAt: models.Now(),
 	}
 
