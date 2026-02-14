@@ -4,23 +4,35 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
-	"hearth/internal/models"
 )
+
+var ErrReminderNotFound = errors.New("reminder not found")
+
+// Reminder represents a user reminder
+type Reminder struct {
+	ID        uuid.UUID
+	ChannelID uuid.UUID
+	UserID    uuid.UUID
+	Content   string
+	CreatedAt time.Time
+}
 
 // ReminderRepository defines the contract for Reminder data persistence
 // This interface decouples the service from the specific database implementation.
 type ReminderRepository interface {
 	// Create persists a reminder.
-	Create(ctx context.Context, reminder models.Reminder) error
+	Create(ctx context.Context, reminder Reminder) error
 	// GetByID retrieves a single reminder by its UUID.
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Reminder, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*Reminder, error)
 	// Update modifies an existing reminder.
-	Update(ctx context.Context, reminder models.Reminder) error
+	Update(ctx context.Context, reminder Reminder) error
 	// Delete removes a reminder by its ID.
 	Delete(ctx context.Context, id uuid.UUID) error
 	// GetRemindersByChannel retrieves all reminders for a specific channel.
-	GetRemindersByChannel(ctx context.Context, channelID uuid.UUID) ([]models.Reminder, error)
+	GetRemindersByChannel(ctx context.Context, channelID uuid.UUID) ([]Reminder, error)
 }
 
 // ReminderService handles business logic for reminders.
@@ -37,11 +49,13 @@ func NewReminderService(repo ReminderRepository) *ReminderService {
 
 // Create creates a new Reminder instance.
 // It validates the input and sets empty time/rate if necessary.
-func (s *ReminderService) Create(ctx context.Context, channelID, userID uuid.UUID, content string’modelReminder := models.Reminder{
+func (s *ReminderService) Create(ctx context.Context, channelID, userID uuid.UUID, content string) (*Reminder, error) {
+	modelReminder := Reminder{
 		ID:        uuid.New(),
 		ChannelID: channelID,
 		UserID:    userID,
 		Content:   content,
+		CreatedAt: time.Now(),
 	}
 
 	if err := s.repo.Create(ctx, modelReminder); err != nil {
@@ -52,7 +66,7 @@ func (s *ReminderService) Create(ctx context.Context, channelID, userID uuid.UUI
 }
 
 // Get retrieves a reminder by its ID.
-func (s *ReminderService) Get(ctx context.Context, id uuid.UUID) (*models.Reminder, error) {
+func (s *ReminderService) Get(ctx context.Context, id uuid.UUID) (*Reminder, error) {
 	if id == uuid.Nil {
 		return nil, errors.New("reminder ID cannot be empty")
 	}
@@ -86,7 +100,7 @@ func (s *ReminderService) Delete(ctx context.Context, id uuid.UUID) error {
 
 // GetRemindersForChannel retrieves all active reminders for a specific channel.
 // This is useful for clients to fetch pending notifications.
-func (s *ReminderService) GetRemindersForChannel(ctx context.Context, channelID uuid.UUID) ([]models.Reminder, error) {
+func (s *ReminderService) GetRemindersForChannel(ctx context.Context, channelID uuid.UUID) ([]Reminder, error) {
 	if channelID == uuid.Nil {
 		return nil, errors.New("channel ID cannot be empty")
 	}
@@ -96,10 +110,10 @@ func (s *ReminderService) GetRemindersForChannel(ctx context.Context, channelID 
 
 // ProcessReminders mocks a "Check and Send" behavior.
 // In a real backend, this would query for due items and send websocket/webhook events.
-func (s *ReminderService) ProcessReminders(ctx context.Context) ([]models.Reminder, error) {
+func (s *ReminderService) ProcessReminders(ctx context.Context) ([]Reminder, error) {
 	// Placeholder for business logic that selects remders based on time
 	// Since we don't have a specific Time field in the simplified models/pkg,
 	// we return a mock list filtered by channel.
 	// Note: This assumes Repository.GetRemindersByChannel returns active all.
-	return s.repo.GetRemindersByChannel(ctx, uuid.Nil) 
+	return s.repo.GetRemindersByChannel(ctx, uuid.Nil)
 }

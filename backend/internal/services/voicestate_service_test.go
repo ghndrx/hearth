@@ -55,3 +55,11 @@ func TestVoiceStateService_Deafen(t *testing.T) {
 	users, _ := svc.GetChannelUsers(ctx, channelID)
 	assert.True(t, users[0].Deafened)
 }
+
+func TestVoiceStateService_Deafen_NotInVoice(t *testing.T) {
+	svc := NewVoiceStateService()
+	ctx := context.Background()
+
+	err := svc.SetDeafened(ctx, uuid.New(), true)
+	assert.ErrorIs(t, err, ErrUserNotInVoice)
+}

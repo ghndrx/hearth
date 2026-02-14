@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/google/uuid"
-	"hearth/internal/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -13,20 +15,20 @@ type MockReminderRepository struct {
 	mock.Mock
 }
 
-func (m *MockReminderRepository) Create(ctx context.Context, reminder models.Reminder) error {
+func (m *MockReminderRepository) Create(ctx context.Context, reminder Reminder) error {
 	args := m.Called(ctx, reminder)
 	return args.Error(0)
 }
 
-func (m *MockReminderRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Reminder, error) {
+func (m *MockReminderRepository) GetByID(ctx context.Context, id uuid.UUID) (*Reminder, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*models.Reminder), args.Error(1)
+	return args.Get(0).(*Reminder), args.Error(1)
 }
 
-func (m *MockReminderRepository) Update(ctx context.Context, reminder models.Reminder) error {
+func (m *MockReminderRepository) Update(ctx context.Context, reminder Reminder) error {
 	args := m.Called(ctx, reminder)
 	return args.Error(0)
 }
@@ -36,12 +38,12 @@ func (m *MockReminderRepository) Delete(ctx context.Context, id uuid.UUID) error
 	return args.Error(0)
 }
 
-func (m *MockReminderRepository) GetRemindersByChannel(ctx context.Context, channelID uuid.UUID) ([]models.Reminder, error) {
+func (m *MockReminderRepository) GetRemindersByChannel(ctx context.Context, channelID uuid.UUID) ([]Reminder, error) {
 	args := m.Called(ctx, channelID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]models.Reminder), args.Error(1)
+	return args.Get(0).([]Reminder), args.Error(1)
 }
 
 func TestReminderService_Create(t *testing.T) {
@@ -53,9 +55,7 @@ func TestReminderService_Create(t *testing.T) {
 	userID := uuid.New()
 	content := "Meeting at 3pm"
 
-	expectedID := uuid.New()
-
-	mockRepo.On("Create", ctx, mock.MatchedBy(func(r models.Reminder) bool {
+	mockRepo.On("Create", ctx, mock.MatchedBy(func(r Reminder) bool {
 		return r.ChannelID == channelID &&
 			r.UserID == userID &&
 			r.Content == content
@@ -67,7 +67,6 @@ func TestReminderService_Create(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, reminder)
-	assert.Equal(t, expectedID, reminder.ID)
 	assert.Equal(t, channelID, reminder.ChannelID)
 	assert.Equal(t, userID, reminder.UserID)
 	assert.Equal(t, content, reminder.Content)
@@ -93,13 +92,11 @@ func TestReminderService_Get(t *testing.T) {
 	service := NewReminderService(mockRepo)
 
 	reminderID := uuid.New()
-	Date := "2023-10-27T09:41:12Z"
-	expectedNode := uuid.New()
 	content := "Water the plant"
 	channel := uuid.New()
 	user := uuid.New()
 
-	reminder := &models.Reminder{
+	reminder := &Reminder{
 		ID:        reminderID,
 		UserID:    user,
 		ChannelID: channel,
@@ -121,9 +118,10 @@ func TestReminderService_Get_NotFound(t *testing.T) {
 	mockRepo := new(MockReminderRepository)
 	service := NewReminderService(mockRepo)
 
-	mockRepo.On("GetByID", ctx, uuid.New()).Return(nil, errors.New("record not found")).Once()
+	reminderID := uuid.New()
+	mockRepo.On("GetByID", ctx, reminderID).Return(nil, errors.New("record not found")).Once()
 
-	_, err := service.Get(ctx, uuid.New())
+	_, err := service.Get(ctx, reminderID)
 
 	mockRepo.AssertExpectations(t)
 	assert.Error(t, err)
@@ -140,4 +138,81 @@ func TestReminderService_Get_EmptyID(t *testing.T) {
 	assert.Equal(t, "reminder ID cannot be empty", err.Error())
 	// Ensure repository was not called
 	mockRepo.AssertNotCalled(t, "GetByID")
+}
+
+func TestReminderService_Delete(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockReminderRepository)
+	service := NewReminderService(mockRepo)
+
+	reminderID := uuid.New()
+
+	mockRepo.On("GetByID", ctx, reminderID).Return(&Reminder{ID: reminderID}, nil).Once()
+	mockRepo.On("Delete", ctx, reminderID).Return(nil).Once()
+
+	err := service.Delete(ctx, reminderID)
+
+	mockRepo.AssertExpectations(t)
+	assert.NoError(t, err)
+}
+
+func TestReminderService_Delete_NotFound(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockReminderRepository)
+	service := NewReminderService(mockRepo)
+
+	reminderID := uuid.New()
+
+	mockRepo.On("GetByID", ctx, reminderID).Return(nil, errors.New("not found")).Once()
+
+	err := service.Delete(ctx, reminderID)
+
+	mockRepo.AssertExpectations(t)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "reminder not found")
+}
+
+func TestReminderService_Delete_EmptyID(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockReminderRepository)
+	service := NewReminderService(mockRepo)
+
+	err := service.Delete(ctx, uuid.Nil)
+
+	assert.Error(t, err)
+	assert.Equal(t, "reminder ID cannot be empty", err.Error())
+	mockRepo.AssertNotCalled(t, "GetByID")
+	mockRepo.AssertNotCalled(t, "Delete")
+}
+
+func TestReminderService_GetRemindersForChannel(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockReminderRepository)
+	service := NewReminderService(mockRepo)
+
+	channelID := uuid.New()
+	expectedReminders := []Reminder{
+		{ID: uuid.New(), ChannelID: channelID, Content: "Reminder 1"},
+		{ID: uuid.New(), ChannelID: channelID, Content: "Reminder 2"},
+	}
+
+	mockRepo.On("GetRemindersByChannel", ctx, channelID).Return(expectedReminders, nil).Once()
+
+	reminders, err := service.GetRemindersForChannel(ctx, channelID)
+
+	mockRepo.AssertExpectations(t)
+	assert.NoError(t, err)
+	assert.Len(t, reminders, 2)
+}
+
+func TestReminderService_GetRemindersForChannel_EmptyChannelID(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockReminderRepository)
+	service := NewReminderService(mockRepo)
+
+	_, err := service.GetRemindersForChannel(ctx, uuid.Nil)
+
+	assert.Error(t, err)
+	assert.Equal(t, "channel ID cannot be empty", err.Error())
+	mockRepo.AssertNotCalled(t, "GetRemindersByChannel")
 }

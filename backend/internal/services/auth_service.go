@@ -11,9 +11,7 @@ import (
 )
 
 var (
-	ErrUserNotFound      = errors.New("user not found")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrUserExists        = errors.New("user already exists")
+	ErrUserExists = errors.New("user already exists")
 )
 
 // AuthService defines the business logic for authentication.
@@ -59,10 +57,10 @@ func (s *authService) Register(ctx context.Context, email, username, password st
 	}
 
 	user := &models.User{
-		ID:       uuid.New(),
-		Email:    email,
-		Username: username,
-		Password: string(hashedPassword),
+		ID:           uuid.New(),
+		Email:        email,
+		Username:     username,
+		PasswordHash: string(hashedPassword),
 	}
 
 	if err := s.repo.CreateUser(ctx, user); err != nil {
@@ -83,7 +81,7 @@ func (s *authService) Login(ctx context.Context, email, password string) (string
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return "", nil, ErrInvalidCredentials
 	}
 
