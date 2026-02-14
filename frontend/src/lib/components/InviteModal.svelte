@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher, onDestroy } from 'svelte';
 	import Modal from './Modal.svelte';
 	import Button from './Button.svelte';
 
@@ -8,6 +8,7 @@
 	export let serverId = '';
 	export let channelName = '';
 	export let channelId = '';
+	export let baseUrl = 'https://hearth.chat';
 
 	const dispatch = createEventDispatcher<{
 		close: void;
@@ -21,6 +22,7 @@
 	let inviteLink = '';
 	let isGenerating = false;
 	let isCopied = false;
+	let copyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 	const expirationOptions = [
 		{ label: '30 minutes', value: 1800 },
@@ -43,6 +45,7 @@
 	];
 
 	async function generateInvite() {
+		if (isGenerating) return;
 		isGenerating = true;
 		try {
 			// Generate a random invite code (in production, this would be an API call)
@@ -50,7 +53,7 @@
 			inviteCode = Array.from({ length: 8 }, () =>
 				characters.charAt(Math.floor(Math.random() * characters.length))
 			).join('');
-			inviteLink = `https://hearth.chat/invite/${inviteCode}`;
+			inviteLink = `${baseUrl}/invite/${inviteCode}`;
 
 			dispatch('invite', { code: inviteCode, maxUses, expiresIn });
 		} finally {
@@ -63,13 +66,25 @@
 		try {
 			await navigator.clipboard.writeText(inviteLink);
 			isCopied = true;
-			setTimeout(() => {
+			// Clear any existing timeout
+			if (copyTimeoutId) {
+				clearTimeout(copyTimeoutId);
+			}
+			copyTimeoutId = setTimeout(() => {
 				isCopied = false;
+				copyTimeoutId = null;
 			}, 2000);
 		} catch (err) {
 			console.error('Failed to copy invite link:', err);
 		}
 	}
+
+	// Cleanup timeout on component destroy
+	onDestroy(() => {
+		if (copyTimeoutId) {
+			clearTimeout(copyTimeoutId);
+		}
+	});
 
 	function handleClose() {
 		inviteCode = '';
@@ -78,9 +93,13 @@
 		dispatch('close');
 	}
 
-	// Generate an invite on mount if modal is opened
-	$: if (open && !inviteCode) {
+	// Generate an invite when modal opens (only once per open)
+	let lastOpenState = false;
+	$: if (open && !lastOpenState && !inviteCode) {
+		lastOpenState = true;
 		generateInvite();
+	} else if (!open) {
+		lastOpenState = false;
 	}
 </script>
 
