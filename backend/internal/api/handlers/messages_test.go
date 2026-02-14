@@ -22,7 +22,7 @@ import (
 type mockMessageService struct {
 	sendMessageFunc    func(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error)
 	getMessagesFunc    func(ctx context.Context, channelID, requesterID uuid.UUID, before, after *uuid.UUID, limit int) ([]*models.Message, error)
-	getMessageFunc     func(ctx context.Context, messageID uuid.UUID) (*models.Message, error)
+	getMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) (*models.Message, error)
 	editMessageFunc    func(ctx context.Context, messageID, authorID uuid.UUID, newContent string) (*models.Message, error)
 	deleteMessageFunc  func(ctx context.Context, messageID, requesterID uuid.UUID) error
 	addReactionFunc    func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
@@ -44,9 +44,9 @@ func (m *mockMessageService) GetMessages(ctx context.Context, channelID, request
 	return nil, nil
 }
 
-func (m *mockMessageService) GetMessage(ctx context.Context, messageID uuid.UUID) (*models.Message, error) {
+func (m *mockMessageService) GetMessage(ctx context.Context, messageID, requesterID uuid.UUID) (*models.Message, error) {
 	if m.getMessageFunc != nil {
-		return m.getMessageFunc(ctx, messageID)
+		return m.getMessageFunc(ctx, messageID, requesterID)
 	}
 	return nil, nil
 }
@@ -194,13 +194,29 @@ func setupMessageTestApp(messageService *mockMessageService) *fiber.App {
 		return c.JSON(messages)
 	})
 
-	// GetMessage (not implemented)
+	// GetMessage
 	app.Get("/channels/:channelID/messages/:messageID", func(c *fiber.Ctx) error {
-		_, err := uuid.Parse(c.Params("messageID"))
+		userID := c.Locals("userID").(uuid.UUID)
+		messageID, err := uuid.Parse(c.Params("messageID"))
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid message ID"})
 		}
-		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"error": "Not implemented"})
+
+		message, err := messageService.GetMessage(c.Context(), messageID, userID)
+		if err != nil {
+			if errors.Is(err, services.ErrMessageNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Message not found"})
+			}
+			if errors.Is(err, services.ErrNotServerMember) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not a member of this server"})
+			}
+			if errors.Is(err, services.ErrNoPermission) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "No permission to view this message"})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		return c.JSON(message)
 	})
 
 	// EditMessage
@@ -701,12 +717,25 @@ func TestGetMessages_NoPermission(t *testing.T) {
 
 // ========== GetMessage Tests ==========
 
-func TestGetMessage_NotImplemented(t *testing.T) {
+func TestGetMessage_Success(t *testing.T) {
 	userID := uuid.New()
 	channelID := uuid.New()
 	messageID := uuid.New()
+	authorID := uuid.New()
 
-	mockService := &mockMessageService{}
+	mockService := &mockMessageService{
+		getMessageFunc: func(ctx context.Context, msgID, reqID uuid.UUID) (*models.Message, error) {
+			return &models.Message{
+				ID:        messageID,
+				ChannelID: channelID,
+				AuthorID:  authorID,
+				Content:   "Test message content",
+				Type:      models.MessageTypeDefault,
+				CreatedAt: time.Now(),
+			}, nil
+		},
+	}
+
 	app := setupMessageTestApp(mockService)
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
@@ -718,8 +747,72 @@ func TestGetMessage_NotImplemented(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != fiber.StatusNotImplemented {
-		t.Fatalf("Expected status 501, got %d", resp.StatusCode)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var message models.Message
+	json.NewDecoder(resp.Body).Decode(&message)
+
+	if message.ID != messageID {
+		t.Errorf("Expected message ID %s, got %s", messageID, message.ID)
+	}
+	if message.Content != "Test message content" {
+		t.Errorf("Expected content 'Test message content', got %s", message.Content)
+	}
+}
+
+func TestGetMessage_NotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	mockService := &mockMessageService{
+		getMessageFunc: func(ctx context.Context, msgID, reqID uuid.UUID) (*models.Message, error) {
+			return nil, services.ErrMessageNotFound
+		},
+	}
+
+	app := setupMessageTestApp(mockService)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("Expected status 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetMessage_NoPermission(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	mockService := &mockMessageService{
+		getMessageFunc: func(ctx context.Context, msgID, reqID uuid.UUID) (*models.Message, error) {
+			return nil, services.ErrNoPermission
+		},
+	}
+
+	app := setupMessageTestApp(mockService)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("Expected status 403, got %d", resp.StatusCode)
 	}
 }
 

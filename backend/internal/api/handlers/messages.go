@@ -27,17 +27,17 @@ func NewMessageHandlers(messageService *services.MessageService, channelService 
 
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID              string            `json:"id"`
-	ChannelID       string            `json:"channel_id"`
-	ServerID        *string           `json:"guild_id,omitempty"`
-	AuthorID        string            `json:"author_id"`
-	Content         string            `json:"content"`
-	Type            int               `json:"type"`
-	Timestamp       time.Time         `json:"timestamp"`
-	EditedTimestamp *time.Time        `json:"edited_timestamp,omitempty"`
-	Pinned          bool              `json:"pinned"`
-	TTS             bool              `json:"tts"`
-	ReplyToID       *string           `json:"referenced_message_id,omitempty"`
+	ID              string               `json:"id"`
+	ChannelID       string               `json:"channel_id"`
+	ServerID        *string              `json:"guild_id,omitempty"`
+	AuthorID        string               `json:"author_id"`
+	Content         string               `json:"content"`
+	Type            int                  `json:"type"`
+	Timestamp       time.Time            `json:"timestamp"`
+	EditedTimestamp *time.Time           `json:"edited_timestamp,omitempty"`
+	Pinned          bool                 `json:"pinned"`
+	TTS             bool                 `json:"tts"`
+	ReplyToID       *string              `json:"referenced_message_id,omitempty"`
 	Attachments     []AttachmentResponse `json:"attachments,omitempty"`
 	Reactions       []ReactionResponse   `json:"reactions,omitempty"`
 }
@@ -140,19 +140,38 @@ func (h *MessageHandlers) GetMessages(c *fiber.Ctx) error {
 }
 
 // GetMessage returns a specific message
-// Note: Individual message retrieval not implemented in service yet
 func (h *MessageHandlers) GetMessage(c *fiber.Ctx) error {
-	_, err := uuid.Parse(c.Params("messageID"))
+	userID := c.Locals("userID").(uuid.UUID)
+	messageID, err := uuid.Parse(c.Params("messageID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid message ID",
 		})
 	}
 
-	// TODO: Implement GetMessage in service
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "Not implemented",
-	})
+	message, err := h.messageService.GetMessage(c.Context(), messageID, userID)
+	if err != nil {
+		if errors.Is(err, services.ErrMessageNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrNotServerMember) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Not a member of this server",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to view this message",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(message)
 }
 
 // EditMessage edits a message
