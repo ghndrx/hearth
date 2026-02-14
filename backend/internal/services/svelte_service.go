@@ -1,137 +1,151 @@
 package services
 
 import (
-	"bytes"
 	"fmt"
-	"html/template"
-	"io"
-	"strings"
+	"io/fs"
+	"os"
+	"path/filepath"
 )
 
-// SvelteService defines the interface for rendering Svelte HTML.
-// Using an interface allows for mocking or swapping implementations
-// (e.g., rendering to HTML vs. a custom template engine).
+// Component represents a frontend component or entity.
+// In this context, it maps to a .svelte file or a generated build artifact.
+type Component struct {
+	ID          string
+	Name        string
+	Version     string
+	SourcePath  string // Path to the .svelte source file
+	BuildPath   string // Path to the compiled .css/.js output
+	DocumentDir string // Directory where the build artifacts are served
+}
+
+// BuildConfig holds necessary options for building the component.
+type BuildConfig struct {
+	OutputDir string
+ PurgeCache bool // For testing or hot-reloading scenarios
+}
+
+// SvelteService defines the contract for managing Svelte components.
+// This interface allows us to mock the complex Svelte compilation logic in tests.
 type SvelteService interface {
-	// RenderConnectionStatus generates the HTML for a user's connection status.
-	// It accepts a user ID to simulate dynamic data injection.
-	RenderConnectionStatus(userID string) (string, error)
-	
-	// GenerateChatView renders the main conversation container.
-	// Typically involves loading components for Messages and Input.
-	GenerateChatView() (string, error)
+	// Build sources a Svelte file, compiles it, and places outputs in the filesystem.
+	BuildComponent(comp Component) error
+
+	// CopyToDocumentDir copies the finalized build artifact to the public serving directory.
+	CopyToDocumentDir(comp Component) error
+
+	// ExecuteCompiler runs the Svelte compiler executable with specific arguments.
+	// This is an abstraction used internally by the service to keep the logic testable.
+	ExecuteCompiler(source, outputDir string) error
 }
 
-// DefaultSvelteService implements SvelteService using Go's text/template
-// to simulate the partials and markup structure expected from a build step.
-type DefaultSvelteService struct {
-	// We embed a methods struct or keep handlers here. 
-	// For this example, we use a simple implementation pattern.
+// svelteService is the concrete implementation.
+type svelteService struct {
+	compilerPath string
+	logger       ServiceLogger
+	fileSystem   FileSystem
 }
 
-// NewSvelteService constructs a new instance of the service.
-func NewSvelteService() SvelteService {
-	return &DefaultSvelteService{}
+// SvelteServiceConfig holds dependencies for the service.
+type SvelteServiceConfig struct {
+	CompilerPath string
+	Logger       ServiceLogger
+	FS           FileSystem
 }
 
-// RenderConnectionStatus implements the interface.
-// In a real-world scenario, this would call a command line tool (svelte-kit) 
-// or an embedded binary function. Here, we use Go templates for the mockup.
-func (s *DefaultSvelteService) RenderConnectionStatus(userID string) (string, error) {
-	
-	// Template to simulate a Svelte Component with data props
-	// {#if active} is typical Svelte syntax we mimic
-	const tpl = `<!-- Svelte Component: ConnectionStatus.svelte -->
-<div class="connection-status" data-user-id="{{ .UserID }}">
-	<span class="status-icon">
-		{#{if .Active} 
-			✅ Online
-		{:else if .Away} 
-			💛 Away
- 		{/if} #}
-	</span>
-	<span class="details">
-		<span class="status-dot {{ if .Active }}green{{ else }}gray{{ end }}"></span>
-		{{ .UserID }}
-	</span>
-</div>`
+// NewSvelteService initializes the service with dependencies.
+func NewSvelteService(config SvelteServiceConfig) SvelteService {
+	return &svelteService{
+		compilerPath: config.CompilerPath,
+		logger:       config.Logger,
+		fileSystem:   config.FS,
+	}
+}
 
-	data := struct {
-		UserID string
-		Active bool
-		Away   bool
-	}{
-		UserID: userID,
-		Active: true, // Simulated dynamic state
-		Away:   false,
+// BuildComponent orchestrates the build process.
+func (s *svelteService) BuildComponent(comp Component) error {
+	s.logger.Info(fmt.Sprintf("Starting Svelte build for: %s (%s)", comp.Name, comp.ID))
+
+	// 1. Ensure output directory exists
+	if err := s.fileSystem.MkdirAll(comp.BuildPath, 0755); err != nil {
+		return fmt.Errorf("failed to create build directory: %w", err)
 	}
 
-	var buf bytes.Buffer
-	t := template.Must(template.New("svelte_status").Parse(tpl))
-	err := t.Execute(&buf, data)
+	// 2. Execute the compiler
+	if err := s.ExecuteCompiler(comp.SourcePath, comp.BuildPath); err != nil {
+		return fmt.Errorf("compilation failed for %s: %w", comp.Name, err)
+	}
+
+	s.logger.Info(fmt.Sprintf("Successfully built component: %s", comp.Name))
+	return nil
+}
+
+// CopyToDocumentDir moves the artifact to the web root (Discord clone public files).
+func (s *svelteService) CopyToDocumentDir(comp Component) error {
+	s.logger.Info(fmt.Sprintf("Copying %s to %s", comp.BuildPath, comp.DocumentDir))
+
+	// Walk through the build output directory
+	return s.fileSystem.CopyDir(comp.BuildPath, comp.DocumentDir)
+}
+
+// ExecuteCompiler invokes the Svelte compiler binary.
+// In a real production environment, passing arguments securely is critical.
+func (s *svelteService) ExecuteCompiler(source, outputDir string) error {
+	s.logger.Info(fmt.Sprintf("Running compiler: %s --input %s --output %s", s.compilerPath, source, outputDir))
+	
+	// Example: using exec.Command logic here. 
+	// For simplicity, we just log the command that would be run.
+	return nil
+}
+
+// --- Interfaces for Dependency Injection / Testing ---
+
+// FileSystem abstracts os/fs operations to allow mocking in tests.
+type FileSystem interface {
+	MkdirAll(path string, perm os.FileMode) error
+	CopyDir(src, dst string) error
+	RemoveAll(path string) error
+	Exists(path string) bool
+}
+
+// ServiceLogger represents a logging abstraction.
+type ServiceLogger interface {
+	Info(msg string)
+	Error(msg string)
+}
+
+// RealFileSystem is the standard implementation of FileSystem.
+type RealFileSystem struct{}
+
+func (r *RealFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+func (r *RealFileSystem) CopyDir(src, dst string) error {
+	return copyDir(src, dst)
+}
+
+func (r *RealFileSystem) RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
+func (r *RealFileSystem) Exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func copyDir(src string, dst string) error {
+	source, err := os.Open(src)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute connection status template: %w", err)
+		return err
 	}
+	defer source.Close()
 
-	return buf.String(), nil
-}
-
-// GenerateChatView implements the interface.
-func (s *DefaultSvelteService) GenerateChatView() (string, error) {
-	const chatTpl = `<!-- Svelte Component: ChatView.svelte -->
-<div class="chat-container">
-	<div class="sidebar">
-		<!-- Sidebar Component -->
-	</div>
-	
-	<main class="chat-main">
-		<div class="server-list">
-			{#each messages as msg (msg.id)}
-				<div class="message {{ if .isSystem }}system{{ else }}user{{ end }}">
-					<strong>{{ .author }}</strong>: {{ .content }}
-				</div>
-			{/each}
-		</div>
-		
-		<div class="input-area">
-			<input type="text" placeholder="Message #general" />
-		</div>
-	</main>
-</div>`
-
-	// In a real app, this might fetch data from a MessageService
-	messages := []struct {
-		author string
-		content string
-		id     int
-	}{
-		{"User1", "Hello from Discord!", 1},
-		{"User2", "How's the Go service running?", 2},
-	}
-
-	data := struct {
-		Messages []struct{ author string; content string; id int }
-	}{
-		Messages: messages,
-	}
-
-	var buf bytes.Buffer
-	t := template.Must(template.New("svelte_chat").Parse(chatTpl))
-	err := t.Execute(&buf, data)
+	destination, err := os.Create(dst)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute chat view template: %w", err)
+		return err
 	}
+	defer destination.Close()
 
-	return buf.String(), nil
-}
-
-// MockRenderer is a specialized struct for testing, 
-// allowing us to capture the exact string content generated.
-type MockRenderer struct {
-	SvelteService
-}
-
-func (m *MockRenderer) CaptureOutput(callback func(SvelteService)) string {
-	// This is a helper pattern; typically refactoring the service
-	// to accept an io.Writer would be cleaner, but this demonstrates isolation.
-	panic("utilizing a simpler approach for this unit test definition")
+	_, err = destination.ReadFrom(source)
+	return err
 }

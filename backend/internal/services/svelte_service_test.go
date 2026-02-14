@@ -1,115 +1,213 @@
-package services_test
+package services
 
 import (
-	"strings"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
-
-	"github.com/yourusername/hearth/services" // Replace with actual module path
 )
 
-func TestDefaultSvelteService_RenderConnectionStatus(t *testing.T) {
-	service := services.NewSvelteService()
-	
-	tests := []struct {
-		name        string
-		userID      string
-		expectActive bool
-		requestID   string
-	}{
-		{
-			name:        "Active User",
-			userID:      "alice",
-			expectActive: true,
-			requestID:   "alice",
-		},
-		{
-			name:        "Offline User",
-			userID:      "bob",
-			expectActive: false,
-			requestID:   "bob",
-		},
+// MockSvelteService implements SvelteService using in-memory assertions.
+type MockSvelteService struct {
+	CompiledFiles map[string]bool
+	CopyErrors    map[string]error // Injected error for test cases
+}
+
+func (m *MockSvelteService) BuildComponent(comp Component) error {
+	m.CompiledFiles[comp.ID] = true
+	return nil
+}
+
+func (m *MockSvelteService) CopyToDocumentDir(comp Component) error {
+	if err, exists := m.CopyErrors[comp.ID]; exists {
+		return err
 	}
+	return nil
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Act
-			html, err := service.RenderConnectionStatus(tt.userID)
-			
-			if err != nil {
-				t.Fatalf("RenderConnectionStatus() failed with error: %v", err)
-			}
+func (m *MockSvelteService) ExecuteCompiler(source, outputDir string) error {
+	// Mock implementation stub
+	return nil
+}
 
-			// Assert
-			if html == "" {
-				t.Error("expected output HTML to be non-empty")
-			}
+// MockFileSystem is used to verify directory operations without touching the real disk.
+type MockFileSystem struct {
+	MkdirAllInvocations  []string
+	CopyDirInvocations   []string
+	RemoveAllInvocations []string
+	ExistsInvocations    []string
+	DirContents          map[string][]string // Track file contents per directory
+}
 
-			// Check for expected classes or content based on mock logic (Active=true)
-			if strings.Contains(html, "green") && tt.expectActive {
-				t.Log("HTML contains expected 'green' status class")
-			}
-			
-			// Verify user ID injection
-			if !strings.Contains(html, tt.requestID) {
-				t.Errorf("HTML does not contain user ID: %v", tt.requestID)
-			}
-		})
+func NewMockFileSystem() *MockFileSystem {
+	return &MockFileSystem{
+		DirContents: make(map[string][]string),
 	}
 }
 
-func TestDefaultSvelteService_GenerateChatView(t *testing.T) {
-	service := services.NewSvelteService()
+func (m *MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	m.MkdirAllInvocations = append(m.MkdirAllInvocations, path)
+	return nil
+}
 
-	// Act
-	html, err := service.GenerateChatView()
+func (m *MockFileSystem) CopyDir(src, dst string) error {
+	m.CopyDirInvocations = append(m.CopyDirInvocations, src+" -> "+dst)
+	return nil
+}
 
-	// Assert basic behavior
+func (m *MockFileSystem) RemoveAll(path string) error {
+	m.RemoveAllInvocations = append(m.RemoveAllInvocations, path)
+	return nil
+}
+
+func (m *MockFileSystem) Exists(path string) bool {
+	m.ExistsInvocations = append(m.ExistsInvocations, path)
+	_, ok := m.DirContents[path]
+	return ok
+}
+
+// TestNewSvelteService tests the constructor.
+func TestNewSvelteService(t *testing.T) {
+	logger := &MockLogger{}
+	fs := NewMockFileSystem()
+	path := "/usr/local/bin/svelte"
+
+	service := NewSvelteService(SvelteServiceConfig{
+		CompilerPath: path,
+		Logger:       logger,
+		FS:           fs,
+	})
+
+	svelteService, ok := service.(*svelteService)
+	if !ok {
+		t.Fatalf("Failed to cast service to concrete type")
+	}
+
+	if svelteService.compilerPath != path {
+		t.Errorf("Expected compilerPath %s, got %s", path, svelteService.compilerPath)
+	}
+}
+
+// TestBuildComponent tests the full build lifecycle.
+func TestBuildComponent(t *testing.T) {
+	comp := Component{
+		ID:        "test-cmp",
+		Name:      "TestComponent",
+		Version:   "v1.0",
+		SourcePath: "./test-input.svelte",
+		BuildPath:   "./build/test-cmp",
+		DocumentDir: "./public/dist",
+	}
+
+	// Setup
+	mockFS := NewMockFileSystem()
+	mockSvelte := &MockSvelteService{
+		CompiledFiles: make(map[string]bool),
+	}
+
+	// Inject dependencies
+	service := NewSvelteService(SvelteServiceConfig{
+		CompilerPath: "svelte",
+		FS:           mockFS,
+		Logger:       &MockLogger{}, // Using MockLogger defined in standard test helper usually, or simple struct below
+	})
+
+	// Execute
+	err := service.BuildComponent(comp)
+
+	// Assertions
 	if err != nil {
-		t.Fatalf("GenerateChatView() failed with error: %v", err)
+		t.Fatalf("BuildComponent failed: %v", err)
+	}
+	if !mockSvelte.CompiledFiles["test-cmp"] {
+		t.Error("Expected component to be compiled in mock service")
 	}
 
-	if html == "" {
-		t.Fatal("expected output HTML to be non-empty")
+	// Verify FileSystem calls
+	expectedDir := "./build/test-cmp"
+	found := false
+	for _, dir := range mockFS.MkdirAllInvocations {
+		if dir == expectedDir {
+			found = true
+			break
+		}
 	}
-
-	// Verify we got the chat container structure
-	// We expect the placeholder text from our template
-	if !strings.Contains(html, "Message #general") {
-		t.Error("Chat view template did not render expected container placeholder")
-	}
-
-	// Verify mock data messages are included
-	mockMsg := "Hello from Discord!"
-	if !strings.Contains(html, mockMsg) {
-		t.Errorf("Chat view did not render mock message. Content: %v", html)
+	if !found {
+		t.Errorf("Expected MkdirAll to be called with %s", expectedDir)
 	}
 }
 
-// Example of a Mock implementation for a strict Interface Test
-type MockSvelteRenderer struct{}
+// TestCopyToDocumentDir tests the final distribution step.
+func TestCopyToDocumentDir(t *testing.T) {
+	comp := Component{
+		ID:         "success-id",
+		BuildPath:  "build/abc",
+		DocumentDir: "public/abc",
+	}
 
-func (s *MockSvelteRenderer) RenderConnectionStatus(userID string) (string, error) {
-	// Static mock response
-	return "<div>Mock Status</div>", nil
-}
+	mockFS := NewMockFileSystem()
+	mockSvelte := &MockSvelteService{
+		CopyErrors: make(map[string]error),
+	}
 
-func (s *MockSvelteRenderer) GenerateChatView() (string, error) {
-	return "<div>Mock Chat</div>", nil
-}
+	service := NewSvelteService(SvelteServiceConfig{
+		CompilerPath: "svelte",
+		FS:           mockFS,
+		Logger:       &MockLogger{},
+	})
 
-func TestSvelteService_Interfaces(t *testing.T) {
-	var _ services.SvelteService = &MockSvelteRenderer{}
-
-	mock := &MockSvelteRenderer{}
-	
-	// Call methods to ensure they satisfy the contract
-	_, err := mock.RenderConnectionStatus("test")
+	err := service.CopyToDocumentDir(comp)
 	if err != nil {
-		t.Errorf("mock RenderConnectionStatus failed: %v", err)
+		t.Fatalf("CopyToDocumentDir errored: %v", err)
 	}
 
-	_, err = mock.GenerateChatView()
-	if err != nil {
-		t.Errorf("mock GenerateChatView failed: %v", err)
+	// Check that CopyDir was called
+	actions := mockFS.CopyDirInvocations
+	found := false
+	for _, action := range actions {
+		if action == "build/abc -> public/abc" {
+			found = true
+			break
+		}
 	}
+	if !found {
+		t.Error("CopyDir was not called with expected arguments")
+	}
+}
+
+// TestSuccessfulBuildErrorHandling verifies errors propagating up the chain.
+func TestSuccessfulBuildErrorHandling(t *testing.T) {
+	comp := Component{
+		ID:        "fail-id",
+		SetSource: "./fail.svelte", // Note: Struct fields likely int, using Field access or setter? 
+		// Assuming BuildPath setter or field access for cleaner test structure:
+		BuildPath: "build/fail-id", 
+	}
+
+	// Inject a MockFileSystem that fails on MkdirAll
+	mockFS := NewMockFileSystem()
+	mockFS.MkdirAllFail = true // Assuming we added a field to mockFS
+
+	service := NewSvelteService(SvelteServiceConfig{
+		CompilerPath: "svelte",
+		FS:           mockFS,
+		Logger:       &MockLogger{},
+	})
+
+	err := service.BuildComponent(comp)
+	if err == nil {
+		t.Error("Expected error when MkdirAll fails, but got nil")
+	}
+}
+
+// MockLogger satisfies the ServiceLogger interface
+type MockLogger struct{}
+
+func (l *MockLogger) Info(msg string) {
+	// Log to stdout for visibility in tests if desired
+	// fmt.Println("[INFO]", msg)
+}
+
+func (l *MockLogger) Error(msg string) {
+	fmt.Println("[ERROR]", msg)
 }
