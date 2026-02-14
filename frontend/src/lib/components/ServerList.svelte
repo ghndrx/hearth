@@ -1,59 +1,145 @@
 <script lang="ts">
 	import { servers, currentServer } from '$lib/stores/servers';
 	import { createEventDispatcher } from 'svelte';
-	
+	import { goto } from '$app/navigation';
+	import CreateServerModal from './CreateServerModal.svelte';
+	import ServerIcon from './ServerIcon.svelte';
+	import ServerFolder from './ServerFolder.svelte';
+	import type { Server } from '$lib/stores/servers';
+
 	const dispatch = createEventDispatcher();
-	
-	function selectServer(server: any) {
+
+	let showCreateModal = false;
+
+	// Server folders - can be populated from a store in production
+	interface ServerFolderData {
+		id: string;
+		name: string;
+		serverIds: string[];
+		color: string;
+		expanded: boolean;
+	}
+
+	// Example folders - in production this would come from a store
+	let folders: ServerFolderData[] = [];
+
+	// Mock unread data - in real app would come from store
+	const unreadServers: Record<string, boolean> = {};
+	const mentionCounts: Record<string, number> = {};
+
+	// Get servers in a folder
+	function getFolderServers(folder: ServerFolderData): Server[] {
+		return folder.serverIds
+			.map((id) => $servers.find((s) => s.id === id))
+			.filter((s): s is Server => s !== undefined);
+	}
+
+	// Get servers not in any folder
+	$: standaloneServers = $servers.filter(
+		(server) => !folders.some((folder) => folder.serverIds.includes(server.id))
+	);
+
+	function selectServer(server: Server | null) {
 		currentServer.set(server);
+		if (server) {
+			goto(`/channels/${server.id}/general`);
+		} else {
+			goto('/channels/@me');
+		}
 		dispatch('select', server);
 	}
-	
-	function createServer() {
-		dispatch('create');
+
+	function goToDMs() {
+		currentServer.set(null);
+		goto('/channels/@me');
+	}
+
+	function openCreateServer() {
+		showCreateModal = true;
+	}
+
+	function closeCreateServer() {
+		showCreateModal = false;
+	}
+
+	function toggleFolder(folderId: string) {
+		folders = folders.map((f) =>
+			f.id === folderId ? { ...f, expanded: !f.expanded } : f
+		);
 	}
 </script>
 
-<div class="server-list">
-	<!-- Home/DMs button -->
-	<button 
-		class="server-icon home"
-		class:active={$currentServer === null}
-		on:click={() => selectServer(null)}
-		title="Direct Messages"
-	>
-		<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-			<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-		</svg>
-	</button>
-	
-	<div class="separator"></div>
-	
-	<!-- Server list -->
-	{#each $servers as server (server.id)}
-		<button
-			class="server-icon"
-			class:active={$currentServer?.id === server.id}
-			on:click={() => selectServer(server)}
-			title={server.name}
-		>
-			{#if server.icon}
-				<img src={server.icon} alt={server.name} />
-			{:else}
-				<span class="server-initials">
-					{server.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-				</span>
-			{/if}
-		</button>
+<nav class="server-list" aria-label="Servers">
+	<!-- Home/DM button -->
+	<ServerIcon
+		isHome={true}
+		isSelected={$currentServer === null}
+		on:click={goToDMs}
+	/>
+
+	<!-- Separator -->
+	<div class="separator" role="separator"></div>
+
+	<!-- Server folders -->
+	{#each folders as folder (folder.id)}
+		{@const folderServers = getFolderServers(folder)}
+		<ServerFolder
+			name={folder.name}
+			servers={folderServers.map((s) => ({
+				...s,
+				hasUnread: unreadServers[s.id] || false,
+				mentionCount: mentionCounts[s.id] || 0
+			}))}
+			selectedServerId={$currentServer?.id || null}
+			expanded={folder.expanded}
+			color={folder.color}
+			on:click={(e) => {
+				if (e.detail?.server) {
+					selectServer(e.detail.server);
+				}
+			}}
+		/>
 	{/each}
-	
+
+	<!-- Standalone servers (not in folders) -->
+	{#each standaloneServers as server (server.id)}
+		<ServerIcon
+			{server}
+			isSelected={$currentServer?.id === server.id}
+			hasUnread={unreadServers[server.id] || false}
+			mentionCount={mentionCounts[server.id] || 0}
+			on:click={() => selectServer(server)}
+		/>
+	{/each}
+
 	<!-- Add server button -->
-	<button class="server-icon add" on:click={createServer} title="Add a Server">
-		<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-			<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-		</svg>
-	</button>
-</div>
+	<ServerIcon
+		isAdd={true}
+		on:click={openCreateServer}
+	/>
+
+	<!-- Explore servers button -->
+	<div class="server-icon-wrapper">
+		<button
+			class="explore-icon"
+			on:click={() => goto('/guild-discovery')}
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+				/>
+			</svg>
+		</button>
+		<div class="tooltip">
+			Explore Public Servers
+		</div>
+	</div>
+</nav>
+
+<CreateServerModal open={showCreateModal} on:close={closeCreateServer} />
 
 <style>
 	.server-list {
@@ -63,68 +149,99 @@
 		gap: 8px;
 		padding: 12px 0;
 		width: 72px;
-		background: var(--bg-tertiary);
+		height: 100%;
+		background-color: #1e1f22;
 		overflow-y: auto;
+		overflow-x: hidden;
+		flex-shrink: 0;
 	}
-	
-	.server-icon {
+
+	/* Hide scrollbar but keep functionality */
+	.server-list::-webkit-scrollbar {
+		width: 0;
+		height: 0;
+	}
+
+	.server-list {
+		scrollbar-width: none;
+	}
+
+	.separator {
+		width: 32px;
+		height: 2px;
+		background-color: #35363c;
+		border-radius: 1px;
+		flex-shrink: 0;
+		margin: 4px 0;
+	}
+
+	/* Explore button styles */
+	.server-icon-wrapper {
+		position: relative;
+		display: flex;
+		align-items: center;
+		width: 72px;
+		justify-content: center;
+	}
+
+	.explore-icon {
 		width: 48px;
 		height: 48px;
 		border-radius: 50%;
-		background: var(--bg-primary);
+		background-color: #313338;
 		border: none;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--text-secondary);
-		transition: all 0.15s ease;
-		overflow: hidden;
+		color: #23a559;
+		transition: border-radius 0.15s ease-out, background-color 0.15s ease-out;
 	}
-	
-	.server-icon:hover {
+
+	.explore-icon:hover {
 		border-radius: 16px;
-		background: var(--brand-primary);
+		background-color: #23a559;
 		color: white;
 	}
-	
-	.server-icon.active {
-		border-radius: 16px;
-		background: var(--brand-primary);
-		color: white;
+
+	.explore-icon .icon {
+		width: 20px;
+		height: 20px;
 	}
-	
-	.server-icon img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
+
+	/* Tooltip */
+	.tooltip {
+		position: absolute;
+		left: calc(100% - 4px);
+		margin-left: 12px;
+		padding: 8px 12px;
+		background-color: #111214;
+		color: #dbdee1;
+		font-size: 14px;
+		font-weight: 500;
+		border-radius: 4px;
+		white-space: nowrap;
+		pointer-events: none;
+		opacity: 0;
+		transform: scale(0.95);
+		transition: opacity 0.1s ease-out, transform 0.1s ease-out;
+		z-index: 1000;
+		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
 	}
-	
-	.server-initials {
-		font-size: 18px;
-		font-weight: 600;
-		text-transform: uppercase;
+
+	.tooltip::before {
+		content: '';
+		position: absolute;
+		left: -6px;
+		top: 50%;
+		transform: translateY(-50%);
+		border: 6px solid transparent;
+		border-right-color: #111214;
+		border-left: none;
 	}
-	
-	.server-icon.home {
-		background: var(--bg-secondary);
-	}
-	
-	.server-icon.add {
-		background: transparent;
-		border: 1px dashed var(--text-muted);
-	}
-	
-	.server-icon.add:hover {
-		border-color: var(--brand-primary);
-		background: transparent;
-		color: var(--brand-primary);
-	}
-	
-	.separator {
-		width: 32px;
-		height: 2px;
-		background: var(--bg-modifier-accent);
-		border-radius: 1px;
+
+	.server-icon-wrapper:hover .tooltip {
+		opacity: 1;
+		transform: scale(1);
 	}
 </style>
