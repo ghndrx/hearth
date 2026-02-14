@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"time"
 
@@ -280,8 +281,8 @@ func (s *WebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.UUID
 		return nil, ErrWebhookNotFound
 	}
 
-	// Verify token
-	if webhook.Token != token {
+	// Verify token using constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(webhook.Token), []byte(token)) != 1 {
 		return nil, ErrInvalidWebhookToken
 	}
 
