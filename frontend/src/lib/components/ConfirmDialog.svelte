@@ -3,87 +3,84 @@
 	import Modal from './Modal.svelte';
 
 	export let open = false;
-	export let title = '';
+	export let title = 'Are you sure?';
 	export let message = '';
-	export let confirmLabel = 'Confirm';
-	export let cancelLabel = 'Cancel';
-	export let confirmVariant: 'danger' | 'primary' | 'brand' = 'primary';
+	export let confirmText = 'Confirm';
+	export let cancelText = 'Cancel';
+	export let danger = false;
 	export let loading = false;
 
 	const dispatch = createEventDispatcher();
 
 	function handleConfirm() {
+		if (loading) return;
 		dispatch('confirm');
 	}
 
 	function handleCancel() {
-		dispatch('cancel');
+		if (loading) return;
 		open = false;
+		dispatch('cancel');
 	}
 
 	function handleClose() {
+		if (loading) return;
 		dispatch('cancel');
 	}
 </script>
 
 <Modal {open} {title} size="small" on:close={handleClose}>
-	<p class="message">{message}</p>
+	<div class="confirm-dialog">
+		{#if message}
+			<p class="message">{message}</p>
+		{/if}
+		<slot />
+	</div>
 
 	<svelte:fragment slot="footer">
 		<button class="btn secondary" on:click={handleCancel} disabled={loading}>
-			{cancelLabel}
+			{cancelText}
 		</button>
-		<button class="btn {confirmVariant}" on:click={handleConfirm} disabled={loading}>
-			{loading ? 'Loading...' : confirmLabel}
+		<button class="btn {danger ? 'danger' : 'primary'}" on:click={handleConfirm} disabled={loading}>
+			{loading ? 'Please wait...' : confirmText}
 		</button>
 	</svelte:fragment>
 </Modal>
 
 <style>
+	.confirm-dialog {
+		color: var(--text-secondary);
+	}
+
 	.message {
 		margin: 0;
 		font-size: 16px;
+		line-height: 1.375;
 		color: var(--text-secondary);
-		line-height: 1.5;
 	}
 
+	/* PRD Section 4.1 Button Styles */
 	.btn {
-		padding: 10px 24px;
-		border-radius: 4px;
+		padding: 8px 16px;
+		border-radius: 3px;
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
 		border: none;
-		transition: background-color 0.15s ease;
+		transition: background-color 0.1s ease;
 	}
 
+	/* Primary Button: background var(--blurple), color white */
 	.btn.primary {
-		background: var(--brand-primary);
+		background: #5865f2;
 		color: white;
 	}
 
 	.btn.primary:hover:not(:disabled) {
-		background: var(--brand-hover);
+		background: #4752c4;
 	}
 
-	.btn.brand {
-		background: var(--brand-primary);
-		color: white;
-	}
-
-	.btn.brand:hover:not(:disabled) {
-		background: var(--brand-hover);
-	}
-
-	.btn.danger {
-		background: var(--status-danger);
-		color: white;
-	}
-
-	.btn.danger:hover:not(:disabled) {
-		background: #d9383f;
-	}
-
+	/* Secondary Button: background transparent, color var(--text-normal) */
 	.btn.secondary {
 		background: transparent;
 		color: var(--text-primary);
@@ -91,6 +88,16 @@
 
 	.btn.secondary:hover:not(:disabled) {
 		text-decoration: underline;
+	}
+
+	/* Danger Button: background var(--red), color white */
+	.btn.danger {
+		background: #da373c;
+		color: white;
+	}
+
+	.btn.danger:hover:not(:disabled) {
+		background: #a12828;
 	}
 
 	.btn:disabled {

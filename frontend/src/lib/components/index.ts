@@ -22,3 +22,8 @@ export { default as UserPopout } from './UserPopout.svelte';
 export { default as SettingsLayout } from './SettingsLayout.svelte';
 export { default as UserSettings } from './UserSettings.svelte';
 export { default as ServerSettings } from './ServerSettings.svelte';
+
+// Modal components
+export { default as Modal } from './Modal.svelte';
+export { default as ConfirmDialog } from './ConfirmDialog.svelte';
+export { default as CreateServerModal } from './CreateServerModal.svelte';
