@@ -110,7 +110,7 @@ func TestUpdateStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			mockRepo := &MockRepo{}
+			mockRepo := &MockRepo{Err: tt.mockUpsertErr}
 			svc := NewPresenceService(mockRepo)
 			
 			// Action
@@ -145,10 +145,10 @@ func TestGetOnlineUsers(t *testing.T) {
 		{
 			name: "Happy Path: Returns list of online users",
 			setupMock: func(m *MockRepo) {
-				onlineUser1 := &Presence{UserID: "u1", Username: "User1", Status: StatusOnline, ServerID: &serverID, LastSeen: time.Now()}
-				onlineUser2 := &Presence{UserID: "u2", Username: "User2", Status: StatusOnline, ServerID: &serverID, LastSeen: time.Now()}
+				onlineUser1 := &Presence{UserID: "u1", Username: "User1", Status: StatusOnline, ServerID: serverID, LastSeen: time.Now()}
+				onlineUser2 := &Presence{UserID: "u2", Username: "User2", Status: StatusOnline, ServerID: serverID, LastSeen: time.Now()}
 				// Should not appear
-				offline := &Presence{UserID: "u3", Username: "User3", Status: StatusAway, ServerID: &serverID, LastSeen: time.Now()} 
+				offline := &Presence{UserID: "u3", Username: "User3", Status: StatusAway, ServerID: serverID, LastSeen: time.Now()} 
 				
 				m.Presences = append(m.Presences, onlineUser1, onlineUser2, offline)
 			},
@@ -161,7 +161,7 @@ func TestGetOnlineUsers(t *testing.T) {
 				// Mock repo implementation defined above filters by StatusOnline
 				// Here we rely on expectation that GetOnlineUsers logic in repo returns only Online
 				m.Presences = append(m.Presences, 
-					&Presence{UserID: "u1", Username: "User1", Status: StatusOnline, ServerID: &serverID, LastSeen: time.Now()},
+					&Presence{UserID: "u1", Username: "User1", Status: StatusOnline, ServerID: serverID, LastSeen: time.Now()},
 				)
 			},
 			expectedCount: 1,

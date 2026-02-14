@@ -1,149 +1,133 @@
 package services
 
 import (
+	"context"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// mockUserRepository implements userCredentialRepository for testing.
-type mockUserRepository struct {
-	findUserByIDFunc    func(id string) (*User, error)
-	checkEmailExistsFunc func(email string) (bool, error)
-	saveUserFunc        func(user *User) error
+// MockHeartRepository implements HeartRepository for testing purposes.
+type MockHeartRepository struct {
+	mock.Mock
 }
 
-func (m *mockUserRepository) FindUserByID(id string) (*User, error) {
-	if m.findUserByIDFunc != nil {
-		return m.findUserByIDFunc(id)
-	}
-	return nil, errors.New("not implemented")
+func (m *MockHeartRepository) Create(ctx context.Context, heart *Heart) error {
+	args := m.Called(ctx, heart)
+	return args.Error(0)
 }
 
-func (m *mockUserRepository) CheckEmailExists(email string) (bool, error) {
-	if m.checkEmailExistsFunc != nil {
-		return m.checkEmailExistsFunc(email)
+func (m *MockHeartRepository) GetByID(ctx context.Context, id uuid.UUID) (*Heart, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-	return false, nil
+	return args.Get(0).(*Heart), args.Error(1)
 }
 
-func (m *mockUserRepository) SaveUser(user *User) error {
-	if m.saveUserFunc != nil {
-		return m.saveUserFunc(user)
-	}
-	return nil
+func (m *MockHeartRepository) GetByTargetID(ctx context.Context, targetUserID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, targetUserID)
+	return args.Get(0).(int64), args.Error(1)
 }
 
-// TestGetUserByID_Success tests successful retrieval
-func TestGetUserByID_Success(t *testing.T) {
-	repo := &mockUserRepository{}
-	expectedUser := &User{ID: "U_1", Username: "Alice", Email: "alice@example.com"}
-	
-	repo.findUserByIDFunc = func(id string) (*User, error) {
-		if id != "U_1" {
-			t.Fatalf("Expected ID U_1, got %s", id)
-		}
-		return expectedUser, nil
+func (m *MockHeartRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, userID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func TestHeartService_CreateHeart(t *testing.T) {
+	ctx := context.Background()
+
+	authorID := uuid.New()
+	targetID := uuid.New()
+	now := time.Now()
+
+	tests := []struct {
+		name      string
+		userID    uuid.UUID
+		target    uuid.UUID
+		expectErr bool
+	}{
+		{
+			name:   "Success",
+			userID: authorID,
+			target: targetID,
+		},
+		{
+			name:      "Self heart rejected",
+			userID:    authorID,
+			target:    authorID,
+			expectErr: true,
+		},
 	}
 
-	service := NewUserService(repo)
-	user, err := service.GetUserByID("U_1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockHeartRepository)
+			service := NewHeartService(mockRepo)
 
-	if err != nil {
-		t.Fatalf("GetUserByID returned error: %v", err)
-	}
+			if tt.name == "Success" {
+				// Setup expectations
+				expectedHeart := &Heart{
+					ID:        uuid.New(),
+					AuthorID:  tt.userID,
+					TargetID:  tt.target,
+					Active:    true,
+					CreatedAt: now,
+				}
+				mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*services.Heart")).Return(nil).Run(func(args mock.Arguments) {
+					h := args.Get(1).(*Heart)
+					h.ID = expectedHeart.ID
+					h.CreatedAt = now
+				}).Once()
 
-	if user.ID != expectedUser.ID || user.Username != expectedUser.Username {
-		t.Errorf("Returned user mismatch. Got %+v, want %+v", user, expectedUser)
+				// Test execution
+				heart, err := service.CreateHeart(ctx, tt.userID, tt.target)
+
+				// Assertions
+				assert.NoError(t, err)
+				assert.Equal(t, tt.userID, heart.AuthorID)
+				assert.Equal(t, tt.target, heart.TargetID)
+				mockRepo.AssertExpectations(t)
+			} else if tt.name == "Self heart rejected" {
+				// Test execution
+				_, err := service.CreateHeart(ctx, tt.userID, tt.target)
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "cannot heart themselves")
+				// Ensure repo.Create was NOT called
+				mockRepo.AssertNotCalled(t, "Create", ctx, mock.Anything)
+			}
+		})
 	}
 }
 
-// TestGetUserByID_InvalidID tests error case for empty ID
-func TestGetUserByID_InvalidID(t *testing.T) {
-	repo := &mockUserRepository{}
-	service := NewUserService(repo)
+func TestHeartService_GetHeartSummary(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockHeartRepository)
+	service := NewHeartService(mockRepo)
 
-	_, err := service.GetUserByID("")
-	if err == nil {
-		t.Error("Expected error for empty ID, got nil")
-	}
-}
+	// Mock Data
+	targetUser := uuid.New()
+	fromUser := uuid.New()
+	metricsToSend := int64(42)
+	metricsToReceive := int64(1337)
 
-// TestCreateUser_Success tests happy path creation
-func TestCreateUser_Success(t *testing.T) {
-	mockedRepo := &mockUserRepository{}
-	
-	// Setup mock expectations
-	emailExists := false
-	mockedRepo.checkEmailExistsFunc = func(email string) (bool, error) {
-		return emailExists, nil
-	}
-	mockedRepo.saveUserFunc = func(user *User) error {
-		if user.ID == "" || user.Username == "" {
-			t.Error("SaveUser called with invalid user data")
-		}
-		return nil
-	}
+	// Setup Expectations
+	mockRepo.On("GetByUserID", ctx, fromUser).Return(metricsToSend, nil).Once()
+	mockRepo.On("GetByTargetID", ctx, targetUser).Return(metricsToReceive, nil).Once()
 
-	service := NewUserService(mockedRepo)
-	
-	username := "NewUser"
-	email := "new@example.com"
-
-	user, id, err := service.CreateUser(username, email)
-
-	if err != nil {
-		t.Fatalf("CreateUser returned error: %v", err)
-	}
-
-	expectedID := "U_" + username
+	// Test Execution
+	result, err := service.GetHeartSummary(ctx, targetUser, fromUser)
 
 	// Assertions
-	if id != expectedID {
-		t.Errorf("Expected ID %s, got %s", expectedID, id)
-	}
-	if user.ID != id {
-		t.Errorf("User.ID %s does not match ID %s", user.ID, id)
-	}
-	if user.Username != username {
-		t.Errorf("Username mismatch")
-	}
-}
+	assert.NoError(t, err)
+	assert.Equal(t, metricsToSend, result.LikeCount)
+	assert.Equal(t, int64(0), result.QuoteCount)
+	assert.Equal(t, int64(0), result.RepostCount)
 
-// TestCreateUser_EmailExists tests the validation logic for duplicate emails
-func TestCreateUser_EmailExists(t *testing.T) {
-	mockedRepo := &mockUserRepository{}
-
-	// Setup mock to return true for email exists
-	mockedRepo.checkEmailExistsFunc = func(email string) (bool, error) {
-		return true, nil
-	}
-
-	service := NewUserService(mockedRepo)
-
-	_, _, err := service.CreateUser("Bob", "bob@example.com")
-
-	if err == nil {
-		t.Error("Expected error for existing email, got nil")
-	}
-
-	if err.Error() != "email already registered" {
-		t.Errorf("Expected error message 'email already registered', got: %v", err)
-	}
-}
-
-// TestCreateUser_MissingFields tests validation logic for missing inputs
-func TestCreateUser_MissingFields(t *testing.T) {
-	repo := &mockUserRepository{}
-	service := NewUserService(repo)
-
-	// Test empty username
-	_, _, err := service.CreateUser("", "test@test.com")
-	if err == nil {
-		t.Error("Expected error for empty username, got nil")
-	}
-
-	// Test empty email
-	_, _, err = service.CreateUser("TestUser", "")
-	if err == nil {
-		t.Error("Expected error for empty email, got nil")
-	}
+	// Verify calls
+	mockRepo.AssertExpectations(t)
 }

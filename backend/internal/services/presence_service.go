@@ -66,11 +66,15 @@ func (s *PresenceService) UpdateStatus(ctx context.Context, userID, username, st
 		return errors.New("invalid status provided")
 	}
 
+	var sID string
+	if serverID != nil {
+		sID = *serverID
+	}
 	presence := &Presence{
 		UserID:    userID,
 		Username:  username,
 		Status:    status,
-		ServerID:  serverID,
+		ServerID:  sID,
 		Activity:  activity,
 		LastSeen:  time.Now(),
 	}

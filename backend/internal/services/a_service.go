@@ -1,89 +1,92 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/google/uuid"
 )
 
-// User represents a core entity in Hearth.
-type User struct {
-	ID       string
-	Username string
-	Email    string
+// Heart represents a user's "like" action on another user
+type Heart struct {
+	ID        uuid.UUID
+	AuthorID  uuid.UUID
+	TargetID  uuid.UUID
+	Active    bool
+	CreatedAt time.Time
 }
 
-// UserService defines the contract for user operations.
-// Using an interface allows us to swap implementations (e.g., for mocking).
-type UserService interface {
-	GetUserByID(id string) (*User, error)
-	CreateUser(username, email string) (*User, error)
+// PublicMetrics contains public engagement metrics
+type PublicMetrics struct {
+	LikeCount   int64
+	RepostCount int64
+	QuoteCount  int64
 }
 
-// userCredentialRepository is a simplified repository abstraction.
-// In a real app, this would interact with a DB or external API.
-type userCredentialRepository interface {
-	FindUserByID(id string) (*User, error)
-	CheckEmailExists(email string) (bool, error)
-	SaveUser(user *User) error
+// HeartRepository defines the interface for heart operations.
+// It abstracts the underlying database implementation (e.g., PostgreSQL).
+type HeartRepository interface {
+	Create(ctx context.Context, heart *Heart) error
+	GetByID(ctx context.Context, id uuid.UUID) (*Heart, error)
+	GetByTargetID(ctx context.Context, targetUserID uuid.UUID) (int64, error)
+	GetByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 
-// UserServiceImpl is the concrete implementation of the service.
-type UserServiceImpl struct {
-	repo userCredentialRepository
+// HeartService handles logic related to hearts.
+type HeartService struct {
+	repo HeartRepository
 }
 
-// NewUserService creates a new UserService instance.
-func NewUserService(repo userCredentialRepository) UserService {
-	return &UserServiceImpl{repo: repo}
+// NewHeartService initializes the service with the required repository.
+func NewHeartService(repo HeartRepository) *HeartService {
+	return &HeartService{repo: repo}
 }
 
-// GetUserByID retrieves a user by their unique identifier.
-func (s *UserServiceImpl) GetUserByID(id string) (*User, error) {
-	if id == "" {
-		return nil, errors.New("invalid user id")
+// CreateHeart creates a new heart for a user towards another user.
+// Returns an error if the target user is the same as the author.
+func (s *HeartService) CreateHeart(ctx context.Context, authorID, targetUserID uuid.UUID) (*Heart, error) {
+	if authorID == targetUserID {
+		return nil, errors.New("author cannot heart themselves")
 	}
 
-	user, err := s.repo.FindUserByID(id)
+	// NOTE: In a real application, you might want to check against a banned list
+	// or user status here before proceeding.
+
+	heart := &Heart{
+		ID:        uuid.New(),
+		AuthorID:  authorID,
+		TargetID:  targetUserID,
+		Active:    true,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.repo.Create(ctx, heart); err != nil {
+		return nil, fmt.Errorf("failed to create heart: %w", err)
+	}
+
+	return heart, nil
+}
+
+// GetHeartSummary fetches a summary of hearts: counts for the user who requested it
+// and the total number received.
+func (s *HeartService) GetHeartSummary(ctx context.Context, userID, requestFromUserID uuid.UUID) (PublicMetrics, error) {
+	// 1. Count hearts sent by the requesting user
+	sentCount, err := s.repo.GetByUserID(ctx, requestFromUserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve user: %w", err)
+		return PublicMetrics{}, fmt.Errorf("failed to get sent hearts count: %w", err)
 	}
 
-	return user, nil
-}
-
-// CreateUser creates a new user and persists them via the repository.
-func (s *UserServiceImpl) CreateUser(username, email string) (*User, allowedID, error) {
-	// 1. Validate inputs
-	if username == "" || email == "" {
-		return nil, "", errors.New("username and email are required")
-	}
-
-	// 2. Check if email already exists (Business Logic)
-	emailExists, err := s.repo.CheckEmailExists(email)
+	// 2. Count hearts received by the target user
+	_, err = s.repo.GetByTargetID(ctx, userID)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to check email existence: %w", err)
+		return PublicMetrics{}, fmt.Errorf("failed to get received hearts count: %w", err)
 	}
 
-	if emailExists {
-		return nil, "", errors.New("email already registered")
-	}
-
-	// 3. ID is pseudo-generated
-	newID := fmt.Sprintf("U_%s", username)
-
-	newUser := &User{
-		ID:       newID,
-		Username: username,
-		Email:    email,
-	}
-
-	// 4. Persist
-	if err := s.repo.SaveUser(newUser); err != nil {
-		return nil, "", fmt.Errorf("failed to save user to database: %w", err)
-	}
-
-	return newUser, newID, nil
+	return PublicMetrics{
+		LikeCount:   sentCount,
+		RepostCount: 0, // Reposts are separate from hearts
+		QuoteCount:  0,
+	}, nil
 }
-
-// allowedID is a helper type (naked return for internal use, not exposed in interface)
-type allowedID string
