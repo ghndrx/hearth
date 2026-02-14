@@ -1,191 +1,193 @@
-# 🔥 Hearth
+# Hearth
 
-**A self-hosted Discord alternative. Your community, your server, your rules.**
+A self-hosted, open-source real-time communication platform. Discord-compatible API with full data sovereignty.
 
-Hearth is an open-source, self-hosted real-time communication platform that gives you complete control over your community's data and infrastructure. Built for privacy-conscious users, homelab enthusiasts, and organizations that need to own their communication stack.
+## Overview
 
----
+Hearth is a chat platform designed for teams, communities, and organizations that need to own their communication infrastructure. It provides familiar Discord-like functionality while keeping all data on your servers.
 
-## ✨ Features
+**Key differentiators:**
+- Self-hosted with no external dependencies
+- End-to-end encryption for DMs (optional for channels)
+- Single binary deployment or Docker/Kubernetes
+- PostgreSQL or SQLite backend
 
-### 🔐 Privacy First
-- **DMs always encrypted** — Server never sees your private messages
-- **Channels: your choice** — Enable E2EE per-channel, or keep history searchable
-- **Voice/video DMs encrypted** — SRTP with E2EE key exchange
-- **Zero knowledge DMs** — We can't read your private conversations. Period.
+## Features
 
-### Core Communication
-- **Text Channels** — Real-time messaging with Markdown, embeds, and file sharing
-- **Voice Channels** — Crystal-clear voice chat with WebRTC
-- **Video Calls** — Face-to-face communication, screen sharing
-- **Direct Messages** — Private 1:1 and group conversations (up to 10)
-- **Threads** — Focused discussions without cluttering main channels
-- **Forum Channels** — Threaded discussions with tags
-
-### Rich Messaging
-- **Markdown** — Bold, italic, code blocks, spoilers, quotes, lists
-- **File Sharing** — Images, videos, documents up to 100MB
-- **Link Embeds** — Auto-preview for URLs, YouTube, Twitter
-- **Emoji & Reactions** — Unicode + custom server emoji
-- **GIF Picker** — Tenor/Giphy integration
-- **Typing Indicators** — See who's typing in real-time
-- **Message Search** — Full-text with filters (from:, in:, has:, before:)
+### Communication
+- Text channels with Markdown, file sharing, and embeds
+- Voice channels (WebRTC)
+- Direct messages and group DMs
+- Threads and forum channels
+- Typing indicators and presence
 
 ### Server Management
-- **Servers** — Create isolated communities with custom branding
-- **Categories** — Organize channels into logical groups
-- **Roles & Permissions** — 30+ granular permissions with hierarchy
-- **Channel Overrides** — Per-channel permission tweaks
-- **Invites** — Time-limited, usage-limited, or permanent
-- **Server Folders** — Organize your server list
+- Servers with categories and channels
+- Role-based permissions (30+ granular permissions)
+- Invite system with expiration and usage limits
+- Audit logging
+- Auto-moderation
 
-### Voice & Video
-- **Voice Channels** — Low-latency WebRTC audio
-- **Video Chat** — Camera support with grid layout
-- **Screen Sharing** — Full screen or window
-- **Push-to-Talk** — Or voice activity detection
-- **Noise Suppression** — AI-based background noise removal
-- **Voice Moderation** — Server mute, deafen, move, disconnect
+### User Features
+- Profiles with avatars and status
+- Friend system
+- Notification controls
+- Theme support
 
-### Moderation
-- **Kick/Ban/Timeout** — Full member management
-- **Audit Log** — Track all moderation actions
-- **Auto-Moderation** — Spam, link, and word filters
-- **Verification Levels** — Email, account age, phone
-- **Bulk Message Delete** — Purge up to 100 messages
+### Security
+- End-to-end encryption for DMs
+- JWT authentication with refresh tokens
+- Rate limiting
+- CORS and CSRF protection
 
-### User Experience
-- **User Profiles** — Avatar, banner, bio, status
-- **Presence** — Online, idle, DND, invisible + custom status
-- **Friends System** — Friend requests, mutual servers
-- **User Notes** — Private notes on any user
-- **Notifications** — Per-channel/server, desktop, mobile push
-- **Dark/Light Theme** — With accessibility options
+## Architecture
 
-### Extensibility
-- **Webhooks** — Inbound integrations for external services
-- **Bot API** — Build custom bots with full API access
-- **Slash Commands** — Registered bot commands with autocomplete
-- **REST + WebSocket API** — Full programmatic access
-
-### Privacy & Security
-- **E2EE by Default** — All DMs, group chats, and voice encrypted end-to-end
-- **Zero Knowledge** — Server never sees plaintext content
-- **Data Sovereignty** — All data stays on your infrastructure
-- **No Telemetry** — Zero tracking, zero analytics
-
-### Self-Hosting
-- **SQLite or Postgres** — Choose your database backend
-- **S3-Compatible Storage** — AWS, MinIO, B2, R2, Wasabi
-- **Easy Deployment** — Docker, Helm, systemd, or binary
-
----
-
-## 🏗️ Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Backend** | Go (Fiber/Echo) |
-| **Frontend** | SvelteKit + TypeScript |
-| **Database** | SQLite (dev) / PostgreSQL (prod) |
-| **Real-time** | WebSocket (gorilla/websocket) |
-| **Voice/Video** | WebRTC + Pion |
-| **Storage** | Local FS / S3-compatible |
-| **Auth** | JWT + OAuth2 (optional OIDC) |
-| **Cache** | Redis (optional) |
-| **Search** | Bleve (embedded) / Meilisearch |
-
----
-
-## 🚀 Quick Start
-
-### One-Line Install
-```bash
-curl -sSL https://get.hearth.chat | bash
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Frontend  │────▶│   Backend   │────▶│  Database   │
+│  SvelteKit  │◀────│     Go      │◀────│ PostgreSQL  │
+└─────────────┘     └──────┬──────┘     └─────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │  WebSocket  │
+                    │   Gateway   │
+                    └─────────────┘
 ```
 
-### With Custom Domain
+| Component | Technology |
+|-----------|------------|
+| Backend | Go + Chi router |
+| Frontend | SvelteKit + TypeScript + Tailwind |
+| Database | PostgreSQL (SQLite for development) |
+| Real-time | WebSocket |
+| Storage | Local filesystem or S3-compatible |
+| Cache | Redis (optional) |
 
-Pick your reverse proxy:
+## Quick Start
+
+### Docker Compose (Recommended)
 
 ```bash
-# Caddy (auto-SSL, simplest)
-curl -sSL https://get.hearth.chat | bash -s -- --domain hearth.gregh.dev
-
-# Nginx + Let's Encrypt
-curl -sSL https://get.hearth.chat/nginx | bash -s -- --domain hearth.gregh.dev --email you@example.com
-
-# Traefik + Let's Encrypt (with dashboard)
-curl -sSL https://get.hearth.chat/traefik | bash -s -- --domain hearth.gregh.dev --email you@example.com
-
-# Cloudflare Tunnel (zero exposed ports, DDoS protection)
-curl -sSL https://get.hearth.chat/cloudflare | bash -s -- --domain hearth.gregh.dev --tunnel-token <TOKEN>
-```
-
-### With Enterprise SSO (FusionAuth)
-```bash
-curl -sSL https://get.hearth.chat | bash -s -- --with-fusionauth
-```
-
-### Manual Docker Compose
-```bash
-mkdir hearth && cd hearth
-curl -O https://raw.githubusercontent.com/ghndrx/hearth/main/deploy/docker-compose/docker-compose.yml
-curl -O https://raw.githubusercontent.com/ghndrx/hearth/main/deploy/docker-compose/.env.example
+git clone https://github.com/ghndrx/hearth.git
+cd hearth
 cp .env.example .env
-echo "SECRET_KEY=$(openssl rand -base64 32)" >> .env
-docker-compose up -d
+docker compose up -d
 ```
 
-### Helm (Kubernetes)
+Access at `http://localhost:3000`
+
+### Manual Installation
+
+**Prerequisites:**
+- Go 1.21+
+- Node.js 20+
+- PostgreSQL 15+ (or SQLite)
+
 ```bash
-helm repo add hearth https://ghndrx.github.io/hearth
-helm install hearth hearth/hearth --set ingress.enabled=true
+# Clone
+git clone https://github.com/ghndrx/hearth.git
+cd hearth
+
+# Backend
+cd backend
+go build -o hearth ./cmd/hearth
+./hearth
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-Visit `http://localhost:8080` and create your first server.
+## Configuration
 
----
+Environment variables:
 
-## 📚 Documentation
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `sqlite://hearth.db` |
+| `JWT_SECRET` | Secret for JWT signing | (required) |
+| `REDIS_URL` | Redis connection string | (optional) |
+| `S3_BUCKET` | S3 bucket for file storage | (optional) |
+| `PORT` | Backend port | `8080` |
 
-| Document | Description |
-|----------|-------------|
-| [Features](docs/FEATURES.md) | Complete feature specification (200+ features) |
-| [PRD](docs/PRD.md) | Product requirements and user stories |
-| [Architecture](docs/ARCHITECTURE.md) | System design, WebSocket, WebRTC |
-| [Data Model](docs/DATA_MODEL.md) | Database schema and relationships |
-| [Deployment](docs/DEPLOYMENT.md) | Docker, Helm, systemd installation |
-| [Self-Hosting](docs/SELF_HOSTING.md) | Configuration and maintenance |
-| [Security](docs/SECURITY.md) | Auth, encryption, attack mitigation |
-| [E2EE](docs/E2EE.md) | End-to-end encryption design |
-| [Roadmap](docs/ROADMAP.md) | Development phases and timeline |
-| [Contributing](docs/CONTRIBUTING.md) | How to contribute |
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full configuration reference.
 
----
+## Deployment
 
-## 🗺️ Roadmap
+### Docker
 
-| Phase | Status | Features |
-|-------|--------|----------|
-| **MVP** | 🔨 In Progress | Auth, servers, text channels, basic roles |
-| **v0.2** | 📋 Planned | Voice channels, DMs, file uploads |
-| **v0.3** | 📋 Planned | Video, screen share, threads |
-| **v1.0** | 📋 Planned | Bots, webhooks, full moderation |
-| **v2.0** | 💭 Future | Federation, mobile apps, E2EE |
+```bash
+docker pull ghcr.io/ghndrx/hearth:latest
+docker run -d -p 8080:8080 -e DATABASE_URL=... ghcr.io/ghndrx/hearth
+```
 
----
+### Kubernetes
 
-## 🤝 Contributing
+```bash
+helm repo add hearth https://charts.hearth.chat
+helm install hearth hearth/hearth -f values.yaml
+```
 
-Contributions welcome! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment guides.
 
----
+## API
 
-## 📄 License
+Hearth exposes a REST API and WebSocket gateway.
 
-MIT License. See [LICENSE](LICENSE) for details.
+- REST API: `GET/POST/PUT/DELETE /api/v1/*`
+- WebSocket: `ws://host/api/gateway`
 
----
+API documentation: [docs/API.md](docs/API.md)
 
-**Built with 🔥 for the self-hosted community.**
+## Development
+
+```bash
+# Run tests
+cd backend && go test ./...
+cd frontend && npm test
+
+# Lint
+cd backend && golangci-lint run
+cd frontend && npm run lint
+
+# Build
+docker compose -f docker-compose.dev.yml up
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+
+## Project Status
+
+Hearth is in active development. Current version: **v0.1.0**
+
+### Implemented
+- User authentication
+- Servers, channels, messages
+- Real-time WebSocket gateway
+- Roles and permissions
+- Invites
+- Basic moderation
+
+### Roadmap
+- Voice channels (WebRTC)
+- Video calls
+- File sharing
+- Search
+- Mobile apps
+- Desktop app
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+## Related Repositories
+
+- [hearth-desktop](https://github.com/ghndrx/hearth-desktop) - Tauri desktop client
+- [hearth-mobile](https://github.com/ghndrx/hearth-mobile) - React Native mobile app
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
+
+## Contributing
+
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
