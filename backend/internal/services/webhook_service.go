@@ -85,7 +85,7 @@ func (s *WebhookService) CreateWebhook(ctx context.Context, req *CreateWebhookRe
 	webhook := &models.Webhook{
 		ID:        uuid.New(),
 		Type:      models.WebhookTypeIncoming,
-		ServerID:  &req.ServerID,
+		ServerID:  channel.ServerID, // Use channel's ServerID (nil for DM channels)
 		ChannelID: req.ChannelID,
 		CreatorID: &req.CreatorID,
 		Name:      req.Name,

@@ -41,6 +41,14 @@ func (m *MockMemberSidebarRepository) GetServerRoles(ctx context.Context, server
 	return args.Get(0).([]*models.Role), args.Error(1)
 }
 
+func (m *MockMemberSidebarRepository) GetMembersPresence(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*models.Presence, error) {
+	args := m.Called(ctx, userIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[uuid.UUID]*models.Presence), args.Error(1)
+}
+
 func TestGetServerSidebar(t *testing.T) {
 	ctx := context.Background()
 	serverID := uuid.New()
@@ -56,7 +64,9 @@ func TestGetServerSidebar(t *testing.T) {
 		{UserID: userID, ServerID: serverID, Roles: []uuid.UUID{adminRoleID}},
 	}
 
-	presence := &models.Presence{UserID: userID, Status: models.StatusOnline, UpdatedAt: time.Now()}
+	presences := map[uuid.UUID]*models.Presence{
+		userID: {UserID: userID, Status: models.StatusOnline, UpdatedAt: time.Now()},
+	}
 
 	t.Run("Success - Groups members correctly", func(t *testing.T) {
 		mockRepo := new(MockMemberSidebarRepository)
@@ -65,7 +75,7 @@ func TestGetServerSidebar(t *testing.T) {
 		// Setup Expectations
 		mockRepo.On("GetServerRoles", ctx, serverID).Return(roles, nil)
 		mockRepo.On("GetMembersByServer", ctx, serverID).Return(members, nil)
-		mockRepo.On("GetMemberPresence", ctx, userID).Return(presence, nil)
+		mockRepo.On("GetMembersPresence", ctx, []uuid.UUID{userID}).Return(presences, nil)
 
 		// Execute
 		result, err := service.GetServerSidebar(ctx, serverID)
@@ -91,7 +101,7 @@ func TestGetServerSidebar(t *testing.T) {
 		// Setup Expectations: Presence returns error
 		mockRepo.On("GetServerRoles", ctx, serverID).Return(roles, nil)
 		mockRepo.On("GetMembersByServer", ctx, serverID).Return(members, nil)
-		mockRepo.On("GetMemberPresence", ctx, userID).Return(nil, errors.New("db error"))
+		mockRepo.On("GetMembersPresence", ctx, []uuid.UUID{userID}).Return(nil, errors.New("db error"))
 
 		// Execute
 		result, err := service.GetServerSidebar(ctx, serverID)

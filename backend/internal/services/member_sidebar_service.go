@@ -21,6 +21,8 @@ type MemberSidebarRepository interface {
 	GetMembersByServer(ctx context.Context, serverID uuid.UUID) ([]*models.Member, error)
 	// GetMemberPresence retrieves the current status of a user (e.g., Online, Idle).
 	GetMemberPresence(ctx context.Context, userID uuid.UUID) (*models.Presence, error)
+	// GetMembersPresence retrieves presence for multiple users in a single query.
+	GetMembersPresence(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*models.Presence, error)
 	// GetServerRoles fetches role definitions to help with sorting/grouping.
 	GetServerRoles(ctx context.Context, serverID uuid.UUID) ([]*models.Role, error)
 }
@@ -79,13 +81,23 @@ func (s *MemberSidebarService) GetServerSidebar(ctx context.Context, serverID uu
 	// Prepare map for grouping: Role Name -> Members
 	groupsMap := make(map[string][]*MemberView)
 
+	// Fetch all presences in a single batch query (avoid N+1 problem)
+	userIDs := make([]uuid.UUID, len(members))
+	for i, m := range members {
+		userIDs[i] = m.UserID
+	}
+
+	presences, err := s.repo.GetMembersPresence(ctx, userIDs)
+	if err != nil {
+		// Log error but continue with empty presences
+		presences = make(map[uuid.UUID]*models.Presence)
+	}
+
 	// Iterate over members to attach presence and group them
 	for _, m := range members {
-		// Fetch Presence (Task F2 Requirement: "show presence dots")
-		presence, err := s.repo.GetMemberPresence(ctx, m.UserID)
-		if err != nil {
-			// Log error but don't fail entire request if one presence is missing
-			// Default to offline/unknown
+		// Get presence from batch results, default to offline if not found
+		presence, ok := presences[m.UserID]
+		if !ok {
 			presence = &models.Presence{Status: models.StatusOffline}
 		}
 

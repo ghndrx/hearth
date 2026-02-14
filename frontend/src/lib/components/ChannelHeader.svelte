@@ -16,6 +16,7 @@
 		openInbox: void;
 		openHelp: void;
 		openThreads: void;
+		openNotificationSettings: void;
 	}>();
 
 	// Channel type icons
@@ -52,6 +53,10 @@
 
 	function handleOpenThreads() {
 		dispatch('openThreads');
+	}
+
+	function handleOpenNotificationSettings() {
+		dispatch('openNotificationSettings');
 	}
 </script>
 
@@ -92,6 +97,7 @@
 		<Tooltip text="Notification Settings">
 			<button
 				class="header-action-btn"
+				on:click={handleOpenNotificationSettings}
 				aria-label="Notification Settings"
 			>
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">

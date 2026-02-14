@@ -150,15 +150,25 @@ function createAuthStore() {
 				throw new Error('No refresh token');
 			}
 			
-			const { access_token, refresh_token } = await api.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
-				refresh_token: refreshToken
-			});
-			
-			localStorage.setItem('hearth_token', access_token);
-			localStorage.setItem('hearth_refresh_token', refresh_token);
-			setAuthToken(access_token);
-			
-			update(s => ({ ...s, token: access_token }));
+			try {
+				const { access_token, refresh_token } = await api.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
+					refresh_token: refreshToken
+				});
+				
+				localStorage.setItem('hearth_token', access_token);
+				localStorage.setItem('hearth_refresh_token', refresh_token);
+				setAuthToken(access_token);
+				
+				update(s => ({ ...s, token: access_token }));
+			} catch (error) {
+				// Token refresh failed - clear auth and redirect to login
+				localStorage.removeItem('hearth_token');
+				localStorage.removeItem('hearth_refresh_token');
+				clearAuthToken();
+				set({ ...initialState, loading: false, initialized: true });
+				goto('/login');
+				throw error;
+			}
 		},
 		
 		async updateProfile(updates: Partial<User>) {
