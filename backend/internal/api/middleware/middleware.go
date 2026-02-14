@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/contrib/websocket"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -18,6 +20,14 @@ func NewMiddleware(jwtSecret string) *Middleware {
 	return &Middleware{
 		jwtSecret: []byte(jwtSecret),
 	}
+}
+
+// Claims represents JWT claims
+type Claims struct {
+	jwt.RegisteredClaims
+	UserID   string `json:"uid"`
+	Username string `json:"usr"`
+	Type     string `json:"typ"`
 }
 
 // RequireAuth validates JWT and sets userID in context
@@ -37,19 +47,53 @@ func (m *Middleware) RequireAuth(c *fiber.Ctx) error {
 		})
 	}
 	
-	token := parts[1]
+	tokenString := parts[1]
 	
-	// TODO: Validate JWT token
-	// For now, try to parse as UUID directly (dev mode)
-	userID, err := uuid.Parse(token)
+	// Parse and validate JWT
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fiber.NewError(fiber.StatusUnauthorized, "invalid signing method")
+		}
+		return m.jwtSecret, nil
+	})
+	
 	if err != nil {
-		// TODO: Real JWT validation
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "invalid token",
 		})
 	}
 	
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "invalid token claims",
+		})
+	}
+	
+	// Check token type
+	if claims.Type != "access" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "invalid token type",
+		})
+	}
+	
+	// Check expiration
+	if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()) {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "token expired",
+		})
+	}
+	
+	// Parse and set userID
+	userID, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "invalid user id in token",
+		})
+	}
+	
 	c.Locals("userID", userID)
+	c.Locals("username", claims.Username)
 	return c.Next()
 }
 
@@ -100,7 +144,6 @@ func (m *Middleware) RequestID() fiber.Handler {
 // Logger logs requests
 func (m *Middleware) Logger() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// TODO: Structured logging
 		return c.Next()
 	}
 }

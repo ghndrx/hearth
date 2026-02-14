@@ -4,10 +4,36 @@ import (
 	"io"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
+const testSecret = "test-secret"
+
+// generateTestToken creates a valid JWT for testing
+func generateTestToken(userID uuid.UUID, tokenType string, expired bool) string {
+	expiresAt := time.Now().Add(time.Hour)
+	if expired {
+		expiresAt = time.Now().Add(-time.Hour)
+	}
+
+	claims := &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+		UserID:   userID.String(),
+		Username: "testuser",
+		Type:     tokenType,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, _ := token.SignedString([]byte(testSecret))
+	return tokenString
+}
 
 func TestNewMiddleware(t *testing.T) {
 	secret := "test-secret-key"
@@ -22,7 +48,11 @@ func TestNewMiddleware(t *testing.T) {
 }
 
 func TestRequireAuth(t *testing.T) {
-	m := NewMiddleware("test-secret")
+	m := NewMiddleware(testSecret)
+	validUserID := uuid.New()
+	validToken := generateTestToken(validUserID, "access", false)
+	expiredToken := generateTestToken(validUserID, "access", true)
+	refreshToken := generateTestToken(validUserID, "refresh", false)
 
 	tests := []struct {
 		name           string
@@ -60,15 +90,29 @@ func TestRequireAuth(t *testing.T) {
 			shouldSetUser:  false,
 		},
 		{
-			name:           "invalid token - not a UUID",
-			authHeader:     "Bearer invalid-not-uuid",
+			name:           "invalid token - malformed JWT",
+			authHeader:     "Bearer invalid-not-jwt",
 			expectedStatus: fiber.StatusUnauthorized,
 			expectedError:  "invalid token",
 			shouldSetUser:  false,
 		},
 		{
-			name:           "valid UUID token",
-			authHeader:     "Bearer " + uuid.New().String(),
+			name:           "invalid token - expired",
+			authHeader:     "Bearer " + expiredToken,
+			expectedStatus: fiber.StatusUnauthorized,
+			expectedError:  "token expired",
+			shouldSetUser:  false,
+		},
+		{
+			name:           "invalid token - wrong type (refresh instead of access)",
+			authHeader:     "Bearer " + refreshToken,
+			expectedStatus: fiber.StatusUnauthorized,
+			expectedError:  "invalid token type",
+			shouldSetUser:  false,
+		},
+		{
+			name:           "valid JWT access token",
+			authHeader:     "Bearer " + validToken,
 			expectedStatus: fiber.StatusOK,
 			expectedError:  "",
 			shouldSetUser:  true,
@@ -393,8 +437,9 @@ func TestWebSocketUpgrade(t *testing.T) {
 
 // Test middleware chaining
 func TestMiddlewareChaining(t *testing.T) {
-	m := NewMiddleware("test-secret")
+	m := NewMiddleware(testSecret)
 	validUserID := uuid.New()
+	validToken := generateTestToken(validUserID, "access", false)
 
 	app := fiber.New()
 	app.Use(m.Recover())
@@ -447,7 +492,7 @@ func TestMiddlewareChaining(t *testing.T) {
 
 	t.Run("protected route with valid auth", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/protected", nil)
-		req.Header.Set("Authorization", "Bearer "+validUserID.String())
+		req.Header.Set("Authorization", "Bearer "+validToken)
 
 		resp, err := app.Test(req)
 		if err != nil {

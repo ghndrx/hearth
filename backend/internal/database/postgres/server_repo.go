@@ -76,12 +76,15 @@ func (r *ServerRepository) GetMembers(ctx context.Context, serverID uuid.UUID, l
 
 func (r *ServerRepository) GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error) {
 	var member models.Member
-	query := `SELECT * FROM members WHERE server_id = $1 AND user_id = $2`
+	query := `SELECT server_id, user_id, nickname, joined_at, premium_since, deaf, mute, pending, temporary FROM members WHERE server_id = $1 AND user_id = $2`
 	err := r.db.GetContext(ctx, &member, query, serverID, userID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return &member, err
+	if err != nil {
+		return nil, err
+	}
+	return &member, nil
 }
 
 func (r *ServerRepository) AddMember(ctx context.Context, member *models.Member) error {

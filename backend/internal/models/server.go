@@ -74,14 +74,12 @@ type Member struct {
 	UserID       uuid.UUID  `json:"user_id" db:"user_id"`
 	ServerID     uuid.UUID  `json:"server_id" db:"server_id"`
 	Nickname     *string    `json:"nickname,omitempty" db:"nickname"`
-	AvatarURL    *string    `json:"avatar_url,omitempty" db:"avatar_url"`
 	JoinedAt     time.Time  `json:"joined_at" db:"joined_at"`
 	PremiumSince *time.Time `json:"premium_since,omitempty" db:"premium_since"`
 	Deaf         bool       `json:"deaf" db:"deaf"`
 	Mute         bool       `json:"mute" db:"mute"`
 	Pending      bool       `json:"pending" db:"pending"`
-	TimeoutUntil *time.Time `json:"timeout_until,omitempty" db:"timeout_until"`
-	Flags        int        `json:"flags" db:"flags"`
+	Temporary    bool       `json:"temporary" db:"temporary"`
 
 	// Populated from joins
 	User  *PublicUser `json:"user,omitempty"`
