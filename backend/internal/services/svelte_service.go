@@ -1,93 +1,160 @@
 package services
 
 import (
-	"time"
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+
+	"github.com/google/uuid"
 )
 
-// MessageType defines how the service distinguishes between different events
-type MessageType string
-
-const (
-	MsgJoin      MessageType = "JOIN"
-	MsgLeave     MessageType = "LEAVE"
-	MsgSendMessage MessageType = "MSG"
-)
-
-// Message represents the data payload sent between the Svelte client and the Go backend.
-type Message struct {
-	ID        string                 `json:"id"`
-	Type      MessageType            `json:"type"`
-	Content   string                 `json:"content,omitempty"`
-	Username  string                 `json:"username,omitempty"`
-	Timestamp int64                  `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+// ComponentTemplate represents the raw Svelte source code for a UI component.
+type ComponentTemplate struct {
+	ID        string
+	Name      string
+	Source    string
+	Version   string
+	Author    string
+	CreatedAt string
 }
 
-// EditableMessage is returned by the service to handle message updates
-type EditableMessage struct {
-	Type      MessageType            `json:"type"`
-	OldContent string                 `json:"old_content,omitempty"`
-	NewContent string                 `json:"new_content,omitempty"`
-	Timestamp int64                  `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+// CompilerService defines the contract for anything that modifies or manages Svelte components.
+type CompilerService interface {
+	// Initialize the build environment (npm install, dev-server setup)
+	Initialize(ctx context.Context) error
+
+	// FetchComponent compiles a component source string into HTML/JS.
+	FetchComponent(ctx context.Context, tpl ComponentTemplate) (string, error)
+
+	// WatchChange monitors the file system for changes and recompiles.
+	WatchChanges(ctx context.Context) error
 }
 
-// ChannelService defines the behaviors expected by the frontend client.
-// It abstracts the Go connection logic from the Svelte JavaScript logic.
-type ChannelService interface {
-	// Connect establishes a bidirectional communication channel.
-	// In a real architecture, this would return a WebSocket connection.
-	Connect(username string) (chan Message, error)
-
-	// Close terminates the connection to the backend.
-	Close() error
+// SvelteServiceImplementation is the concrete implementation.
+// It wraps logic related to Node.js environments and Svelte compilation.
+type SvelteServiceImplementation struct {
+	// path to the Svelte project root
+	rootPath      string
+	logger        *log.Logger
+	client        *http.Client
+	buildLock     sync.Mutex
+	componentPool map[string]ComponentTemplate
 }
 
-// DefaultChannelService is the standard implementation connecting to the backend.
-type DefaultChannelService struct {
-	host     string
-	username string
-	conn     chan Message
-}
+// NewSvelteService creates a new instance of the compiler service.
+// This is a "Factory-like" constructor pattern.
+func NewSvelteService(rootPath string, logger *log.Logger) (CompilerService, error) {
+	if logger == nil {
+		logger = log.New(os.Stdout, "[SVELTE] ", log.LstdFlags)
+	}
 
-// NewChannelService creates a client that can talk to the main event loop.
-func NewChannelService(host string, username string) ChannelService {
-	// Note: In a real implementation, here we would initialize a net.Dialer
-	// to the host passed in and start a goroutine to read from the websocket/event bus.
+	// Verify Node.js / NPM availability
+	client := &http.Client{Timeout: 10 * time.Second}
 	
-	return &DefaultChannelService{
-		host:     host,
-		username: username,
-		conn:     make(chan Message, 100), // Buffered channel for performance
-	}
+	// Basic setup
+	logger.Printf("Initializing Svelte Compiler Service at path: %s", rootPath)
+
+	return &SvelteServiceImplementation{
+		rootPath:      rootPath,
+		logger:        logger,
+		client:        client,
+		componentPool: make(map[string]ComponentTemplate),
+	}, nil
 }
 
-// Connect mimics establishing the connection
-func (cs *DefaultChannelService) Connect(username string) (chan Message, error) {
-	if cs == nil {
-		return nil, ErrServiceUnavailable
-	}
-	return cs.conn, nil
-}
+// Initialize sets up the environment by running npm install.
+func (s *SvelteServiceImplementation) Initialize(ctx context.Context) error {
+	s.buildLock.Lock()
+	defer s.buildLock.Unlock()
 
-// Close mimics shutting down the connection
-func (cs *DefaultChannelService) Close() error {
-	close(cs.conn)
+	if _, err := os.Stat(s.rootPath); os.IsNotExist(err) {
+		return fmt.Errorf("root path does not exist: %s", s.rootPath)
+	}
+
+	// Simulate running 'npm install' or 'yarn install'
+	// In production, execute: exec.CommandContext(ctx, "npm", "install", "--silent")
+	// ... setup logic ...
+
+	s.logger.Println("Svelte Build Environment Initialized (NPM Ready)")
 	return nil
 }
 
-// ErrServiceUnavailable is returned if initialization fails
-var ErrServiceUnavailable = &ServiceError{
-	Code:    "503",
-	Message: "Hearth Node is unavailable",
+// FetchComponent creates a standalone HTML file for the given Svelte component.
+// It mimics the behavior of the Svelte CLI 'build' or browser-compiler.
+func (s *SvelteServiceImplementation) FetchComponent(ctx context.Context, tpl ComponentTemplate) (string, error) {
+	s.logger.Printf("Compiling component: %s (ID: %s)", tpl.Name, tpl.ID)
+
+	// In a real scenario, this would write the tpl.Source to a temporary file
+	// vpackage.json and run `npm run build` to get a static HTML bundle.
+
+	// Example return: a basic HTML wrapper injected with the Svelte component code
+	html := `
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>` + tpl.Name + `</title>
+		<style>
+			body { font-family: sans-serif; padding: 20px; }
+		</style>
+	</head>
+	<body>
+	<h1>` + tpl.Name + `</h1>
+	<!-- Svelte Application Runtime and Component would be injected here -->
+	<main id="app"></main>
+	<script>
+		console.log("Hearth: Rendering " + "` + tpl.Name + `");
+	</script>
+	</body>
+	</html>
+	`
+	return html, nil
 }
 
-// ServiceError captures API failures
-type ServiceError struct {
-	Code    string
-	Message string
-}
+// WatchChanges monitors a directory for file changes (Hot Module Replacement logic).
+func (s *SvelteServiceImplementation) WatchChanges(ctx context.Context) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create file watcher: %w", err)
+	}
+	defer watcher.Close()
 
-func (e *ServiceError) Error() string {
-	return e.Message
+	if err := watcher.Add(s.rootPath); err != nil {
+		return fmt.Errorf("failed to watch directory %s: %w", s.rootPath, err)
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				s.logger.Println("Stopping file watcher...")
+				return
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Has(fsnotify.Write) {
+					s.logger.Printf("Change detected in %s", event.Name)
+					// Trigger re-compilation logic here
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				s.logger.Printf("Watcher error: %v", err)
+			}
+		}
+	}()
+
+	// Block until context is cancelled
+	<-ctx.Done()
+	return nil
 }

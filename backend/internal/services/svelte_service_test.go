@@ -1,111 +1,120 @@
 package services
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
-	"reflect"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// MockChannelService implements ChannelService but uses an in-memory channel.
-// This allows us to drive messages programmatically for testing.
-type MockChannelService struct {
-	connected chan Message
-	closed    bool
+// MockCompilerService creates a mock implementation of CompilerService for unit testing.
+type MockCompilerService struct {
+	mock.Mock
 }
 
-func (m *MockChannelService) Connect(username string) (chan Message, error) {
-	if m.closed {
-		return nil, ErrServiceUnavailable
-	}
-	m.connected = make(chan Message, 100)
-	return m.connected, nil
+func (m *MockCompilerService) Initialize(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
 
-func (m *MockChannelService) Close() error {
-	m.closed = true
-	return nil
+func (m *MockCompilerService) FetchComponent(ctx context.Context, tpl ComponentTemplate) (string, error) {
+	args := m.Called(ctx, tpl)
+	return args.Get(0).(string), args.Error(1)
 }
 
-func TestNewChannelService(t *testing.T) {
-	host := "ws://hearth-backend.internal:8080"
-	username := "test_user"
-
-	// Act
-	svc := NewChannelService(host, username)
-
-	// Assert
-	if svc == nil {
-		t.Fatal("Expected service instance, got nil")
-	}
-
-	defaultSvc, ok := svc.(*DefaultChannelService)
-	if !ok {
-		t.Fatalf("Expected DefaultChannelService, got %T", svc)
-	}
-
-	if defaultSvc.host != host {
-		t.Errorf("Host mismatch. Expected %s, got %s", host, defaultSvc.host)
-	}
-
-	if defaultSvc.username != username {
-		t.Errorf("Username mismatch. Expected %s, got %s", username, defaultSvc.username)
-	}
+func (m *MockCompilerService) WatchChanges(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
 
-func TestServiceLifecycle(t *testing.T) {
-	mock := &MockChannelService{}
-	
-	// Simulate successful connection
-	chnl, err := mock.Connect("tester")
-	if err != nil {
-		t.Fatalf("Failed to connect mock: %v", err)
-	}
+// TestNewSvelteService tests that the service fails if the root path does not exist.
+func TestNewSvelteService(t *testing.T) {
+	invalidPath := "/non/existent/path"
 
-	// Verify channel is ready
-	if chnl == nil {
-		t.Fatal("Expected non-nil channel on connect")
-	}
+	_, err := NewSvelteService(invalidPath, nil)
 
-	// Test sending a message down the wire
-	expectedMsg := Message{
-		ID:        "msg_123",
-		Type:      MsgSendMessage,
-		Content:   "Hello World",
-		Timestamp: time.Now().Unix(),
-		Username:  "tester",
-	}
-
-	// Write to the service
-	chnl <- expectedMsg
-
-	// Read from the service
-	receivedMsg := <-chnl
-
-	// Assert data integrity
-	if receivedMsg.ID != expectedMsg.ID {
-		t.Errorf("ID mismatch. Got %s", receivedMsg.ID)
-	}
-	
-	if receivedMsg.Type != expectedMsg.Type {
-		t.Errorf("Type mismatch. Got %s", receivedMsg.Type)
-	}
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
 }
 
-func TestMockConnectionFailure(t *testing.T) {
-	mock := &MockChannelService{closed: true}
+// TestFetchComponent tests the compilation logic.
+func TestFetchComponent(t *testing.T) {
+	// 1. Setup
+	logger := &log.Logger{}
+	service, err := NewSvelteService(".", logger) // Use current folder for test
+	assert.NoError(t, err)
 
-	_, err := mock.Connect("blocked_user")
-	if err == nil {
-		t.Error("Expected ErrServiceUnavailable when connection is closed")
+	ctx := context.Background()
+	template := ComponentTemplate{
+		ID:   "comp-123",
+		Name: "TestSidebar",
+		Source: `<script>export let name;</script><h1>Hello {name}!</h1>`,
 	}
 
-	// Verify error type
-	svcErr, ok := err.(*ServiceError)
-	if !ok {
-		t.Fatalf("Expected ServiceError type, got %T", err)
-	}
+	// 2. Execute
+	html, err := service.FetchComponent(ctx, template)
 
-	if svcErr.Code != "503" {
-		t.Errorf("Expected error code 503, got %s", svcErr.Code)
-	}
+	// 3. Assert
+	assert.NoError(t, err)
+	assert.Contains(t, html, "TestSidebar")
+	assert.Contains(t, html, "Hello TestSidebar!")
+	assert.Contains(t, html, "Hearth: Rendering TestSidebar")
+	assert.Contains(t, html, `<script> console.log("Hearth: Rendering TestSidebar");</script>`)
+}
+
+// TestFetchComponent_Error tests error scenarios (e.g., context cancellation).
+func TestFetchComponent_Cancellation(t *testing.T) {
+	service, _ := NewSvelteService(".", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	_, err := service.FetchComponent(ctx, ComponentTemplate{Name: "test"})
+
+	assert.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+}
+
+// Example of using the Mock for dependency injection patterns.
+func TestMockedImplementation(t *testing.T) {
+	mockSvc := new(MockCompilerService)
+	ctx := context.Background()
+
+	// Define expectations
+	expectedHTML := "<div>Mocked Output</div>"
+	mockSvc.On("FetchComponent", ctx, mock.AnythingOfType("services.ComponentTemplate")).
+		Return(expectedHTML, nil).
+		Once()
+
+	// Performance test
+	// (Note: In a production test, this might behave differently, but for mocks it's instant)
+	html, err := mockSvc.FetchComponent(ctx, ComponentTemplate{Name: "Mock"})
+
+	// Verify mocks were called
+	mockSvc.AssertExpectations(t)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedHTML, html)
+}
+
+// TestWatchChanges_HasBaseDependencies tests that necessary packages are checked
+// This is an integration-style test behavior relying on the struct initialization.
+func TestSvelteServiceInitialization(t *testing.T) {
+	// Use a temporary directory valid for the test runner
+	tmpDir := t.TempDir()
+
+	service, err := NewSvelteService(tmpDir, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, service)
+
+	// Verify properties
+	assert.Equal(t, tmpDir, service.(*SvelteServiceImplementation).rootPath)
+
+	// Test Initialize (Mocking potential I/O delay or errors)
+	ctx := context.Background()
+	// Assuming real Init would check node existence, we just check it returns no immediate error
+	err = service.Initialize(ctx)
+	assert.NoError(t, err)
 }
