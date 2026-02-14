@@ -48,3 +48,6 @@ temp/
 # Uploads (in dev)
 uploads/
 data/
+
+# Agent context files (local only)
+.agent-context/
