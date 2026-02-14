@@ -14,3 +14,6 @@ export { default as MessageInput } from './MessageInput.svelte';
 export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as Reactions } from './Reactions.svelte';
 export { default as EmojiPicker } from './EmojiPicker.svelte';
+
+// User components
+export { default as UserPopout } from './UserPopout.svelte';
