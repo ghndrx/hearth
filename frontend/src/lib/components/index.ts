@@ -7,6 +7,7 @@ export { default as TypingIndicator } from './TypingIndicator.svelte';
 export { default as ServerIcon } from './ServerIcon.svelte';
 export { default as ServerFolder } from './ServerFolder.svelte';
 export { default as ServerList } from './ServerList.svelte';
+export { default as ServerHeader } from './ServerHeader.svelte';
 
 // Discord-style message components
 // Note: Import Message directly from './Message.svelte' where needed
