@@ -45,6 +45,9 @@ tmp/
 temp/
 *.tmp
 
+# Performance test results (generated, can be large)
+tests/performance/*-results.json
+
 # Uploads (in dev)
 uploads/
 data/
