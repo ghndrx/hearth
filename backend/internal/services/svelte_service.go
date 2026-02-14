@@ -2,156 +2,90 @@ package services
 
 import (
 	"context"
-	"log"
-	"net"
+	"fmt"
+	"io/fs"
 	"net/http"
-	"net/url"
-	"time"
 )
 
-// Service defines the interface for the Svelte component management system.
-// It ensures the main application can interact with the service without knowing
-// the implementation details of the HTTP server or the heartbeat logic.
-type Service interface {
-	// Start initializes the service, including the heartbeat and HTTP server.
-	Start() error
+// SvelteService defines the interface for interacting with the frontend frontend.
+// It abstracts the source code location and the Svelte compiler/build process.
+type SvelteService interface {
+	// Build builds the Svelte static assets and returns the underlying filesystem
+	// ready for serving.
+	Build(ctx context.Context) (fs.FS, error)
 
-	// Stop gracefully shuts down the service and its resources.
-	Stop() error
-
-	// GetHealth returns the current health status of the Svelte frontend.
-	GetHealth() (string, error)
+	// RouteHandler returns an HTTP handler function specific for this Svelte app.
+	RouteHandler(sourceFs fs.FS) http.HandlerFunc
 }
 
-// SvelteService implements the Service interface.
-type SvelteService struct {
-	port       int
-	listener   net.Listener
-	httpServer *http.Server
+// ServiceConfig holds the configuration needed to initialize the service.
+type ServiceConfig struct {
+	// SourcePath is the local filesystem path relative to the working directory
+	// where the Svelte source code resides.
+	SourcePath string
+
+	// BuildPath is the path where the built static assets will be placed during the build process.
+	BuildPath string
 }
 
-// NewSvelteService creates a new instance of the SvelteService.
-// Port 0 allows Go to assign an available ephemeral port, making the unit testing easier.
-func NewSvelteService(port int) *SvelteService {
-	return &SvelteService{
-		port: port,
+// svelteServiceImpl implements SvelteService.
+type svelteServiceImpl struct {
+	config ServiceConfig
+}
+
+// NewSvelteService creates a new instance of the Svelte service.
+func NewSvelteService(cfg ServiceConfig) SvelteService {
+	return &svelteServiceImpl{
+		config: cfg,
 	}
 }
 
-// Start begins the listen loop and the background heartbeat ticker.
-func (s *SvelteService) Start() error {
-	// Bind to the socket (loopback only for local services)
-	addr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: s.port}
-	
-	var err error
-	s.listener, err = net.ListenTCP("tcp", addr)
-	if err != nil {
-		return err
+// Build simulates the compilation of the Svelte application. 
+// In a real-world scenario, this would shell out to `npm run build` 
+// or use a go-based Svelte compiler like ramirago/svelte-c().
+func (s *svelteServiceImpl) Build(ctx context.Context) (fs.FS, error) {
+	// Simulate build process delay
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// In production, unpack build artifacts here using archive/zip or similar.
+		// For this example, we assume BuildPath contains the pre-compiled static assets.
+		return http.FS(fs.Sub(http.Dir(s.config.BuildPath)), "build"), nil
 	}
+}
 
-	// Initialize the HTTP server handler
-	mux := http.NewServeMux()
-	mux.HandleFunc("/status", s.handleStatus)
-	mux.HandleFunc("/health", s.handleHealth)
+// RouteHandler constructs an HTTP handler that serves the built Svelte application.
+// It proxies paths like '/' to 'index.html' so the Sapper/Svelte router works.
+func (s *svelteServiceImpl) RouteHandler(sourceFs fs.FS) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Auth check would likely happen here before serving HTML.
+		// See AuthMiddleware in core.
 
-	s.httpServer = &http.Server{
-		Handler: mux,
-		// Add a sensible read/write timeout to prevent hijacking
-		ReadTimeout:  time.Second * 10,
-		WriteTimeout: time.Second * 10,
-	}
-
-	// Start the background heartbeat (Heart of Hearth)
-	go s.startHeartbeat()
-
-	// Start the HTTP server in a goroutine
-	go func() {
-		log.Printf("Svelte Frontend Service starting on interface 127.0.0.1:%d", s.port)
-		if err := s.httpServer.Serve(s.listener); err != nil && err != http.ErrServerClosed {
-			log.Printf("Error serving HTTP: %v", err)
+		// Redoc/Debug route (example)
+		if r.URL.Path == "/_auth" {
+			w.Write([]byte("Auth service active"))
+			return
 		}
-	}()
 
-	return nil
-}
+		// Default to index.html to handle client-side routing (e.g., /channels/123)
+		fileToServe := "build/index.html"
 
-// Stop gracefully shuts down the service.
-func (s *SvelteService) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	log.Println("Svelte Service shutting down...")
-	
-	// Shutdown HTTP server
-	return s.httpServer.Shutdown(ctx)
-}
-
-// startHeartbeat simulates keeping the Svelte connection (WebSocket) alive.
-func (s *SvelteService) startHeartbeat() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// Simulate network activity for the Discord clone frontend
-			log.Println("💓 Svelte Frontend Heartbeat: Connection Active")
-		}
-	}
-}
-
-// handleStatus renders a mock view of the Svelte application status.
-func (s *SvelteService) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	
-	html := `
-	<!DOCTYPE html>
-	<html>
-	<head>
-		<title>Hearth - Svelte Status</title>
-		<style>
-			body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #36393f; color: #fff; }
-			.card { background: #23272a; padding: 40px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); text-align: center; max-width: 300px; }
-			h1 { color: #7289da; margin-bottom: 10px; }
-			.status-badge { background: #43b581; color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.8em; display: inline-block; margin-top: 15px; }
-			.logger { margin-top: 20px; font-family: monospace; font-size: 12px; color: #b9bbbe; height: 100px; overflow-y: auto; border: 1px solid #202225; padding: 10px; }
-		</style>
-	</head>
-	<body>
-		<div class="card">
-			<h1>Hearth Core</h1>
-			<p>Svelte Frontend Component</p>
-			<div id="status" class="status-badge">Online</div>
-			<div class="logger">System initialized.<br>WebSocket adapter loaded.<br>Waiting for events...</div>
-		</div>
-		<script>
-			// Logic to refresh the logger based on Heartbeat rate
-			setInterval(() => {
-				const logger = document.querySelector('.logger');
-				const timestamp = new Date().toLocaleTimeString();
-				logger.innerHTML += ` + "`<br>[${timestamp}] Heart received.`" + `
-				logger.scrollTop = logger.scrollHeight;
-			}, 1500);
-		</script>
-	</body>
-	</html>
-	`
-
-	w.Write([]byte(html))
-}
-
-// GetHealth allows the parent framework to query the service.
-func (s *SvelteService) GetHealth() (string, error) {
-	if s.httpServer != nil && s.httpServer.Addr != "" {
-		// Try to verify the server is actually reachable via TCP
-		addr, _ := url.Parse("http://" + s.httpServer.Addr)
-		port := addr.Port()
-		conn, err := net.DialTimeout("tcp", addr.Hostname()+":"+port, 1*time.Second)
+		// Attempt to serve the requested file statically
+		f, err := sourceFs.Open(fileToServe)
 		if err != nil {
-			return "unhealthy", err
+			// Fallback: If we can't open index.html, 404 the user
+			http.NotFound(w, r)
+			return
 		}
-		conn.Close()
-		return "healthy", nil
+		defer f.Close()
+
+		// Serve the file
+		http.ServeContent(w, r, fileToServe, int64(0), f)
 	}
-	return "unknown", nil
+}
+
+// GetBuildPath returns the configured build path for external processes.
+func (s *svelteServiceImpl) GetBuildPath() string {
+	return s.config.BuildPath
 }

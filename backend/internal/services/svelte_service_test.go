@@ -1,105 +1,197 @@
 package services
 
 import (
+	"context"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestNewSvelteService(t *testing.T) {
-	// Test that the service initializes without panicking
-	s := NewSvelteService(8080)
-	if s == nil {
-		t.Fatal("NewSvelteService returned nil")
-	}
+func init() {
+	// Ensure the module has a go.sum stable environment for the tests
+	// (Mocking inputs usually avoids this, but good for sanity)
 }
 
-func TestSvelteService_StartServer(t *testing.T) {
-	service := NewSvelteService(0) // Use 0 to let OS assign a port
-
-	// Use a timeout to prevent the test from hanging forever
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	// Start the service in a goroutine
-	errCh := make(chan error, 1)
-	go func() { errCh <- service.Start() }()
-
-	// Wait for a short moment for the server to boot
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify the service is running
-	select {
-	case err := <-errCh:
-		t.Fatalf("Service error during start: %v", err)
-	case <-ctx.Done():
-		// Good, it started in time
-	default:
-		// Continue
-	}
-
-	// Test the /status endpoint to ensure it returns HTML
-	req, _ := http.NewRequest("GET", "/status", nil)
-	w := httptest.NewRecorder()
-
-	// Access the internal HTTP handler for testing purposes
-	service.httpServer.Handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Status code = %d, want %d", w.Code, http.StatusOK)
-	}
-
-	body := w.Body.String()
-	if !strings.Contains(body, "Hearth Core") {
-		t.Error("Response body does not contain expected title")
-	}
-}
-
-func TestSvelteService_HealthCheck(t *testing.T) {
-	service := NewSvelteService(0)
-	service.Start() // Start the server
-
-	// Give the server a moment to listen
-	time.Sleep(200 * time.Millisecond)
-
-	health, err := service.GetHealth()
-	if err != nil {
-		t.Fatalf("GetHealth failed: %v", err)
-	}
-
-	if health != "healthy" {
-		t.Errorf("Health status = %s, want 'healthy'", health)
-	}
-
-	service.Stop()
-}
-
-func TestSvelteService_Stop(t *testing.T) {
-	service := NewSvelteService(0)
-	service.Start()
-
-	// Ensure the server is reachable
-	time.Sleep(500 * time.Millisecond)
+func setUpTestBuildPath(t *testing.T) string {
+	tmpDir := t.TempDir()
+	source := filepath.Join(tmpDir, "src")
+	indexContent := "<!DOCTYPE html><script type='module'>console.log('test');</script></html>"
 	
-	onlineConn, err := net.DialTimeout("tcp", "127.0.0.1:0", 100*time.Millisecond)
-	if err != nil {
-		t.Skip("Server not listening, cannot test shutdown properly")
+	build := filepath.Join(tmpDir, "build")
+	
+	// Create a fake directory structure
+	if err := os.Mkdir(source, 0755); err != nil {
+		t.Fatal(err)
 	}
-	onlineConn.Close()
-
-	// Stop the service
-	err = service.Stop()
-	if err != nil {
-		t.Errorf("Stop returned error: %v", err)
+	if err := os.Mkdir(build, 0755); err != nil {
+		t.Fatal(err)
 	}
 
-	// Verify the server is actually down
-	disconnected, err := net.DialTimeout("tcp", "127.0.0.1:0", 100*time.Millisecond)
-	if err == nil {
-		disconnected.Close()
-		t.Error("Service shutdown failed: Server is still accepting connections")
+	// Create a fake build artifact
+	indexPath := filepath.Join(build, "index.html")
+	if err := os.WriteFile(indexPath, []byte(indexContent), 0644); err != nil {
+		t.Fatal(err)
 	}
+
+	return tmpDir
+}
+
+func TestNewSvelteService(t *testing.T) {
+ cfg := ServiceConfig{
+  SourcePath: "./src",
+  BuildPath: "./dist",
+ }
+
+ svc := NewSvelteService(cfg)
+ 
+ if svc == nil {
+  t.Fatal("Expected non-nil service")
+ }
+ 
+ svelteSvc, ok := svc.(SvelteService)
+ if !ok {
+  t.Fatal("Service does not implement SvelteService interface")
+ }
+}
+
+func TestBuild(t *testing.T) {
+ tmpDir := setUpTestBuildPath(t)
+
+ cfg := ServiceConfig{
+  SourcePath: "unused",
+  BuildPath:  filepath.Join(tmpDir, "build"),
+ }
+
+ svc := NewSvelteService(cfg)
+
+ // Test successful build
+ fs, err := svc.Build(context.Background())
+ if err != nil {
+  t.Fatalf("Build failed unexpectedly: %v", err)
+ }
+
+ if fs == nil {
+  t.Fatal("Expected fs.FS to be returned")
+ }
+
+ // Verify the FS looks like an overlay
+ sub, ok := fs.(fs.FS)
+ if !ok {
+  t.Fatal("Returned fs is not a valid FS")
+ }
+ 
+ // Opening the index file
+ f, err := sub.Open("index.html")
+ if err != nil {
+  t.Fatalf("Failed to open index.html from returned FS: %v", err)
+ }
+ defer f.Close()
+ 
+ // Test context cancellation
+ ctx, cancel := context.WithCancel(context.Background())
+ cancel()
+ _, err = svc.Build(ctx)
+ if err != context.Canceled {
+  t.Errorf("Expected context.Canceled, got %v", err)
+ }
+}
+
+func TestRouteHandler(t *testing.T) {
+ tmpDir := setUpTestBuildPath(t)
+
+ cfg := ServiceConfig{
+  SourcePath: "unused",
+  BuildPath:  filepath.Join(tmpDir, "build"),
+ }
+
+ svc := NewSvelteService(cfg)
+ fsMount, err := svc.Build(context.Background())
+ if err != nil {
+  t.Fatal(err)
+ }
+
+ handler := svc.RouteHandler(fsMount)
+ server := httptest.NewServer(handler)
+ defer server.Close()
+
+ tests := []struct {
+  name           string
+  url            string
+  expectedStatus int
+  expectedBody   string
+  contentType    string
+ }{
+  {
+   name:           "Root path forwards to index.html",
+   url:            "/",
+   expectedStatus: http.StatusOK,
+   expectedBody:   "<!DOCTYPE html>",
+   contentType:    "text/html",
+  },
+  {
+   name:           "Client side route forwards to index.html",
+   url:            "/channels/123/esterling",
+   expectedStatus: http.StatusOK,
+   expectedBody:   "<!DOCTYPE html>",
+   contentType:    "text/html",
+  },
+ }
+
+ for _, tt := range tests {
+  t.Run(tt.name, func(t *testing.T) {
+   resp, err := http.Get(server.URL + tt.url)
+   if err != nil {
+    t.Fatalf("Request failed: %v", err)
+   }
+   defer resp.Body.Close()
+
+   if resp.StatusCode != tt.expectedStatus {
+    t.Errorf("Status code = %v, want %v", resp.StatusCode, tt.expectedStatus)
+   }
+
+   // Basic body check to ensure we are serving the HTML
+   buf := new(strings.Builder)
+   buf.ReadFrom(resp.Body)
+   body := buf.String()
+   
+   if !strings.Contains(body, tt.expectedBody) {
+    t.Errorf("Response body does not contain expected content. Got: %s", body)
+   }
+   
+   if resp.Header.Get("Content-Type") != tt.contentType {
+    t.Errorf("Content-Type mismatch, got %s", resp.Header.Get("Content-Type"))
+   }
+  })
+ }
+}
+
+func TestRouteHandler_NotFound(t *testing.T) {
+ tmpDir := setUpTestBuildPath(t)
+
+ cfg := ServiceConfig{
+  SourcePath: "unused",
+  BuildPath:  filepath.Join(tmpDir, "build"),
+ }
+
+ svc := NewSvelteService(cfg)
+ fsMount, err := svc.Build(context.Background())
+ if err != nil {
+  t.Fatal(err)
+ }
+
+ handler := svc.RouteHandler(fsMount)
+ 
+ req := httptest.NewRequest("GET", "/nonexistent/file.js", nil)
+ w := httptest.NewRecorder()
+ 
+ handler(w, req)
+
+ if w.Code != http.StatusNotFound {
+  t.Errorf("Expected 404, got %d", w.Code)
+ }
 }
