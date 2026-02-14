@@ -52,7 +52,7 @@ export async function loadMessages(channelId: string, before?: string) {
 		const params = new URLSearchParams({ limit: '50' });
 		if (before) params.set('before', before);
 		
-		const data = await api.get(`/channels/${channelId}/messages?${params}`);
+		const data = await api.get<Message[]>(`/channels/${channelId}/messages?${params}`);
 		
 		messages.update(m => {
 			const existing = m[channelId] || [];
@@ -76,7 +76,7 @@ export async function sendMessage(
 	replyToId?: string
 ) {
 	try {
-		let data: any = { content };
+		let data: { content: string; reply_to?: string } | FormData = { content };
 		if (replyToId) {
 			data.reply_to = replyToId;
 		}
@@ -94,7 +94,7 @@ export async function sendMessage(
 			data = formData;
 		}
 		
-		const message = await api.post(`/channels/${channelId}/messages`, data);
+		const message = await api.post<Message>(`/channels/${channelId}/messages`, data);
 		
 		// Add to local store (will also come via WebSocket)
 		addMessage(message);
@@ -108,7 +108,7 @@ export async function sendMessage(
 
 export async function editMessage(messageId: string, channelId: string, content: string) {
 	try {
-		const message = await api.patch(`/channels/${channelId}/messages/${messageId}`, { content });
+		const message = await api.patch<Message>(`/channels/${channelId}/messages/${messageId}`, { content });
 		updateMessage(message);
 		return message;
 	} catch (error) {
