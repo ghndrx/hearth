@@ -51,3 +51,6 @@ data/
 
 # Agent context files (local only)
 .agent-context/
+
+# Documentation (generated/research - not tracked)
+docs/
