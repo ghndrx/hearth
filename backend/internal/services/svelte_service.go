@@ -1,160 +1,157 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"io"
 	"log"
+	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"sync"
-
-	"github.com/google/uuid"
+	"net/url"
+	"time"
 )
 
-// ComponentTemplate represents the raw Svelte source code for a UI component.
-type ComponentTemplate struct {
-	ID        string
-	Name      string
-	Source    string
-	Version   string
-	Author    string
-	CreatedAt string
+// Service defines the interface for the Svelte component management system.
+// It ensures the main application can interact with the service without knowing
+// the implementation details of the HTTP server or the heartbeat logic.
+type Service interface {
+	// Start initializes the service, including the heartbeat and HTTP server.
+	Start() error
+
+	// Stop gracefully shuts down the service and its resources.
+	Stop() error
+
+	// GetHealth returns the current health status of the Svelte frontend.
+	GetHealth() (string, error)
 }
 
-// CompilerService defines the contract for anything that modifies or manages Svelte components.
-type CompilerService interface {
-	// Initialize the build environment (npm install, dev-server setup)
-	Initialize(ctx context.Context) error
-
-	// FetchComponent compiles a component source string into HTML/JS.
-	FetchComponent(ctx context.Context, tpl ComponentTemplate) (string, error)
-
-	// WatchChange monitors the file system for changes and recompiles.
-	WatchChanges(ctx context.Context) error
+// SvelteService implements the Service interface.
+type SvelteService struct {
+	port       int
+	listener   net.Listener
+	httpServer *http.Server
 }
 
-// SvelteServiceImplementation is the concrete implementation.
-// It wraps logic related to Node.js environments and Svelte compilation.
-type SvelteServiceImplementation struct {
-	// path to the Svelte project root
-	rootPath      string
-	logger        *log.Logger
-	client        *http.Client
-	buildLock     sync.Mutex
-	componentPool map[string]ComponentTemplate
-}
-
-// NewSvelteService creates a new instance of the compiler service.
-// This is a "Factory-like" constructor pattern.
-func NewSvelteService(rootPath string, logger *log.Logger) (CompilerService, error) {
-	if logger == nil {
-		logger = log.New(os.Stdout, "[SVELTE] ", log.LstdFlags)
+// NewSvelteService creates a new instance of the SvelteService.
+// Port 0 allows Go to assign an available ephemeral port, making the unit testing easier.
+func NewSvelteService(port int) *SvelteService {
+	return &SvelteService{
+		port: port,
 	}
+}
 
-	// Verify Node.js / NPM availability
-	client := &http.Client{Timeout: 10 * time.Second}
+// Start begins the listen loop and the background heartbeat ticker.
+func (s *SvelteService) Start() error {
+	// Bind to the socket (loopback only for local services)
+	addr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: s.port}
 	
-	// Basic setup
-	logger.Printf("Initializing Svelte Compiler Service at path: %s", rootPath)
-
-	return &SvelteServiceImplementation{
-		rootPath:      rootPath,
-		logger:        logger,
-		client:        client,
-		componentPool: make(map[string]ComponentTemplate),
-	}, nil
-}
-
-// Initialize sets up the environment by running npm install.
-func (s *SvelteServiceImplementation) Initialize(ctx context.Context) error {
-	s.buildLock.Lock()
-	defer s.buildLock.Unlock()
-
-	if _, err := os.Stat(s.rootPath); os.IsNotExist(err) {
-		return fmt.Errorf("root path does not exist: %s", s.rootPath)
+	var err error
+	s.listener, err = net.ListenTCP("tcp", addr)
+	if err != nil {
+		return err
 	}
 
-	// Simulate running 'npm install' or 'yarn install'
-	// In production, execute: exec.CommandContext(ctx, "npm", "install", "--silent")
-	// ... setup logic ...
+	// Initialize the HTTP server handler
+	mux := http.NewServeMux()
+	mux.HandleFunc("/status", s.handleStatus)
+	mux.HandleFunc("/health", s.handleHealth)
 
-	s.logger.Println("Svelte Build Environment Initialized (NPM Ready)")
+	s.httpServer = &http.Server{
+		Handler: mux,
+		// Add a sensible read/write timeout to prevent hijacking
+		ReadTimeout:  time.Second * 10,
+		WriteTimeout: time.Second * 10,
+	}
+
+	// Start the background heartbeat (Heart of Hearth)
+	go s.startHeartbeat()
+
+	// Start the HTTP server in a goroutine
+	go func() {
+		log.Printf("Svelte Frontend Service starting on interface 127.0.0.1:%d", s.port)
+		if err := s.httpServer.Serve(s.listener); err != nil && err != http.ErrServerClosed {
+			log.Printf("Error serving HTTP: %v", err)
+		}
+	}()
+
 	return nil
 }
 
-// FetchComponent creates a standalone HTML file for the given Svelte component.
-// It mimics the behavior of the Svelte CLI 'build' or browser-compiler.
-func (s *SvelteServiceImplementation) FetchComponent(ctx context.Context, tpl ComponentTemplate) (string, error) {
-	s.logger.Printf("Compiling component: %s (ID: %s)", tpl.Name, tpl.ID)
+// Stop gracefully shuts down the service.
+func (s *SvelteService) Stop() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// In a real scenario, this would write the tpl.Source to a temporary file
-	// vpackage.json and run `npm run build` to get a static HTML bundle.
+	log.Println("Svelte Service shutting down...")
+	
+	// Shutdown HTTP server
+	return s.httpServer.Shutdown(ctx)
+}
 
-	// Example return: a basic HTML wrapper injected with the Svelte component code
+// startHeartbeat simulates keeping the Svelte connection (WebSocket) alive.
+func (s *SvelteService) startHeartbeat() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Simulate network activity for the Discord clone frontend
+			log.Println("💓 Svelte Frontend Heartbeat: Connection Active")
+		}
+	}
+}
+
+// handleStatus renders a mock view of the Svelte application status.
+func (s *SvelteService) handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	
 	html := `
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>` + tpl.Name + `</title>
+		<title>Hearth - Svelte Status</title>
 		<style>
-			body { font-family: sans-serif; padding: 20px; }
+			body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #36393f; color: #fff; }
+			.card { background: #23272a; padding: 40px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); text-align: center; max-width: 300px; }
+			h1 { color: #7289da; margin-bottom: 10px; }
+			.status-badge { background: #43b581; color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.8em; display: inline-block; margin-top: 15px; }
+			.logger { margin-top: 20px; font-family: monospace; font-size: 12px; color: #b9bbbe; height: 100px; overflow-y: auto; border: 1px solid #202225; padding: 10px; }
 		</style>
 	</head>
 	<body>
-	<h1>` + tpl.Name + `</h1>
-	<!-- Svelte Application Runtime and Component would be injected here -->
-	<main id="app"></main>
-	<script>
-		console.log("Hearth: Rendering " + "` + tpl.Name + `");
-	</script>
+		<div class="card">
+			<h1>Hearth Core</h1>
+			<p>Svelte Frontend Component</p>
+			<div id="status" class="status-badge">Online</div>
+			<div class="logger">System initialized.<br>WebSocket adapter loaded.<br>Waiting for events...</div>
+		</div>
+		<script>
+			// Logic to refresh the logger based on Heartbeat rate
+			setInterval(() => {
+				const logger = document.querySelector('.logger');
+				const timestamp = new Date().toLocaleTimeString();
+				logger.innerHTML += ` + "`<br>[${timestamp}] Heart received.`" + `
+				logger.scrollTop = logger.scrollHeight;
+			}, 1500);
+		</script>
 	</body>
 	</html>
 	`
-	return html, nil
+
+	w.Write([]byte(html))
 }
 
-// WatchChanges monitors a directory for file changes (Hot Module Replacement logic).
-func (s *SvelteServiceImplementation) WatchChanges(ctx context.Context) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("failed to create file watcher: %w", err)
-	}
-	defer watcher.Close()
-
-	if err := watcher.Add(s.rootPath); err != nil {
-		return fmt.Errorf("failed to watch directory %s: %w", s.rootPath, err)
-	}
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				s.logger.Println("Stopping file watcher...")
-				return
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Has(fsnotify.Write) {
-					s.logger.Printf("Change detected in %s", event.Name)
-					// Trigger re-compilation logic here
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				s.logger.Printf("Watcher error: %v", err)
-			}
+// GetHealth allows the parent framework to query the service.
+func (s *SvelteService) GetHealth() (string, error) {
+	if s.httpServer != nil && s.httpServer.Addr != "" {
+		// Try to verify the server is actually reachable via TCP
+		addr, _ := url.Parse("http://" + s.httpServer.Addr)
+		port := addr.Port()
+		conn, err := net.DialTimeout("tcp", addr.Hostname()+":"+port, 1*time.Second)
+		if err != nil {
+			return "unhealthy", err
 		}
-	}()
-
-	// Block until context is cancelled
-	<-ctx.Done()
-	return nil
+		conn.Close()
+		return "healthy", nil
+	}
+	return "unknown", nil
 }

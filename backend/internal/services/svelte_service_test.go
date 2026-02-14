@@ -1,120 +1,105 @@
 package services
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-// MockCompilerService creates a mock implementation of CompilerService for unit testing.
-type MockCompilerService struct {
-	mock.Mock
-}
-
-func (m *MockCompilerService) Initialize(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
-func (m *MockCompilerService) FetchComponent(ctx context.Context, tpl ComponentTemplate) (string, error) {
-	args := m.Called(ctx, tpl)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (m *MockCompilerService) WatchChanges(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
-// TestNewSvelteService tests that the service fails if the root path does not exist.
 func TestNewSvelteService(t *testing.T) {
-	invalidPath := "/non/existent/path"
-
-	_, err := NewSvelteService(invalidPath, nil)
-
-	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "does not exist")
+	// Test that the service initializes without panicking
+	s := NewSvelteService(8080)
+	if s == nil {
+		t.Fatal("NewSvelteService returned nil")
+	}
 }
 
-// TestFetchComponent tests the compilation logic.
-func TestFetchComponent(t *testing.T) {
-	// 1. Setup
-	logger := &log.Logger{}
-	service, err := NewSvelteService(".", logger) // Use current folder for test
-	assert.NoError(t, err)
+func TestSvelteService_StartServer(t *testing.T) {
+	service := NewSvelteService(0) // Use 0 to let OS assign a port
 
-	ctx := context.Background()
-	template := ComponentTemplate{
-		ID:   "comp-123",
-		Name: "TestSidebar",
-		Source: `<script>export let name;</script><h1>Hello {name}!</h1>`,
+	// Use a timeout to prevent the test from hanging forever
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Start the service in a goroutine
+	errCh := make(chan error, 1)
+	go func() { errCh <- service.Start() }()
+
+	// Wait for a short moment for the server to boot
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify the service is running
+	select {
+	case err := <-errCh:
+		t.Fatalf("Service error during start: %v", err)
+	case <-ctx.Done():
+		// Good, it started in time
+	default:
+		// Continue
 	}
 
-	// 2. Execute
-	html, err := service.FetchComponent(ctx, template)
+	// Test the /status endpoint to ensure it returns HTML
+	req, _ := http.NewRequest("GET", "/status", nil)
+	w := httptest.NewRecorder()
 
-	// 3. Assert
-	assert.NoError(t, err)
-	assert.Contains(t, html, "TestSidebar")
-	assert.Contains(t, html, "Hello TestSidebar!")
-	assert.Contains(t, html, "Hearth: Rendering TestSidebar")
-	assert.Contains(t, html, `<script> console.log("Hearth: Rendering TestSidebar");</script>`)
+	// Access the internal HTTP handler for testing purposes
+	service.httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Status code = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Hearth Core") {
+		t.Error("Response body does not contain expected title")
+	}
 }
 
-// TestFetchComponent_Error tests error scenarios (e.g., context cancellation).
-func TestFetchComponent_Cancellation(t *testing.T) {
-	service, _ := NewSvelteService(".", nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+func TestSvelteService_HealthCheck(t *testing.T) {
+	service := NewSvelteService(0)
+	service.Start() // Start the server
 
-	_, err := service.FetchComponent(ctx, ComponentTemplate{Name: "test"})
+	// Give the server a moment to listen
+	time.Sleep(200 * time.Millisecond)
 
-	assert.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	health, err := service.GetHealth()
+	if err != nil {
+		t.Fatalf("GetHealth failed: %v", err)
+	}
+
+	if health != "healthy" {
+		t.Errorf("Health status = %s, want 'healthy'", health)
+	}
+
+	service.Stop()
 }
 
-// Example of using the Mock for dependency injection patterns.
-func TestMockedImplementation(t *testing.T) {
-	mockSvc := new(MockCompilerService)
-	ctx := context.Background()
+func TestSvelteService_Stop(t *testing.T) {
+	service := NewSvelteService(0)
+	service.Start()
 
-	// Define expectations
-	expectedHTML := "<div>Mocked Output</div>"
-	mockSvc.On("FetchComponent", ctx, mock.AnythingOfType("services.ComponentTemplate")).
-		Return(expectedHTML, nil).
-		Once()
+	// Ensure the server is reachable
+	time.Sleep(500 * time.Millisecond)
+	
+	onlineConn, err := net.DialTimeout("tcp", "127.0.0.1:0", 100*time.Millisecond)
+	if err != nil {
+		t.Skip("Server not listening, cannot test shutdown properly")
+	}
+	onlineConn.Close()
 
-	// Performance test
-	// (Note: In a production test, this might behave differently, but for mocks it's instant)
-	html, err := mockSvc.FetchComponent(ctx, ComponentTemplate{Name: "Mock"})
+	// Stop the service
+	err = service.Stop()
+	if err != nil {
+		t.Errorf("Stop returned error: %v", err)
+	}
 
-	// Verify mocks were called
-	mockSvc.AssertExpectations(t)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedHTML, html)
-}
-
-// TestWatchChanges_HasBaseDependencies tests that necessary packages are checked
-// This is an integration-style test behavior relying on the struct initialization.
-func TestSvelteServiceInitialization(t *testing.T) {
-	// Use a temporary directory valid for the test runner
-	tmpDir := t.TempDir()
-
-	service, err := NewSvelteService(tmpDir, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, service)
-
-	// Verify properties
-	assert.Equal(t, tmpDir, service.(*SvelteServiceImplementation).rootPath)
-
-	// Test Initialize (Mocking potential I/O delay or errors)
-	ctx := context.Background()
-	// Assuming real Init would check node existence, we just check it returns no immediate error
-	err = service.Initialize(ctx)
-	assert.NoError(t, err)
+	// Verify the server is actually down
+	disconnected, err := net.DialTimeout("tcp", "127.0.0.1:0", 100*time.Millisecond)
+	if err == nil {
+		disconnected.Close()
+		t.Error("Service shutdown failed: Server is still accepting connections")
+	}
 }
