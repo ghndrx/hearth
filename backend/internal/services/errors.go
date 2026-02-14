@@ -46,6 +46,12 @@ var (
 	ErrUsernameTaken = errors.New("username already taken")
 	ErrSelfAction    = errors.New("cannot perform this action on yourself")
 
+	// Webhook errors
+	ErrWebhookNotFound     = errors.New("webhook not found")
+	ErrInvalidWebhookToken = errors.New("invalid webhook token")
+	ErrWebhookNameTooLong  = errors.New("webhook name cannot exceed 80 characters")
+	ErrTooManyWebhooks     = errors.New("maximum number of webhooks reached for this channel")
+
 	// Cache errors
 	ErrCacheNotFound = errors.New("key not found in cache")
 )
