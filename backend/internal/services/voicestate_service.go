@@ -75,3 +75,27 @@ func (s *VoiceStateService) GetChannelUsers(ctx context.Context, channelID uuid.
 	}
 	return users, nil
 }
+
+// GetUserState returns the voice state for a specific user
+func (s *VoiceStateService) GetUserState(ctx context.Context, userID uuid.UUID) (*VoiceState, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	state, ok := s.states[userID]
+	if !ok {
+		return nil, ErrUserNotInVoice
+	}
+	return state, nil
+}
+
+// GetServerUsers returns all voice states for users in a server
+func (s *VoiceStateService) GetServerUsers(ctx context.Context, serverID uuid.UUID) ([]*VoiceState, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var users []*VoiceState
+	for _, state := range s.states {
+		if state.ServerID == serverID {
+			users = append(users, state)
+		}
+	}
+	return users, nil
+}

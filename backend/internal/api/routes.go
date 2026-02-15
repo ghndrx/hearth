@@ -112,6 +112,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	// Voice
 	voice := api.Group("/voice")
 	voice.Get("/regions", h.Voice.GetRegions)
+	voice.Post("/join", h.Voice.JoinVoice)
+	voice.Post("/leave", h.Voice.LeaveVoice)
+	voice.Patch("/state", h.Voice.UpdateVoiceState)
+	voice.Get("/state/@me", h.Voice.GetMyVoiceState)
+	
+	// Voice states for channels
+	channels.Get("/:id/voice-states", h.Voice.GetChannelVoiceStates)
 	
 	// Gateway stats (admin)
 	api.Get("/gateway/stats", h.Gateway.GetStats)

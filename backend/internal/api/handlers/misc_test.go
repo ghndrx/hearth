@@ -424,40 +424,6 @@ func TestInviteHandler_Delete_ServerError(t *testing.T) {
 	assert.Equal(t, "database error", result["error"])
 }
 
-// Test VoiceHandler.GetRegions
-func TestVoiceHandler_GetRegions(t *testing.T) {
-	mockServerSvc := &mockMiscServerService{}
-	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockServerSvc, mockGw)
-
-	req := httptest.NewRequest("GET", "/voice/regions", nil)
-	resp, err := app.Test(req, -1)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-
-	var result []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	// Should return 6 voice regions
-	assert.Len(t, result, 6)
-
-	// Check first region (us-west should be optimal)
-	assert.Equal(t, "us-west", result[0]["id"])
-	assert.Equal(t, "US West", result[0]["name"])
-	assert.Equal(t, true, result[0]["optimal"])
-
-	// Check second region (us-east should not be optimal)
-	assert.Equal(t, "us-east", result[1]["id"])
-	assert.Equal(t, false, result[1]["optimal"])
-
-	// Verify all expected regions are present
-	expectedRegions := []string{"us-west", "us-east", "eu-west", "eu-central", "singapore", "sydney"}
-	for i, region := range expectedRegions {
-		assert.Equal(t, region, result[i]["id"])
-	}
-}
-
 // Test GatewayHandler.GetStats
 func TestGatewayHandler_GetStats(t *testing.T) {
 	mockServerSvc := &mockMiscServerService{}

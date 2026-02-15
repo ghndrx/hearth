@@ -87,25 +87,6 @@ func (h *InviteHandler) Delete(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// VoiceHandler handles voice operations
-type VoiceHandler struct{}
-
-func NewVoiceHandler() *VoiceHandler {
-	return &VoiceHandler{}
-}
-
-// GetRegions returns available voice regions
-func (h *VoiceHandler) GetRegions(c *fiber.Ctx) error {
-	return c.JSON([]fiber.Map{
-		{"id": "us-west", "name": "US West", "optimal": true},
-		{"id": "us-east", "name": "US East", "optimal": false},
-		{"id": "eu-west", "name": "EU West", "optimal": false},
-		{"id": "eu-central", "name": "EU Central", "optimal": false},
-		{"id": "singapore", "name": "Singapore", "optimal": false},
-		{"id": "sydney", "name": "Sydney", "optimal": false},
-	})
-}
-
 // GatewayHandler handles WebSocket gateway connections
 type GatewayHandler struct {
 	gateway *ws.Gateway
