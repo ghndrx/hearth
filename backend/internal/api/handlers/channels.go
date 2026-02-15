@@ -101,8 +101,7 @@ func (h *ChannelHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
-	err = h.channelService.DeleteChannel(c.Context(), channelID, userID)
-	if err != nil {
+	if err := h.channelService.DeleteChannel(c.Context(), channelID, userID); err != nil {
 		switch err {
 		case services.ErrChannelNotFound:
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{

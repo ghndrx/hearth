@@ -58,6 +58,12 @@ func (r *ServerRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+func (r *ServerRepository) TransferOwnership(ctx context.Context, serverID, newOwnerID uuid.UUID) error {
+	query := `UPDATE servers SET owner_id = $2, updated_at = NOW() WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, serverID, newOwnerID)
+	return err
+}
+
 // Members
 
 func (r *ServerRepository) GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error) {

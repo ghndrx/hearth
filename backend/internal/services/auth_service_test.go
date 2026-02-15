@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,10 @@ import (
 	"hearth/internal/auth"
 	"hearth/internal/models"
 )
+
+// ============================================================================
+// Mock Repository for JWT-based AuthService
+// ============================================================================
 
 // MockAuthRepository implements authRepository for testing.
 type MockAuthRepository struct {
@@ -37,6 +42,10 @@ func (m *MockAuthRepository) GetByEmail(ctx context.Context, email string) (*mod
 func testJWTService() *auth.JWTService {
 	return auth.NewJWTService("test-secret-key", 15*time.Minute, 7*24*time.Hour)
 }
+
+// ============================================================================
+// JWT-based AuthService Tests
+// ============================================================================
 
 func TestAuthService_Register_Success(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
@@ -267,4 +276,113 @@ func TestAuthService_RefreshTokens_Invalid(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, tokens)
+}
+
+// ============================================================================
+// Simple AuthService Mock Repository
+// ============================================================================
+
+type SimpleMockAuthRepository struct {
+	users             map[string]*User
+	ErrGetUserByEmail error
+	ErrCreateUser     error
+	PreCalledCreateUser *User
+}
+
+func NewSimpleMockAuthRepository() *SimpleMockAuthRepository {
+	return &SimpleMockAuthRepository{
+		users: make(map[string]*User),
+	}
+}
+
+func (m *SimpleMockAuthRepository) GetUserByEmail(email string) (*User, error) {
+	return m.users[email], m.ErrGetUserByEmail
+}
+
+func (m *SimpleMockAuthRepository) CreateUser(username, email string) (*User, error) {
+	if m.ErrCreateUser != nil {
+		return nil, m.ErrCreateUser
+	}
+
+	user := &User{
+		ID:       "mockuid",
+		Username: username,
+		Email:    email,
+		Created:  time.Now(),
+	}
+
+	if m.PreCalledCreateUser != nil {
+		cpy := *m.PreCalledCreateUser
+		user = &cpy
+	}
+
+	m.users[email] = user
+	return user, nil
+}
+
+// ============================================================================
+// Simple AuthService Tests
+// ============================================================================
+
+func TestSimpleAuthService_Register_Success(t *testing.T) {
+	repo := NewSimpleMockAuthRepository()
+	mockMgr := &JwtManager{}
+	authSvc := NewSimpleAuthService(repo, mockMgr)
+
+	inputUser := "newuser"
+	inputEmail := "new@example.com"
+
+	user, token, err := authSvc.Register(inputUser, inputEmail, "password123")
+
+	if err != nil {
+		t.Fatalf("Register failed with error: %v", err)
+	}
+	if user == nil {
+		t.Fatal("Expected user, got nil")
+	}
+	if user.Username != inputUser {
+		t.Errorf("Username mismatch. Got %s, want %s", user.Username, inputUser)
+	}
+	if token == "" {
+		t.Error("Expected non-empty token")
+	}
+	expectedPrefix := "Bearer "
+	if !strings.HasPrefix(token, expectedPrefix) {
+		t.Errorf("Token format incorrect. Got: %s", token)
+	}
+}
+
+func TestSimpleAuthService_Register_UserAlreadyExists(t *testing.T) {
+	repo := NewSimpleMockAuthRepository()
+	// Pre-populate mock DB
+	repo.users["existing@example.com"] = &User{Email: "existing@example.com"}
+
+	authSvc := NewSimpleAuthService(repo, &JwtManager{})
+
+	_, _, err := authSvc.Register("newuser", "existing@example.com", "password123")
+
+	if err == nil {
+		t.Error("Expected error for existing user, got nil")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("Error message not descriptive enough: %v", err)
+	}
+}
+
+func TestSimpleAuthService_Login_Failure_WrongPassword(t *testing.T) {
+	repo := NewSimpleMockAuthRepository()
+	// Pre-populate mock DB
+	repo.users["test@example.com"] = &User{Email: "test@example.com"}
+
+	authSvc := NewSimpleAuthService(repo, &JwtManager{})
+
+	_, err := authSvc.Login("test@example.com", "wrongpassword")
+
+	if err == nil {
+		t.Error("Expected error for wrong password, got nil")
+	}
+	expectedMsg := "invalid credentials"
+	if err.Error() != expectedMsg {
+		t.Errorf("Got error: %v, want: %v", err, expectedMsg)
+	}
 }
