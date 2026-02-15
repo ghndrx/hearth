@@ -215,3 +215,132 @@ func (r *ThreadRepository) IncrementMessageCount(ctx context.Context, threadID u
 	_, err := r.db.ExecContext(ctx, `UPDATE threads SET message_count = message_count + 1 WHERE id = $1`, threadID)
 	return err
 }
+
+// ============================================================================
+// Thread Notification Preferences
+// ============================================================================
+
+// GetNotificationPreference gets a user's notification preference for a thread
+func (r *ThreadRepository) GetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error) {
+	var pref models.ThreadNotificationPreference
+	query := `SELECT thread_id, user_id, level, created_at, updated_at FROM thread_notification_preferences WHERE thread_id = $1 AND user_id = $2`
+	err := r.db.GetContext(ctx, &pref, query, threadID, userID)
+	if err == sql.ErrNoRows {
+		// Return default preference
+		return &models.ThreadNotificationPreference{
+			ThreadID: threadID,
+			UserID:   userID,
+			Level:    models.ThreadNotifyAll,
+		}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &pref, nil
+}
+
+// SetNotificationPreference sets a user's notification preference for a thread
+func (r *ThreadRepository) SetNotificationPreference(ctx context.Context, pref *models.ThreadNotificationPreference) error {
+	query := `
+		INSERT INTO thread_notification_preferences (thread_id, user_id, level, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (thread_id, user_id) 
+		DO UPDATE SET level = EXCLUDED.level, updated_at = NOW()
+	`
+	_, err := r.db.ExecContext(ctx, query, pref.ThreadID, pref.UserID, pref.Level)
+	return err
+}
+
+// DeleteNotificationPreference removes a user's notification preference for a thread
+func (r *ThreadRepository) DeleteNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM thread_notification_preferences WHERE thread_id = $1 AND user_id = $2`, threadID, userID)
+	return err
+}
+
+// GetNotificationPreferencesForUser gets all notification preferences for a user
+func (r *ThreadRepository) GetNotificationPreferencesForUser(ctx context.Context, userID uuid.UUID) ([]*models.ThreadNotificationPreference, error) {
+	var prefs []*models.ThreadNotificationPreference
+	query := `SELECT thread_id, user_id, level, created_at, updated_at FROM thread_notification_preferences WHERE user_id = $1`
+	err := r.db.SelectContext(ctx, &prefs, query, userID)
+	return prefs, err
+}
+
+// ============================================================================
+// Thread Presence (Active Viewers)
+// ============================================================================
+
+// SetPresence marks a user as actively viewing a thread
+func (r *ThreadRepository) SetPresence(ctx context.Context, threadID, userID uuid.UUID) error {
+	query := `
+		INSERT INTO thread_presence (thread_id, user_id, last_seen_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (thread_id, user_id) 
+		DO UPDATE SET last_seen_at = NOW()
+	`
+	_, err := r.db.ExecContext(ctx, query, threadID, userID)
+	return err
+}
+
+// RemovePresence removes a user's presence from a thread
+func (r *ThreadRepository) RemovePresence(ctx context.Context, threadID, userID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM thread_presence WHERE thread_id = $1 AND user_id = $2`, threadID, userID)
+	return err
+}
+
+// GetActiveViewers gets users currently viewing a thread (seen in last 5 minutes)
+func (r *ThreadRepository) GetActiveViewers(ctx context.Context, threadID uuid.UUID) ([]models.ThreadPresenceUser, error) {
+	var viewers []models.ThreadPresenceUser
+	query := `
+		SELECT u.id, u.username, u.display_name, u.avatar
+		FROM thread_presence tp
+		JOIN users u ON u.id = tp.user_id
+		WHERE tp.thread_id = $1 AND tp.last_seen_at > NOW() - INTERVAL '5 minutes'
+		ORDER BY tp.last_seen_at DESC
+	`
+	err := r.db.SelectContext(ctx, &viewers, query, threadID)
+	return viewers, err
+}
+
+// CleanupStalePresence removes stale presence records (older than 5 minutes)
+func (r *ThreadRepository) CleanupStalePresence(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM thread_presence WHERE last_seen_at < NOW() - INTERVAL '5 minutes'`)
+	return err
+}
+
+// UpdatePresenceHeartbeat updates the last_seen_at for an active viewer
+func (r *ThreadRepository) UpdatePresenceHeartbeat(ctx context.Context, threadID, userID uuid.UUID) error {
+	query := `UPDATE thread_presence SET last_seen_at = NOW() WHERE thread_id = $1 AND user_id = $2`
+	_, err := r.db.ExecContext(ctx, query, threadID, userID)
+	return err
+}
+
+// GetMessagesWithAuthors retrieves messages from a thread with author details
+func (r *ThreadRepository) GetMessagesWithAuthors(ctx context.Context, threadID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	var messages []*models.ThreadMessage
+	var err error
+
+	baseQuery := `
+		SELECT 
+			tm.id, tm.thread_id, tm.author_id, tm.content, tm.created_at, tm.edited_at,
+			u.id as "author.id", u.username as "author.username", 
+			u.display_name as "author.display_name", u.avatar as "author.avatar"
+		FROM thread_messages tm
+		LEFT JOIN users u ON u.id = tm.author_id
+		WHERE tm.thread_id = $1
+	`
+
+	if before != nil {
+		query := baseQuery + ` AND tm.created_at < (SELECT created_at FROM thread_messages WHERE id = $2)
+			ORDER BY tm.created_at DESC LIMIT $3`
+		err = r.db.SelectContext(ctx, &messages, query, threadID, *before, limit)
+	} else {
+		query := baseQuery + ` ORDER BY tm.created_at DESC LIMIT $2`
+		err = r.db.SelectContext(ctx, &messages, query, threadID, limit)
+	}
+
+	return messages, err
+}

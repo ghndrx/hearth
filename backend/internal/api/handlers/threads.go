@@ -376,3 +376,173 @@ func (h *ThreadHandler) DeleteThread(c *fiber.Ctx) error {
 
 	return c.SendStatus(fiber.StatusNoContent)
 }
+
+// ============================================================================
+// Thread Notification Preferences
+// ============================================================================
+
+// GetNotificationPreference gets the user's notification preference for a thread
+// GET /threads/:id/notifications
+func (h *ThreadHandler) GetNotificationPreference(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	threadID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	pref, err := h.threadService.GetNotificationPreference(c.Context(), threadID, userID)
+	if err != nil {
+		if err == services.ErrThreadNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "thread not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get notification preference",
+		})
+	}
+
+	return c.JSON(pref)
+}
+
+// SetNotificationPreference sets the user's notification preference for a thread
+// PUT /threads/:id/notifications
+func (h *ThreadHandler) SetNotificationPreference(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	threadID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	var req models.UpdateThreadNotificationRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	// Validate level
+	switch req.Level {
+	case models.ThreadNotifyAll, models.ThreadNotifyMentions, models.ThreadNotifyNone:
+		// Valid
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid notification level, must be 'all', 'mentions', or 'none'",
+		})
+	}
+
+	if err := h.threadService.SetNotificationPreference(c.Context(), threadID, userID, req.Level); err != nil {
+		if err == services.ErrThreadNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "thread not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to set notification preference",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"thread_id": threadID,
+		"level":     req.Level,
+	})
+}
+
+// ============================================================================
+// Thread Presence (Active Viewers)
+// ============================================================================
+
+// EnterThread marks the user as viewing a thread and returns active viewers
+// POST /threads/:id/presence
+func (h *ThreadHandler) EnterThread(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	threadID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	response, err := h.threadService.EnterThread(c.Context(), threadID, userID)
+	if err != nil {
+		if err == services.ErrThreadNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "thread not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to enter thread",
+		})
+	}
+
+	return c.JSON(response)
+}
+
+// ExitThreadPresence removes the user's presence from a thread (stops viewing)
+// DELETE /threads/:id/presence
+func (h *ThreadHandler) ExitThreadPresence(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	threadID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	if err := h.threadService.ExitThread(c.Context(), threadID, userID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to exit thread",
+		})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// GetActiveViewers gets users currently viewing a thread
+// GET /threads/:id/presence
+func (h *ThreadHandler) GetActiveViewers(c *fiber.Ctx) error {
+	threadID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	response, err := h.threadService.GetActiveViewers(c.Context(), threadID)
+	if err != nil {
+		if err == services.ErrThreadNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "thread not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get active viewers",
+		})
+	}
+
+	return c.JSON(response)
+}
+
+// HeartbeatPresence updates the user's presence timestamp
+// PATCH /threads/:id/presence
+func (h *ThreadHandler) HeartbeatPresence(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	threadID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	if err := h.threadService.HeartbeatPresence(c.Context(), threadID, userID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update presence",
+		})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}

@@ -12,7 +12,7 @@
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import MemberList from '$lib/components/MemberList.svelte';
-	import ThreadView from '$lib/components/ThreadView.svelte';
+	import ThreadSidebar from '$lib/components/ThreadSidebar.svelte';
 	import PinnedMessages from '$lib/components/PinnedMessages.svelte';
 	import UserSettings from '$lib/components/UserSettings.svelte';
 	import ServerSettings from '$lib/components/ServerSettings.svelte';
@@ -90,9 +90,9 @@
 		<MemberList />
 	{/if}
 
-	<!-- Thread View - Right sidebar panel for viewing threads -->
+	<!-- FEAT-001: Thread Sidebar - Enhanced right sidebar panel for viewing threads -->
 	{#if $threadStore.currentThread}
-		<ThreadView />
+		<ThreadSidebar />
 	{/if}
 
 	<!-- Pinned Messages - Right sidebar panel for viewing pinned messages -->

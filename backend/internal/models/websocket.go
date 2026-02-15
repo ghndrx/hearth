@@ -95,4 +95,11 @@ const (
 	WSEventServerMemberAdd    = "SERVER_MEMBER_ADD"
 	WSEventServerMemberRemove = "SERVER_MEMBER_REMOVE"
 	WSEventServerMemberUpdate = "SERVER_MEMBER_UPDATE"
+
+	// FEAT-001: Thread events
+	WSEventThreadCreate          = "THREAD_CREATE"
+	WSEventThreadUpdate          = "THREAD_UPDATE"
+	WSEventThreadDelete          = "THREAD_DELETE"
+	WSEventThreadPresenceUpdate  = "THREAD_PRESENCE_UPDATE"
+	WSEventThreadMessageCreate   = "THREAD_MESSAGE_CREATE"
 )

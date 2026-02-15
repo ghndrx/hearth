@@ -5,6 +5,8 @@ export type Theme = 'dark' | 'light' | 'midnight';
 export type MessageDisplay = 'cozy' | 'compact';
 export type NotificationLevel = 'all' | 'mentions' | 'none';
 
+export type ThreadNotificationLevel = 'all' | 'mentions' | 'none';
+
 export interface NotificationSettings {
 	desktopEnabled: boolean;
 	soundsEnabled: boolean;
@@ -19,6 +21,10 @@ export interface NotificationSettings {
 	mentionRoles: boolean;
 	mentionHighlight: boolean;
 	suppressDND: boolean;
+	// FEAT-001: Thread notification preferences
+	threadNotifications: ThreadNotificationLevel;
+	threadAutoFollow: boolean;
+	threadFollowOnReply: boolean;
 }
 
 export interface AppSettings {
@@ -54,7 +60,11 @@ const defaultNotificationSettings: NotificationSettings = {
 	mentionEveryone: true,
 	mentionRoles: true,
 	mentionHighlight: true,
-	suppressDND: false
+	suppressDND: false,
+	// FEAT-001: Thread notification defaults
+	threadNotifications: 'all',
+	threadAutoFollow: true,
+	threadFollowOnReply: true
 };
 
 const defaultSettings: AppSettings = {
@@ -86,6 +96,10 @@ function isValidVolume(value: unknown): value is number {
 	return typeof value === 'number' && value >= 0 && value <= 100;
 }
 
+function isValidThreadNotificationLevel(value: unknown): value is ThreadNotificationLevel {
+	return typeof value === 'string' && ['all', 'mentions', 'none'].includes(value);
+}
+
 function loadNotificationSettings(parsed: Record<string, unknown>): NotificationSettings {
 	const n = typeof parsed.notifications === 'object' && parsed.notifications !== null 
 		? parsed.notifications as Record<string, unknown>
@@ -104,7 +118,11 @@ function loadNotificationSettings(parsed: Record<string, unknown>): Notification
 		mentionEveryone: typeof n.mentionEveryone === 'boolean' ? n.mentionEveryone : defaultNotificationSettings.mentionEveryone,
 		mentionRoles: typeof n.mentionRoles === 'boolean' ? n.mentionRoles : defaultNotificationSettings.mentionRoles,
 		mentionHighlight: typeof n.mentionHighlight === 'boolean' ? n.mentionHighlight : defaultNotificationSettings.mentionHighlight,
-		suppressDND: typeof n.suppressDND === 'boolean' ? n.suppressDND : defaultNotificationSettings.suppressDND
+		suppressDND: typeof n.suppressDND === 'boolean' ? n.suppressDND : defaultNotificationSettings.suppressDND,
+		// FEAT-001: Thread notification settings
+		threadNotifications: isValidThreadNotificationLevel(n.threadNotifications) ? n.threadNotifications : defaultNotificationSettings.threadNotifications,
+		threadAutoFollow: typeof n.threadAutoFollow === 'boolean' ? n.threadAutoFollow : defaultNotificationSettings.threadAutoFollow,
+		threadFollowOnReply: typeof n.threadFollowOnReply === 'boolean' ? n.threadFollowOnReply : defaultNotificationSettings.threadFollowOnReply
 	};
 }
 

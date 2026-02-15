@@ -1,7 +1,11 @@
 <script lang="ts">
+  /**
+   * NotificationSettings.svelte
+   * FEAT-001: Added Thread Notifications section
+   */
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { settings, notificationSettings, type NotificationSettings } from '$lib/stores/settings';
+  import { settings, notificationSettings, type NotificationSettings, type ThreadNotificationLevel } from '$lib/stores/settings';
 
   export let embedded = false;
 
@@ -39,6 +43,10 @@
     if (typeof currentValue === 'boolean') {
       settings.updateNotifications({ [key]: !currentValue });
     }
+  }
+
+  function updateThreadNotificationLevel(level: ThreadNotificationLevel) {
+    settings.updateNotifications({ threadNotifications: level });
   }
 
   function updateVolume(e: Event) {
@@ -317,6 +325,97 @@
           type="checkbox" 
           checked={!notifications.mentionRoles}
           on:change={() => toggleSetting('mentionRoles')}
+          class="opacity-0 w-0 h-0"
+        />
+        <span class="absolute cursor-pointer inset-0 bg-[var(--bg-modifier-accent)] rounded-full transition-colors before:content-[''] before:absolute before:h-[18px] before:w-[18px] before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition-transform [&:has(input:checked)]:bg-[var(--brand-primary)] [&:has(input:checked)]:before:translate-x-4"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- FEAT-001: Thread Notifications Section -->
+  <div class="mb-10 pb-10 border-b border-[var(--bg-modifier-accent)]">
+    <h2 class="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] mb-4">Threads</h2>
+    
+    <!-- Thread Notification Level -->
+    <div class="py-4 border-b border-[var(--bg-modifier-accent)]">
+      <div class="mb-3">
+        <span class="block text-base text-[var(--text-primary)] mb-1">Thread Notification Level</span>
+        <span class="text-sm text-[var(--text-muted)]">Choose when to receive notifications for threads you're following.</span>
+      </div>
+      <div class="flex flex-col gap-2">
+        <label class="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-secondary)] cursor-pointer hover:bg-[var(--bg-modifier-hover)] transition-colors" class:ring-2={notifications.threadNotifications === 'all'} class:ring-[var(--brand-primary)]={notifications.threadNotifications === 'all'}>
+          <input 
+            type="radio" 
+            name="threadNotifications" 
+            value="all"
+            checked={notifications.threadNotifications === 'all'}
+            on:change={() => updateThreadNotificationLevel('all')}
+            class="w-4 h-4 accent-[var(--brand-primary)]"
+          />
+          <div class="flex-1">
+            <span class="block text-[var(--text-primary)] font-medium">All Messages</span>
+            <span class="text-sm text-[var(--text-muted)]">Receive notifications for all new replies in threads you follow</span>
+          </div>
+        </label>
+        <label class="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-secondary)] cursor-pointer hover:bg-[var(--bg-modifier-hover)] transition-colors" class:ring-2={notifications.threadNotifications === 'mentions'} class:ring-[var(--brand-primary)]={notifications.threadNotifications === 'mentions'}>
+          <input 
+            type="radio" 
+            name="threadNotifications" 
+            value="mentions"
+            checked={notifications.threadNotifications === 'mentions'}
+            on:change={() => updateThreadNotificationLevel('mentions')}
+            class="w-4 h-4 accent-[var(--brand-primary)]"
+          />
+          <div class="flex-1">
+            <span class="block text-[var(--text-primary)] font-medium">Only @mentions</span>
+            <span class="text-sm text-[var(--text-muted)]">Only receive notifications when you are mentioned</span>
+          </div>
+        </label>
+        <label class="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-secondary)] cursor-pointer hover:bg-[var(--bg-modifier-hover)] transition-colors" class:ring-2={notifications.threadNotifications === 'none'} class:ring-[var(--brand-primary)]={notifications.threadNotifications === 'none'}>
+          <input 
+            type="radio" 
+            name="threadNotifications" 
+            value="none"
+            checked={notifications.threadNotifications === 'none'}
+            on:change={() => updateThreadNotificationLevel('none')}
+            class="w-4 h-4 accent-[var(--brand-primary)]"
+          />
+          <div class="flex-1">
+            <span class="block text-[var(--text-primary)] font-medium">Nothing</span>
+            <span class="text-sm text-[var(--text-muted)]">Don't receive any thread notifications by default</span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Auto-follow Threads -->
+    <div class="flex justify-between items-center py-4 border-b border-[var(--bg-modifier-accent)]">
+      <div>
+        <span class="block text-base text-[var(--text-primary)] mb-1">Automatically Follow Threads</span>
+        <span class="text-sm text-[var(--text-muted)]">Automatically follow threads when you're mentioned or added.</span>
+      </div>
+      <label class="relative inline-block w-10 h-6 flex-shrink-0">
+        <input 
+          type="checkbox" 
+          checked={notifications.threadAutoFollow}
+          on:change={() => toggleSetting('threadAutoFollow')}
+          class="opacity-0 w-0 h-0"
+        />
+        <span class="absolute cursor-pointer inset-0 bg-[var(--bg-modifier-accent)] rounded-full transition-colors before:content-[''] before:absolute before:h-[18px] before:w-[18px] before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition-transform [&:has(input:checked)]:bg-[var(--brand-primary)] [&:has(input:checked)]:before:translate-x-4"></span>
+      </label>
+    </div>
+
+    <!-- Follow on Reply -->
+    <div class="flex justify-between items-center py-4">
+      <div>
+        <span class="block text-base text-[var(--text-primary)] mb-1">Follow on Reply</span>
+        <span class="text-sm text-[var(--text-muted)]">Automatically follow threads when you reply to them.</span>
+      </div>
+      <label class="relative inline-block w-10 h-6 flex-shrink-0">
+        <input 
+          type="checkbox" 
+          checked={notifications.threadFollowOnReply}
+          on:change={() => toggleSetting('threadFollowOnReply')}
           class="opacity-0 w-0 h-0"
         />
         <span class="absolute cursor-pointer inset-0 bg-[var(--bg-modifier-accent)] rounded-full transition-colors before:content-[''] before:absolute before:h-[18px] before:w-[18px] before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition-transform [&:has(input:checked)]:bg-[var(--brand-primary)] [&:has(input:checked)]:before:translate-x-4"></span>

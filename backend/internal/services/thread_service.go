@@ -36,6 +36,15 @@ type ThreadRepository interface {
 	CreateMessage(ctx context.Context, threadID, authorID uuid.UUID, content string) (*models.ThreadMessage, error)
 	GetMessages(ctx context.Context, threadID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
 	IncrementMessageCount(ctx context.Context, threadID uuid.UUID) error
+	// Notification preferences
+	GetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error)
+	SetNotificationPreference(ctx context.Context, pref *models.ThreadNotificationPreference) error
+	DeleteNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) error
+	// Presence
+	SetPresence(ctx context.Context, threadID, userID uuid.UUID) error
+	RemovePresence(ctx context.Context, threadID, userID uuid.UUID) error
+	GetActiveViewers(ctx context.Context, threadID uuid.UUID) ([]models.ThreadPresenceUser, error)
+	UpdatePresenceHeartbeat(ctx context.Context, threadID, userID uuid.UUID) error
 }
 
 // ThreadService handles thread-related business logic
@@ -406,6 +415,148 @@ func (s *ThreadService) DeleteThread(ctx context.Context, threadID, requesterID 
 	return nil
 }
 
+// ============================================================================
+// Thread Notification Preferences
+// ============================================================================
+
+// GetNotificationPreference gets a user's notification preference for a thread
+func (s *ThreadService) GetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	return s.threadRepo.GetNotificationPreference(ctx, threadID, userID)
+}
+
+// SetNotificationPreference sets a user's notification preference for a thread
+func (s *ThreadService) SetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID, level models.ThreadNotificationLevel) error {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	// Validate level
+	switch level {
+	case models.ThreadNotifyAll, models.ThreadNotifyMentions, models.ThreadNotifyNone:
+		// Valid
+	default:
+		return errors.New("invalid notification level")
+	}
+
+	pref := &models.ThreadNotificationPreference{
+		ThreadID: threadID,
+		UserID:   userID,
+		Level:    level,
+	}
+
+	if err := s.threadRepo.SetNotificationPreference(ctx, pref); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("thread.notification_preference_updated", &ThreadNotificationUpdatedEvent{
+		ThreadID: threadID,
+		UserID:   userID,
+		Level:    level,
+	})
+
+	return nil
+}
+
+// ============================================================================
+// Thread Presence (Active Viewers)
+// ============================================================================
+
+// EnterThread marks a user as actively viewing a thread
+func (s *ThreadService) EnterThread(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadPresenceResponse, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	// Set presence
+	if err := s.threadRepo.SetPresence(ctx, threadID, userID); err != nil {
+		return nil, err
+	}
+
+	// Get all active viewers
+	viewers, err := s.threadRepo.GetActiveViewers(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &models.ThreadPresenceResponse{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	}
+
+	// Broadcast presence update
+	s.eventBus.Publish("thread.presence_update", &ThreadPresenceUpdateEvent{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	})
+
+	return response, nil
+}
+
+// ExitThread removes a user's presence from a thread (stops viewing)
+func (s *ThreadService) ExitThread(ctx context.Context, threadID, userID uuid.UUID) error {
+	// Remove presence (don't error if thread doesn't exist)
+	if err := s.threadRepo.RemovePresence(ctx, threadID, userID); err != nil {
+		return err
+	}
+
+	// Get remaining active viewers
+	viewers, _ := s.threadRepo.GetActiveViewers(ctx, threadID)
+
+	// Broadcast presence update
+	s.eventBus.Publish("thread.presence_update", &ThreadPresenceUpdateEvent{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	})
+
+	return nil
+}
+
+// GetActiveViewers gets users currently viewing a thread
+func (s *ThreadService) GetActiveViewers(ctx context.Context, threadID uuid.UUID) (*models.ThreadPresenceResponse, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	viewers, err := s.threadRepo.GetActiveViewers(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ThreadPresenceResponse{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	}, nil
+}
+
+// HeartbeatPresence updates the last_seen_at for an active viewer
+func (s *ThreadService) HeartbeatPresence(ctx context.Context, threadID, userID uuid.UUID) error {
+	return s.threadRepo.UpdatePresenceHeartbeat(ctx, threadID, userID)
+}
+
 // Events
 
 type ThreadCreatedEvent struct {
@@ -431,4 +582,15 @@ type ThreadDeletedEvent struct {
 type ThreadMessageCreatedEvent struct {
 	Message  *models.ThreadMessage
 	ThreadID uuid.UUID
+}
+
+type ThreadNotificationUpdatedEvent struct {
+	ThreadID uuid.UUID
+	UserID   uuid.UUID
+	Level    models.ThreadNotificationLevel
+}
+
+type ThreadPresenceUpdateEvent struct {
+	ThreadID    uuid.UUID
+	ActiveUsers []models.ThreadPresenceUser
 }

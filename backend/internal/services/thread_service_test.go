@@ -140,6 +140,40 @@ func (m *mockThreadRepository) IncrementMessageCount(ctx context.Context, thread
 	return nil
 }
 
+// FEAT-001: Notification preference methods
+func (m *mockThreadRepository) GetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error) {
+	return &models.ThreadNotificationPreference{
+		ThreadID: threadID,
+		UserID:   userID,
+		Level:    models.ThreadNotifyAll,
+	}, nil
+}
+
+func (m *mockThreadRepository) SetNotificationPreference(ctx context.Context, pref *models.ThreadNotificationPreference) error {
+	return nil
+}
+
+func (m *mockThreadRepository) DeleteNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) error {
+	return nil
+}
+
+// FEAT-001: Presence methods
+func (m *mockThreadRepository) SetPresence(ctx context.Context, threadID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *mockThreadRepository) RemovePresence(ctx context.Context, threadID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *mockThreadRepository) GetActiveViewers(ctx context.Context, threadID uuid.UUID) ([]models.ThreadPresenceUser, error) {
+	return []models.ThreadPresenceUser{}, nil
+}
+
+func (m *mockThreadRepository) UpdatePresenceHeartbeat(ctx context.Context, threadID, userID uuid.UUID) error {
+	return nil
+}
+
 // mockChannelRepoForThread mocks ChannelRepository for thread service tests
 type mockChannelRepoForThread struct {
 	getByIDFunc func(ctx context.Context, id uuid.UUID) (*models.Channel, error)

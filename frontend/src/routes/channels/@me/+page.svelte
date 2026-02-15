@@ -203,15 +203,15 @@
 	.friends-content {
 		flex: 1;
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: center;
 		padding: 32px;
+		overflow-y: auto;
 	}
 	
 	.empty-state {
 		text-align: center;
 		max-width: 400px;
-		margin-top: 100px;
 	}
 	
 	.illustration {

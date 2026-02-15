@@ -26,7 +26,11 @@ export { default as Reactions } from './Reactions.svelte';
 export { default as EmojiPicker } from './EmojiPicker.svelte';
 export { default as GifPicker } from './GifPicker.svelte';
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte';
+// FEAT-001: Thread components
 export { default as ThreadView } from './ThreadView.svelte';
+export { default as ThreadSidebar } from './ThreadSidebar.svelte';
+export { default as ThreadParticipants } from './ThreadParticipants.svelte';
+export { default as ThreadReplyIndicator } from './ThreadReplyIndicator.svelte';
 
 // User components
 export { default as Avatar } from './Avatar.svelte';

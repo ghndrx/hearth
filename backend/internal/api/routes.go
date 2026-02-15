@@ -182,6 +182,14 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	threads.Post("/:id/unarchive", h.Threads.UnarchiveThread)
 	threads.Post("/:id/join", h.Threads.JoinThread)
 	threads.Delete("/:id/members/@me", h.Threads.LeaveThread)
+	// Thread notification preferences
+	threads.Get("/:id/notifications", h.Threads.GetNotificationPreference)
+	threads.Put("/:id/notifications", h.Threads.SetNotificationPreference)
+	// Thread presence (active viewers)
+	threads.Get("/:id/presence", h.Threads.GetActiveViewers)
+	threads.Post("/:id/presence", h.Threads.EnterThread)
+	threads.Patch("/:id/presence", h.Threads.HeartbeatPresence)
+	threads.Delete("/:id/presence", h.Threads.ExitThreadPresence)
 	
 	// Server channels
 	servers.Get("/:id/channels", h.Servers.GetChannels)
