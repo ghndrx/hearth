@@ -269,7 +269,7 @@
       transition:fly={{ y: 20, duration: 200 }}
     >
       <!-- Sidebar -->
-      <nav class="w-[218px] bg-[var(--bg-secondary)] flex justify-end py-[60px] px-6 pl-5 flex-shrink-0 overflow-y-auto" aria-label="Settings navigation">
+      <nav class="w-[218px] bg-[var(--bg-secondary)] flex justify-end pt-[20px] pb-[60px] px-6 pl-5 flex-shrink-0 overflow-y-auto" aria-label="Settings navigation">
         <div class="w-[192px]">
           {#each sections as section}
             {#if section.divider}
@@ -291,7 +291,7 @@
       </nav>
       
       <!-- Content -->
-      <main class="flex-1 relative flex justify-start py-[60px] pr-10 pl-10 pb-20 overflow-y-auto">
+      <main class="flex-1 relative flex justify-start pt-[20px] pr-10 pl-10 pb-20 overflow-y-auto">
         <div class="w-full max-w-[740px] overflow-y-auto">
           {#if activeSection === 'account'}
             <section>
