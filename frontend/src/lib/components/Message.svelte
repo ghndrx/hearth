@@ -137,7 +137,7 @@
 					style="background-color: {getAvatarColor(displayName)}"
 				>
 					<span class="text-white font-semibold text-base">
-						{(displayName.charAt(0) || '?').toUpperCase()}
+						{((Array.from(displayName)[0] as string) || '?').toUpperCase()}
 					</span>
 				</div>
 			{/if}
@@ -156,7 +156,7 @@
 			<!-- Header with author name and timestamp -->
 			<div class="flex items-baseline gap-2 mb-0.5">
 				<span 
-					class="font-medium text-base cursor-pointer hover:underline"
+					class="font-medium text-base cursor-pointer hover:underline author-name"
 					style="color: {usernameColor}"
 				>
 					{displayName}
@@ -176,6 +176,7 @@
 				<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" class="text-[#b5bac1]">
 					<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
 				</svg>
+				<span class="text-[#949ba4]">Replying to</span>
 				<span class="text-[#b5bac1] font-medium">{message.reply_to_author?.username || 'Unknown'}</span>
 				<span class="truncate">{message.reply_to_content}</span>
 			</div>
