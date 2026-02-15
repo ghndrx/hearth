@@ -121,6 +121,32 @@ type CreateThreadRequest struct {
 	AutoArchive *int   `json:"auto_archive,omitempty"` // 60, 1440, 4320, 10080
 }
 
+// ThreadMessage represents a message within a thread
+type ThreadMessage struct {
+	ID        uuid.UUID  `json:"id" db:"id"`
+	ThreadID  uuid.UUID  `json:"thread_id" db:"thread_id"`
+	AuthorID  uuid.UUID  `json:"author_id" db:"author_id"`
+	Content   string     `json:"content" db:"content"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	EditedAt  *time.Time `json:"edited_at,omitempty" db:"edited_at"`
+
+	// Populated from joins
+	Author *PublicUser `json:"author,omitempty"`
+}
+
+// CreateThreadMessageRequest is the input for sending a message to a thread
+type CreateThreadMessageRequest struct {
+	Content string `json:"content" validate:"required,min=1,max=2000"`
+}
+
+// UpdateThreadRequest is the input for updating a thread
+type UpdateThreadRequest struct {
+	Name        *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Archived    *bool   `json:"archived,omitempty"`
+	Locked      *bool   `json:"locked,omitempty"`
+	AutoArchive *int    `json:"auto_archive,omitempty"`
+}
+
 // DMChannelRecipient links users to DM channels
 type DMChannelRecipient struct {
 	ChannelID uuid.UUID `json:"channel_id" db:"channel_id"`
