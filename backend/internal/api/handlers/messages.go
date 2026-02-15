@@ -348,6 +348,16 @@ func (h *MessageHandlers) PinMessage(c *fiber.Ctx) error {
 
 	err = h.messageService.PinMessage(c.Context(), messageID, userID)
 	if err != nil {
+		if errors.Is(err, services.ErrMessageNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to pin message",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -371,6 +381,11 @@ func (h *MessageHandlers) UnpinMessage(c *fiber.Ctx) error {
 		if errors.Is(err, services.ErrMessageNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to unpin message",
 			})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

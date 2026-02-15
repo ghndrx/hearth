@@ -367,6 +367,9 @@ func setupMessageTestApp(messageService *mockMessageService) *fiber.App {
 			if errors.Is(err, services.ErrMessageNotFound) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Message not found"})
 			}
+			if errors.Is(err, services.ErrNoPermission) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "No permission to pin message"})
+			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -385,6 +388,9 @@ func setupMessageTestApp(messageService *mockMessageService) *fiber.App {
 		if err != nil {
 			if errors.Is(err, services.ErrMessageNotFound) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Message not found"})
+			}
+			if errors.Is(err, services.ErrNoPermission) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "No permission to unpin message"})
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -1404,6 +1410,33 @@ func TestPinMessage_NotFound(t *testing.T) {
 	}
 }
 
+func TestPinMessage_NoPermission(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	mockService := &mockMessageService{
+		pinMessageFunc: func(ctx context.Context, msgID, reqID uuid.UUID) error {
+			return services.ErrNoPermission
+		},
+	}
+
+	app := setupMessageTestApp(mockService)
+
+	req := httptest.NewRequest("PUT", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("Expected status 403, got %d", resp.StatusCode)
+	}
+}
+
 func TestPinMessage_InvalidMessageID(t *testing.T) {
 	userID := uuid.New()
 	channelID := uuid.New()
@@ -1499,6 +1532,33 @@ func TestUnpinMessage_InvalidMessageID(t *testing.T) {
 
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("Expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestUnpinMessage_NoPermission(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	mockService := &mockMessageService{
+		unpinMessageFunc: func(ctx context.Context, msgID, reqID uuid.UUID) error {
+			return services.ErrNoPermission
+		},
+	}
+
+	app := setupMessageTestApp(mockService)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("Expected status 403, got %d", resp.StatusCode)
 	}
 }
 
