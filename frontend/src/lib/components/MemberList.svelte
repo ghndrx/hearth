@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { currentServer } from '$lib/stores/servers';
 	import { presenceStore, type PresenceStatus, type Activity, getActivityLabel } from '$lib/stores/presence';
+	import { popoutStore } from '$lib/stores/popout';
 	import { writable } from 'svelte/store';
 	import Avatar from './Avatar.svelte';
 
@@ -11,9 +12,15 @@
 			username: string;
 			display_name: string | null;
 			avatar: string | null;
+			banner?: string | null;
+			bio?: string | null;
+			pronouns?: string | null;
+			bot?: boolean;
+			created_at?: string;
 		};
 		nickname: string | null;
 		roles: string[];
+		joined_at?: string;
 	}
 
 	interface Role {
@@ -46,6 +53,18 @@
 			.sort((a, b) => b.position - a.position);
 
 		return memberRoles[0]?.color || 'var(--text-normal)';
+	}
+
+	// Get roles with full info for a member
+	function getMemberRoles(member: Member, rolesList: Role[]): { id: string; name: string; color: string }[] {
+		return rolesList
+			.filter(r => member.roles.includes(r.id) && r.name !== '@everyone')
+			.sort((a, b) => b.position - a.position)
+			.map(r => ({
+				id: r.id,
+				name: r.name,
+				color: r.color || '#99aab5'
+			}));
 	}
 
 	// Group members by role (hoisted roles) and status
@@ -153,6 +172,55 @@
 		}
 		return activity.state || activity.name;
 	}
+
+	// Handle member click - show popout
+	function handleMemberClick(event: MouseEvent, member: Member) {
+		const target = event.currentTarget as HTMLElement;
+		const rect = target.getBoundingClientRect();
+		
+		// Position the popout to the left of the member list
+		const position = {
+			x: rect.left,
+			y: rect.top
+		};
+
+		// Build user data for popout
+		const user = {
+			id: member.user.id,
+			username: member.user.username,
+			display_name: member.user.display_name,
+			avatar: member.user.avatar,
+			banner: member.user.banner || null,
+			bio: member.user.bio || null,
+			pronouns: member.user.pronouns || null,
+			bot: member.user.bot || false,
+			created_at: member.user.created_at || new Date().toISOString()
+		};
+
+		// Build member data with roles
+		const memberData = {
+			nickname: member.nickname,
+			joined_at: member.joined_at || new Date().toISOString(),
+			roles: getMemberRoles(member, $roles)
+		};
+
+		popoutStore.open({
+			user,
+			member: memberData,
+			position,
+			anchor: 'left',
+			// TODO: Fetch mutual servers/friends from API
+			mutualServers: [],
+			mutualFriends: []
+		});
+	}
+
+	// Handle context menu
+	function handleContextMenu(event: MouseEvent, member: Member) {
+		event.preventDefault();
+		// TODO: Show context menu with options like:
+		// - Profile, Mention, Message, Mute, Kick, Ban, etc.
+	}
 </script>
 
 {#if $currentServer}
@@ -171,6 +239,9 @@
 					<button
 						class="member-item"
 						class:offline={group.isOffline}
+						on:click={(e) => handleMemberClick(e, member)}
+						on:contextmenu={(e) => handleContextMenu(e, member)}
+						aria-label="View {member.nickname || member.user.display_name || member.user.username}'s profile"
 					>
 						<!-- Avatar with status indicator -->
 						<Avatar
@@ -253,6 +324,11 @@
 
 	.member-item:active {
 		background-color: var(--bg-modifier-active, #404249);
+	}
+
+	.member-item:focus-visible {
+		outline: 2px solid var(--brand-primary, #5865f2);
+		outline-offset: -2px;
 	}
 
 	.member-item.offline {

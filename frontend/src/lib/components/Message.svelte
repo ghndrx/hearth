@@ -54,6 +54,7 @@
 
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import { popoutStore } from '$lib/stores/popout';
 	
 	export let message: any;
 	export let grouped = false;
@@ -107,6 +108,50 @@
 	$: shortTime = formatTime(message.created_at, 'short');
 	$: isEdited = !!message.edited_at;
 	$: usernameColor = roleColor || message.author?.role_color || '#f2f3f5';
+
+	function handleAuthorClick(event: MouseEvent) {
+		if (!message.author) return;
+		
+		const target = event.currentTarget as HTMLElement;
+		const rect = target.getBoundingClientRect();
+		
+		// Position the popout to the right of the clicked element
+		const position = {
+			x: rect.right,
+			y: rect.top
+		};
+
+		// Build user data for popout
+		const user = {
+			id: message.author.id,
+			username: message.author.username,
+			display_name: message.author.display_name || null,
+			avatar: message.author.avatar || null,
+			banner: message.author.banner || null,
+			bio: message.author.bio || null,
+			pronouns: message.author.pronouns || null,
+			bot: message.author.bot || false,
+			created_at: message.author.created_at || new Date().toISOString()
+		};
+
+		// Build member data if available
+		const member = message.member ? {
+			nickname: message.member.nickname || null,
+			joined_at: message.member.joined_at || new Date().toISOString(),
+			roles: (message.member.roles || []).map((r: any) => ({
+				id: r.id || r,
+				name: r.name || 'Role',
+				color: r.color || '#99aab5'
+			}))
+		} : null;
+
+		popoutStore.open({
+			user,
+			member,
+			position,
+			anchor: 'right'
+		});
+	}
 </script>
 
 <div
@@ -117,7 +162,9 @@
 >
 	{#if !grouped}
 		<!-- Avatar (40px) -->
-		<div class="w-10 h-10 mr-4 ml-4 mt-0.5 flex-shrink-0">
+		<!-- svelte-ignore a11y-click-events-have-key-events -->
+		<!-- svelte-ignore a11y-no-static-element-interactions -->
+		<div class="w-10 h-10 mr-4 ml-4 mt-0.5 flex-shrink-0" on:click={handleAuthorClick}>
 			{#if avatarUrl}
 				<img 
 					src={avatarUrl} 
@@ -148,9 +195,12 @@
 		{#if !grouped}
 			<!-- Header with author name and timestamp -->
 			<div class="flex items-baseline gap-2 mb-0.5">
+				<!-- svelte-ignore a11y-click-events-have-key-events -->
+				<!-- svelte-ignore a11y-no-static-element-interactions -->
 				<span 
 					class="font-medium text-base cursor-pointer hover:underline"
 					style="color: {usernameColor}"
+					on:click={handleAuthorClick}
 				>
 					{displayName}
 				</span>

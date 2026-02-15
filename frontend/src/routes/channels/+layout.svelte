@@ -6,11 +6,13 @@
 	import { loadDMChannels } from '$lib/stores/channels';
 	import { isSettingsOpen, isServerSettingsOpen, settings } from '$lib/stores/settings';
 	import { currentServer } from '$lib/stores/servers';
+	import { popoutStore } from '$lib/stores/popout';
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import MemberList from '$lib/components/MemberList.svelte';
 	import UserSettings from '$lib/components/UserSettings.svelte';
 	import ServerSettings from '$lib/components/ServerSettings.svelte';
+	import UserPopout from '$lib/components/UserPopout.svelte';
 
 	onMount(() => {
 		if (!$isAuthenticated) {
@@ -24,6 +26,29 @@
 
 	$: if ($isAuthenticated === false) {
 		goto('/login');
+	}
+
+	// Handle popout events
+	function handlePopoutClose() {
+		popoutStore.close();
+	}
+
+	function handlePopoutMessage(event: CustomEvent<{ userId: string }>) {
+		// TODO: Navigate to DM with user
+		console.log('Message user:', event.detail.userId);
+		popoutStore.close();
+	}
+
+	function handlePopoutCall(event: CustomEvent<{ userId: string; type: 'voice' | 'video' }>) {
+		// TODO: Initiate call with user
+		console.log('Call user:', event.detail.userId, event.detail.type);
+		popoutStore.close();
+	}
+
+	function handlePopoutServerClick(event: CustomEvent<{ serverId: string }>) {
+		// Navigate to server
+		goto(`/channels/${event.detail.serverId}`);
+		popoutStore.close();
 	}
 </script>
 
@@ -44,6 +69,22 @@
 		<MemberList />
 	{/if}
 </div>
+
+<!-- User Popout -->
+{#if $popoutStore.isOpen && $popoutStore.user}
+	<UserPopout
+		user={$popoutStore.user}
+		member={$popoutStore.member}
+		position={$popoutStore.position}
+		anchor={$popoutStore.anchor}
+		mutualServers={$popoutStore.mutualServers}
+		mutualFriends={$popoutStore.mutualFriends}
+		on:close={handlePopoutClose}
+		on:message={handlePopoutMessage}
+		on:call={handlePopoutCall}
+		on:serverClick={handlePopoutServerClick}
+	/>
+{/if}
 
 <UserSettings open={$isSettingsOpen} on:close={() => settings.close()} />
 
