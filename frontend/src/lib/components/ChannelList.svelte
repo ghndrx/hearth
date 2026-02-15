@@ -110,14 +110,14 @@
 				on:invitePeople={handleInvitePeople}
 			/>
 
-			<!-- Text Channels -->
-			{#if textChannels.length > 0}
-				<ChannelCategory
-					name="Text Channels"
-					collapsed={textCategoryCollapsed}
-					on:toggle={(e) => textCategoryCollapsed = e.detail.collapsed}
-					on:addChannel={handleAddTextChannel}
-				>
+			<!-- Text Channels - Always show category to allow creating first channel -->
+			<ChannelCategory
+				name="Text Channels"
+				collapsed={textCategoryCollapsed}
+				on:toggle={(e) => textCategoryCollapsed = e.detail.collapsed}
+				on:addChannel={handleAddTextChannel}
+			>
+				{#if textChannels.length > 0}
 					{#each textChannels as channel (channel.id)}
 						<ChannelItem
 							{channel}
@@ -126,17 +126,21 @@
 							on:openSettings={handleChannelSettings}
 						/>
 					{/each}
-				</ChannelCategory>
-			{/if}
+				{:else}
+					<div class="no-channels-hint">
+						<span>No text channels yet</span>
+					</div>
+				{/if}
+			</ChannelCategory>
 
-			<!-- Voice Channels -->
-			{#if voiceChannels.length > 0}
-				<ChannelCategory
-					name="Voice Channels"
-					collapsed={voiceCategoryCollapsed}
-					on:toggle={(e) => voiceCategoryCollapsed = e.detail.collapsed}
-					on:addChannel={handleAddVoiceChannel}
-				>
+			<!-- Voice Channels - Always show category -->
+			<ChannelCategory
+				name="Voice Channels"
+				collapsed={voiceCategoryCollapsed}
+				on:toggle={(e) => voiceCategoryCollapsed = e.detail.collapsed}
+				on:addChannel={handleAddVoiceChannel}
+			>
+				{#if voiceChannels.length > 0}
 					{#each voiceChannels as channel (channel.id)}
 						<ChannelItem
 							{channel}
@@ -146,8 +150,12 @@
 							on:openSettings={handleChannelSettings}
 						/>
 					{/each}
-				</ChannelCategory>
-			{/if}
+				{:else}
+					<div class="no-channels-hint">
+						<span>No voice channels yet</span>
+					</div>
+				{/if}
+			</ChannelCategory>
 		{:else}
 			<!-- DM List -->
 			<div class="dm-header">
@@ -336,5 +344,12 @@
 	.e2ee-indicator {
 		font-size: 12px;
 		opacity: 0.6;
+	}
+
+	.no-channels-hint {
+		padding: 8px 8px 8px 48px;
+		font-size: 13px;
+		color: var(--text-muted);
+		font-style: italic;
 	}
 </style>
