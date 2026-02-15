@@ -4,6 +4,7 @@
   import { user, auth } from '$lib/stores/auth';
   import { settings, type Theme, type MessageDisplay } from '$lib/stores/settings';
   import Avatar from './Avatar.svelte';
+  import NotificationSettings from './NotificationSettings.svelte';
   
   export let open = false;
   
@@ -560,42 +561,7 @@
           {:else if activeSection === 'notifications'}
             <section>
               <h1 class="text-xl font-semibold text-[var(--text-primary)] mb-5">Notifications</h1>
-              
-              <div class="mb-10 pb-10 border-b border-[var(--bg-modifier-accent)]">
-                <h2 class="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] mb-2">Desktop Notifications</h2>
-                
-                <div class="flex justify-between items-center py-4 border-b border-[var(--bg-modifier-accent)]">
-                  <div>
-                    <span class="block text-base text-[var(--text-primary)] mb-1">Enable Desktop Notifications</span>
-                    <span class="text-sm text-[var(--text-muted)]">Receive notifications even when Hearth is minimized.</span>
-                  </div>
-                  <label class="relative inline-block w-10 h-6 flex-shrink-0">
-                    <input 
-                      type="checkbox" 
-                      checked={appSettings.notificationsEnabled}
-                      on:change={() => toggleSetting('notificationsEnabled')}
-                      class="opacity-0 w-0 h-0"
-                    />
-                    <span class="absolute cursor-pointer inset-0 bg-[var(--bg-modifier-accent)] rounded-full transition-colors before:content-[''] before:absolute before:h-[18px] before:w-[18px] before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition-transform [&:has(input:checked)]:bg-[var(--brand-primary)] [&:has(input:checked)]:before:translate-x-4"></span>
-                  </label>
-                </div>
-                
-                <div class="flex justify-between items-center py-4">
-                  <div>
-                    <span class="block text-base text-[var(--text-primary)] mb-1">Enable Sounds</span>
-                    <span class="text-sm text-[var(--text-muted)]">Play notification sounds for messages.</span>
-                  </div>
-                  <label class="relative inline-block w-10 h-6 flex-shrink-0">
-                    <input 
-                      type="checkbox" 
-                      checked={appSettings.enableSounds}
-                      on:change={() => toggleSetting('enableSounds')}
-                      class="opacity-0 w-0 h-0"
-                    />
-                    <span class="absolute cursor-pointer inset-0 bg-[var(--bg-modifier-accent)] rounded-full transition-colors before:content-[''] before:absolute before:h-[18px] before:w-[18px] before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition-transform [&:has(input:checked)]:bg-[var(--brand-primary)] [&:has(input:checked)]:before:translate-x-4"></span>
-                  </label>
-                </div>
-              </div>
+              <NotificationSettings embedded={true} />
             </section>
           
           {:else if activeSection === 'keybinds'}

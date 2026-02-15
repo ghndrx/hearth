@@ -3,6 +3,23 @@ import { browser } from '$app/environment';
 
 export type Theme = 'dark' | 'light' | 'midnight';
 export type MessageDisplay = 'cozy' | 'compact';
+export type NotificationLevel = 'all' | 'mentions' | 'none';
+
+export interface NotificationSettings {
+	desktopEnabled: boolean;
+	soundsEnabled: boolean;
+	soundVolume: number;
+	mentionSound: boolean;
+	messageSound: boolean;
+	flashTaskbar: boolean;
+	showPreviews: boolean;
+	muteDMs: boolean;
+	muteGroupDMs: boolean;
+	mentionEveryone: boolean;
+	mentionRoles: boolean;
+	mentionHighlight: boolean;
+	suppressDND: boolean;
+}
 
 export interface AppSettings {
 	theme: Theme;
@@ -14,6 +31,7 @@ export interface AppSettings {
 	notificationsEnabled: boolean;
 	fontSize: number;
 	developerMode: boolean;
+	notifications: NotificationSettings;
 }
 
 export interface SettingsState {
@@ -22,6 +40,22 @@ export interface SettingsState {
 	activeSection: string;
 	app: AppSettings;
 }
+
+const defaultNotificationSettings: NotificationSettings = {
+	desktopEnabled: true,
+	soundsEnabled: true,
+	soundVolume: 80,
+	mentionSound: true,
+	messageSound: true,
+	flashTaskbar: true,
+	showPreviews: true,
+	muteDMs: false,
+	muteGroupDMs: false,
+	mentionEveryone: true,
+	mentionRoles: true,
+	mentionHighlight: true,
+	suppressDND: false
+};
 
 const defaultSettings: AppSettings = {
 	theme: 'dark',
@@ -32,7 +66,8 @@ const defaultSettings: AppSettings = {
 	enableSounds: true,
 	notificationsEnabled: true,
 	fontSize: 16,
-	developerMode: false
+	developerMode: false,
+	notifications: defaultNotificationSettings
 };
 
 function isValidTheme(value: unknown): value is Theme {
@@ -45,6 +80,32 @@ function isValidMessageDisplay(value: unknown): value is MessageDisplay {
 
 function isValidFontSize(value: unknown): value is number {
 	return typeof value === 'number' && value >= 12 && value <= 24;
+}
+
+function isValidVolume(value: unknown): value is number {
+	return typeof value === 'number' && value >= 0 && value <= 100;
+}
+
+function loadNotificationSettings(parsed: Record<string, unknown>): NotificationSettings {
+	const n = typeof parsed.notifications === 'object' && parsed.notifications !== null 
+		? parsed.notifications as Record<string, unknown>
+		: {};
+	
+	return {
+		desktopEnabled: typeof n.desktopEnabled === 'boolean' ? n.desktopEnabled : defaultNotificationSettings.desktopEnabled,
+		soundsEnabled: typeof n.soundsEnabled === 'boolean' ? n.soundsEnabled : defaultNotificationSettings.soundsEnabled,
+		soundVolume: isValidVolume(n.soundVolume) ? n.soundVolume : defaultNotificationSettings.soundVolume,
+		mentionSound: typeof n.mentionSound === 'boolean' ? n.mentionSound : defaultNotificationSettings.mentionSound,
+		messageSound: typeof n.messageSound === 'boolean' ? n.messageSound : defaultNotificationSettings.messageSound,
+		flashTaskbar: typeof n.flashTaskbar === 'boolean' ? n.flashTaskbar : defaultNotificationSettings.flashTaskbar,
+		showPreviews: typeof n.showPreviews === 'boolean' ? n.showPreviews : defaultNotificationSettings.showPreviews,
+		muteDMs: typeof n.muteDMs === 'boolean' ? n.muteDMs : defaultNotificationSettings.muteDMs,
+		muteGroupDMs: typeof n.muteGroupDMs === 'boolean' ? n.muteGroupDMs : defaultNotificationSettings.muteGroupDMs,
+		mentionEveryone: typeof n.mentionEveryone === 'boolean' ? n.mentionEveryone : defaultNotificationSettings.mentionEveryone,
+		mentionRoles: typeof n.mentionRoles === 'boolean' ? n.mentionRoles : defaultNotificationSettings.mentionRoles,
+		mentionHighlight: typeof n.mentionHighlight === 'boolean' ? n.mentionHighlight : defaultNotificationSettings.mentionHighlight,
+		suppressDND: typeof n.suppressDND === 'boolean' ? n.suppressDND : defaultNotificationSettings.suppressDND
+	};
 }
 
 function loadSettings(): AppSettings {
@@ -72,6 +133,7 @@ function loadSettings(): AppSettings {
 				notificationsEnabled: typeof parsed.notificationsEnabled === 'boolean' ? parsed.notificationsEnabled : defaultSettings.notificationsEnabled,
 				fontSize: isValidFontSize(parsed.fontSize) ? parsed.fontSize : defaultSettings.fontSize,
 				developerMode: typeof parsed.developerMode === 'boolean' ? parsed.developerMode : defaultSettings.developerMode,
+				notifications: loadNotificationSettings(parsed)
 			};
 		}
 	} catch (error) {
@@ -156,6 +218,15 @@ function createSettingsStore() {
 			});
 		},
 		
+		updateNotifications(updates: Partial<NotificationSettings>) {
+			update(s => {
+				const newNotifications = { ...s.app.notifications, ...updates };
+				const newApp = { ...s.app, notifications: newNotifications };
+				saveSettings(newApp);
+				return { ...s, app: newApp };
+			});
+		},
+		
 		reset() {
 			update(s => {
 				saveSettings(defaultSettings);
@@ -174,3 +245,4 @@ export const isServerSettingsOpen = derived(settings, $s => $s.isServerSettingsO
 export const activeSection = derived(settings, $s => $s.activeSection);
 export const appSettings = derived(settings, $s => $s.app);
 export const currentTheme = derived(settings, $s => $s.app.theme);
+export const notificationSettings = derived(settings, $s => $s.app.notifications);
