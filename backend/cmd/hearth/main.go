@@ -115,6 +115,22 @@ func main() {
 		serviceBus,
 	)
 
+	// Initialize additional services
+	inviteSvc := services.NewInviteService(nil, nil, repos.Servers, nil, serviceBus)
+	attachmentSvc := services.NewAttachmentService()
+	bookmarkSvc := services.NewBookmarkService()
+	emojiSvc := services.NewEmojiService()
+	moderationSvc := services.NewModerationService()
+	notificationSvc := services.NewNotificationService()
+	presenceSvc := services.NewPresenceService(nil, serviceBus, repos.Servers)
+	reactionSvc := services.NewReactionService()
+	readstateSvc := services.NewReadStateService()
+	threadSvc := services.NewThreadService()
+	typingSvc := services.NewTypingService()
+	voicestateSvc := services.NewVoiceStateService()
+	auditlogSvc := services.NewAuditLogService()
+	reportSvc := services.NewReportService()
+
 	// Initialize Fiber app with security settings
 	app := fiber.New(fiber.Config{
 		AppName:               "Hearth",
@@ -174,7 +190,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, wsGateway)
+	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, inviteSvc, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
@@ -213,4 +229,18 @@ func main() {
 	_ = serverService
 	_ = channelService
 	_ = messageService
+	_ = inviteSvc
+	_ = attachmentSvc
+	_ = bookmarkSvc
+	_ = emojiSvc
+	_ = moderationSvc
+	_ = notificationSvc
+	_ = presenceSvc
+	_ = reactionSvc
+	_ = readstateSvc
+	_ = threadSvc
+	_ = typingSvc
+	_ = voicestateSvc
+	_ = auditlogSvc
+	_ = reportSvc
 }

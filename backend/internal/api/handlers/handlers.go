@@ -14,6 +14,8 @@ type Handlers struct {
 	Invites  *InviteHandler
 	Voice    *VoiceHandler
 	Gateway  *GatewayHandler
+	Messages *MessageHandlers
+	Roles    *RoleHandlers
 }
 
 // NewHandlers creates all handlers with dependencies
@@ -24,6 +26,7 @@ func NewHandlers(
 	channelService *services.ChannelService,
 	messageService *services.MessageService,
 	roleService *services.RoleService,
+	inviteService *services.InviteService,
 	gateway *websocket.Gateway,
 ) *Handlers {
 	return &Handlers{
@@ -34,5 +37,7 @@ func NewHandlers(
 		Invites:  NewInviteHandler(serverService),
 		Voice:    NewVoiceHandler(),
 		Gateway:  NewGatewayHandler(gateway),
+		Messages: NewMessageHandlers(messageService, channelService),
+		Roles:    NewRoleHandlers(roleService),
 	}
 }
