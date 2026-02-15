@@ -49,3 +49,4 @@ uploads/
 # Uploads (in dev)
 vendor/
 .vscode/
+specs/
