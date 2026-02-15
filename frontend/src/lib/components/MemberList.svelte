@@ -4,9 +4,12 @@
 	import { popoutStore } from '$lib/stores/popout';
 	import { writable } from 'svelte/store';
 	import { handleListKeyboard } from '$lib/utils/keyboard';
+	import { api } from '$lib/api';
+	import { onMount } from 'svelte';
 	import Avatar from './Avatar.svelte';
 
 	let memberListElement: HTMLElement;
+	let loading = false;
 
 	interface Member {
 		id: string;
@@ -34,9 +37,34 @@
 		hoist: boolean;
 	}
 
-	// TODO: Load from API
 	const members = writable<Member[]>([]);
 	const roles = writable<Role[]>([]);
+
+	// Load members when server changes
+	async function loadMembers(serverId: string) {
+		if (!serverId) return;
+		loading = true;
+		try {
+			const [membersData, rolesData] = await Promise.all([
+				api.get<Member[]>(`/servers/${serverId}/members`),
+				api.get<Role[]>(`/servers/${serverId}/roles`)
+			]);
+			members.set(membersData || []);
+			roles.set(rolesData || []);
+		} catch (err) {
+			console.error('Failed to load members:', err);
+			// Set empty arrays on error
+			members.set([]);
+			roles.set([]);
+		} finally {
+			loading = false;
+		}
+	}
+
+	// Reload when server changes
+	$: if ($currentServer?.id) {
+		loadMembers($currentServer.id);
+	}
 
 	// Get presence status for a member
 	function getMemberStatus(userId: string): PresenceStatus {
