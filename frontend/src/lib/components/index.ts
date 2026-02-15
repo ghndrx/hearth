@@ -47,6 +47,7 @@ export { default as CreateServerModal } from './CreateServerModal.svelte';
 export { default as InviteModal } from './InviteModal.svelte';
 export { default as InviteLink } from './InviteLink.svelte';
 export { default as ServerSettingsModal } from './ServerSettingsModal.svelte';
+export { default as BanListModal } from './BanListModal.svelte';
 
 // Context menu components
 export { default as ContextMenu } from './ContextMenu.svelte';
