@@ -131,6 +131,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	// Execute webhook (public endpoint with token)
 	v1.Post("/webhooks/:webhookID/:token", h.Webhooks.ExecuteWebhook)
 
+	// Attachments
+	channels.Post("/:id/attachments", h.Attachments.UploadAttachment)
+	api.Get("/attachments/:id", h.Attachments.GetAttachment)
+	api.Get("/attachments/:id/download", h.Attachments.DownloadAttachment)
+	api.Get("/attachments/:id/info", h.Attachments.GetAttachmentInfo)
+	api.Delete("/attachments/:id", h.Attachments.DeleteAttachment)
+
 	// Gateway stats (admin)
 	api.Get("/gateway/stats", h.Gateway.GetStats)
 

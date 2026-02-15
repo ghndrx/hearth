@@ -24,6 +24,7 @@ import (
 	"hearth/internal/database/postgres"
 	"hearth/internal/events"
 	"hearth/internal/services"
+	"hearth/internal/storage"
 	"hearth/internal/websocket"
 )
 
@@ -120,6 +121,14 @@ func main() {
 	inviteSvc := services.NewInviteService(nil, nil, repos.Servers, nil, serviceBus)
 	webhookSvc := services.NewWebhookService(repos.Webhooks, repos.Channels, repos.Servers, serviceBus)
 	attachmentSvc := services.NewAttachmentService()
+	friendSvc := services.NewFriendService(repos.Friendships)
+
+	// Initialize storage
+	storageBackend, err := storage.NewLocalBackend("./uploads", cfg.PublicURL+"/uploads")
+	if err != nil {
+		log.Fatalf("Failed to initialize storage: %v", err)
+	}
+	storageSvc := storage.NewService(storageBackend, 25, []string{".exe", ".dll", ".bat", ".cmd", ".sh"})
 	bookmarkSvc := services.NewBookmarkService()
 	emojiSvc := services.NewEmojiService()
 	moderationSvc := services.NewModerationService()
@@ -192,7 +201,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, inviteSvc, webhookSvc, wsGateway)
+	h := handlers.NewHandlers(authService, userService, friendSvc, serverService, channelService, messageService, roleService, inviteSvc, webhookSvc, storageSvc, attachmentSvc, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
@@ -245,4 +254,6 @@ func main() {
 	_ = voicestateSvc
 	_ = auditlogSvc
 	_ = reportSvc
+	_ = friendSvc
+	_ = storageSvc
 }
