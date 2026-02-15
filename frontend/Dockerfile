@@ -1,30 +1,28 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage with Bun
+FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json bun.lockb* ./
 
 # Install dependencies
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the app
-RUN npm run build
+RUN bun run build
 
-# Runtime stage
-FROM node:20-alpine
+# Runtime stage (using Bun's built-in server)
+FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-# Install serve for static hosting
-RUN npm install -g serve
-
 # Copy built assets
 COPY --from=builder /app/build ./build
+COPY --from=builder /app/package.json ./
 
 # Create non-root user
 RUN adduser -D -g '' appuser
@@ -32,4 +30,5 @@ USER appuser
 
 EXPOSE 3000
 
-CMD ["serve", "-s", "build", "-l", "3000"]
+# Use Bun to serve static files
+CMD ["bun", "x", "serve", "-s", "build", "-l", "3000"]
