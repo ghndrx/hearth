@@ -147,7 +147,7 @@
 					variant={isCopied ? 'secondary' : 'primary'}
 					on:click={copyInviteLink}
 					disabled={!inviteLink}
-					aria-label={isCopied ? 'Link copied to clipboard' : 'Copy invite link to clipboard'}
+					ariaLabel={isCopied ? 'Link copied to clipboard' : 'Copy invite link to clipboard'}
 				>
 					{isCopied ? 'Copied' : 'Copy'}
 				</Button>

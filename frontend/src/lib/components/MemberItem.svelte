@@ -70,7 +70,7 @@
 	}
 </script>
 
-<Tooltip text={displayName} placement="left" delay={500}>
+<Tooltip text={displayName} position="left" delay={500}>
 	<button
 		class="member-item"
 		class:offline={isOffline}

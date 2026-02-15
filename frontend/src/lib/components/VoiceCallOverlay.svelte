@@ -180,7 +180,7 @@
 								<Avatar 
 									src={participant.avatar} 
 									username={participant.username} 
-									size={48}
+									size="md"
 								/>
 								{#if participant.isMuted}
 									<div class="status-badge muted-badge" title="Muted">
