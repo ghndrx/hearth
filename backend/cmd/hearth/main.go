@@ -66,8 +66,8 @@ func main() {
 	// Initialize auth services
 	jwtService := auth.NewJWTService(
 		cfg.SecretKey,
-		15*time.Minute,  // Access token expiry
-		7*24*time.Hour,  // Refresh token expiry
+		15*time.Minute, // Access token expiry
+		7*24*time.Hour, // Refresh token expiry
 	)
 
 	// Initialize WebSocket hub
@@ -83,13 +83,7 @@ func main() {
 	// Initialize services
 	quotaService := services.NewQuotaService(cfg.Quotas, nil, nil, nil)
 	userService := services.NewUserService(repos.Users, nil, serviceBus)
-	authService := services.NewAuthService(
-		repos.Users,
-		jwtService,
-		nil, // cache - TODO: add Redis cache
-		true, // registration enabled
-		false, // invite only
-	)
+	authService := services.NewAuthService(repos.Users)
 	roleService := services.NewRoleService(
 		repos.Roles,
 		repos.Servers,
@@ -138,10 +132,10 @@ func main() {
 
 	// Helmet for security headers
 	app.Use(helmet.New(helmet.Config{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "SAMEORIGIN",
-		ReferrerPolicy:        "strict-origin-when-cross-origin",
+		XSSProtection:             "1; mode=block",
+		ContentTypeNosniff:        "nosniff",
+		XFrameOptions:             "SAMEORIGIN",
+		ReferrerPolicy:            "strict-origin-when-cross-origin",
 		CrossOriginEmbedderPolicy: "require-corp",
 		CrossOriginOpenerPolicy:   "same-origin",
 		CrossOriginResourcePolicy: "same-origin",
@@ -158,7 +152,7 @@ func main() {
 		},
 		LimitReached: func(c *fiber.Ctx) error {
 			return c.Status(429).JSON(fiber.Map{
-				"error": "rate_limited",
+				"error":   "rate_limited",
 				"message": "Too many requests",
 			})
 		},

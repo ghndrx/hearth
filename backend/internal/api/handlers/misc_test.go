@@ -13,11 +13,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"hearth/internal/models"
+	"hearth/internal/services"
 )
 
-// mockServerServiceForMisc implements only the methods needed for misc handler tests
+// mockServerServiceForMisc implements the methods needed for misc handler tests
 type mockMiscServerService struct {
-	joinServerFunc func(ctx context.Context, userID uuid.UUID, code string) (*models.Server, error)
+	joinServerFunc   func(ctx context.Context, userID uuid.UUID, code string) (*models.Server, error)
+	getInviteFunc    func(ctx context.Context, code string) (*models.Invite, error)
+	deleteInviteFunc func(ctx context.Context, code string, requesterID uuid.UUID) error
 }
 
 func (m *mockMiscServerService) JoinServer(ctx context.Context, userID uuid.UUID, code string) (*models.Server, error) {
@@ -25,6 +28,20 @@ func (m *mockMiscServerService) JoinServer(ctx context.Context, userID uuid.UUID
 		return m.joinServerFunc(ctx, userID, code)
 	}
 	return nil, nil
+}
+
+func (m *mockMiscServerService) GetInvite(ctx context.Context, code string) (*models.Invite, error) {
+	if m.getInviteFunc != nil {
+		return m.getInviteFunc(ctx, code)
+	}
+	return nil, services.ErrInviteNotFound
+}
+
+func (m *mockMiscServerService) DeleteInvite(ctx context.Context, code string, requesterID uuid.UUID) error {
+	if m.deleteInviteFunc != nil {
+		return m.deleteInviteFunc(ctx, code, requesterID)
+	}
+	return nil
 }
 
 // mockGateway implements a minimal gateway for testing
@@ -64,10 +81,28 @@ func setupMiscTestApp(serverService *mockMiscServerService, gateway *mockMiscGat
 		return c.Next()
 	})
 
-	// Invite routes - implemented inline like invites_test.go
+	// Invite routes - implemented to match misc.go handler behavior
 	app.Get("/invites/:code", func(c *fiber.Ctx) error {
-		// Currently returns empty JSON (not implemented in misc.go)
-		return c.JSON(fiber.Map{})
+		code := c.Params("code")
+		if code == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invite code is required",
+			})
+		}
+
+		invite, err := serverService.GetInvite(c.Context(), code)
+		if err != nil {
+			if err == services.ErrInviteNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "invite not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(invite)
 	})
 
 	app.Post("/invites/:code", func(c *fiber.Ctx) error {
@@ -85,7 +120,31 @@ func setupMiscTestApp(serverService *mockMiscServerService, gateway *mockMiscGat
 	})
 
 	app.Delete("/invites/:code", func(c *fiber.Ctx) error {
-		// Currently returns NoContent (not implemented in misc.go)
+		userID := c.Locals("userID").(uuid.UUID)
+		code := c.Params("code")
+		if code == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invite code is required",
+			})
+		}
+
+		err := serverService.DeleteInvite(c.Context(), code, userID)
+		if err != nil {
+			if err == services.ErrInviteNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "invite not found",
+				})
+			}
+			if err == services.ErrNotServerMember {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "you don't have permission to delete this invite",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
@@ -109,22 +168,90 @@ func setupMiscTestApp(serverService *mockMiscServerService, gateway *mockMiscGat
 	return app
 }
 
-// Test InviteHandler.Get (currently returns empty JSON)
-func TestInviteHandler_Get(t *testing.T) {
-	mockService := &mockMiscServerService{}
-	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+// Test InviteHandler.Get - Success
+func TestInviteHandler_Get_Success(t *testing.T) {
+	testServerID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	testChannelID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	testCreatorID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 
-	req := httptest.NewRequest("GET", "/invites/TEST123", nil)
+	mockServerSvc := &mockMiscServerService{
+		getInviteFunc: func(ctx context.Context, code string) (*models.Invite, error) {
+			assert.Equal(t, "VALIDCODE", code)
+			return &models.Invite{
+				Code:      "VALIDCODE",
+				ServerID:  testServerID,
+				ChannelID: testChannelID,
+				CreatorID: testCreatorID,
+				MaxUses:   10,
+				Uses:      2,
+				Temporary: false,
+				CreatedAt: time.Now(),
+				Server: &models.Server{
+					ID:   testServerID,
+					Name: "Test Server",
+				},
+			}, nil
+		},
+	}
+	mockGw := &mockMiscGateway{}
+	app := setupMiscTestApp(mockServerSvc, mockGw)
+
+	req := httptest.NewRequest("GET", "/invites/VALIDCODE", nil)
 	resp, err := app.Test(req, -1)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
+	var result models.Invite
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "VALIDCODE", result.Code)
+	assert.Equal(t, testServerID, result.ServerID)
+	assert.Equal(t, 10, result.MaxUses)
+	assert.Equal(t, 2, result.Uses)
+	assert.NotNil(t, result.Server)
+	assert.Equal(t, "Test Server", result.Server.Name)
+}
+
+// Test InviteHandler.Get - Not Found
+func TestInviteHandler_Get_NotFound(t *testing.T) {
+	mockServerSvc := &mockMiscServerService{
+		getInviteFunc: func(ctx context.Context, code string) (*models.Invite, error) {
+			return nil, services.ErrInviteNotFound
+		},
+	}
+	mockGw := &mockMiscGateway{}
+	app := setupMiscTestApp(mockServerSvc, mockGw)
+
+	req := httptest.NewRequest("GET", "/invites/INVALID", nil)
+	resp, err := app.Test(req, -1)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 404, resp.StatusCode)
+
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
-	// Currently returns empty object as it's not implemented
-	assert.Empty(t, result)
+	assert.Equal(t, "invite not found", result["error"])
+}
+
+// Test InviteHandler.Get - Server Error
+func TestInviteHandler_Get_ServerError(t *testing.T) {
+	mockServerSvc := &mockMiscServerService{
+		getInviteFunc: func(ctx context.Context, code string) (*models.Invite, error) {
+			return nil, errors.New("database connection failed")
+		},
+	}
+	mockGw := &mockMiscGateway{}
+	app := setupMiscTestApp(mockServerSvc, mockGw)
+
+	req := httptest.NewRequest("GET", "/invites/ANYCODE", nil)
+	resp, err := app.Test(req, -1)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 500, resp.StatusCode)
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "database connection failed", result["error"])
 }
 
 // Test InviteHandler.Accept - Success
@@ -132,7 +259,7 @@ func TestInviteHandler_Accept_Success(t *testing.T) {
 	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	testServerID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 
-	mockService := &mockMiscServerService{
+	mockServerSvc := &mockMiscServerService{
 		joinServerFunc: func(ctx context.Context, userID uuid.UUID, code string) (*models.Server, error) {
 			assert.Equal(t, testUserID, userID)
 			assert.Equal(t, "VALIDCODE", code)
@@ -147,7 +274,7 @@ func TestInviteHandler_Accept_Success(t *testing.T) {
 		},
 	}
 	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("POST", "/invites/VALIDCODE", nil)
 	req.Header.Set("X-Test-User-ID", testUserID.String())
@@ -166,13 +293,13 @@ func TestInviteHandler_Accept_Success(t *testing.T) {
 func TestInviteHandler_Accept_InvalidCode(t *testing.T) {
 	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
-	mockService := &mockMiscServerService{
+	mockServerSvc := &mockMiscServerService{
 		joinServerFunc: func(ctx context.Context, userID uuid.UUID, code string) (*models.Server, error) {
 			return nil, errors.New("invalid or expired invite code")
 		},
 	}
 	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("POST", "/invites/INVALID", nil)
 	req.Header.Set("X-Test-User-ID", testUserID.String())
@@ -189,9 +316,9 @@ func TestInviteHandler_Accept_InvalidCode(t *testing.T) {
 // Test InviteHandler.Accept - Empty Code
 func TestInviteHandler_Accept_EmptyCode(t *testing.T) {
 	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	mockService := &mockMiscServerService{}
+	mockServerSvc := &mockMiscServerService{}
 	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	// Empty code in URL
 	req := httptest.NewRequest("POST", "/invites//", nil)
@@ -203,13 +330,19 @@ func TestInviteHandler_Accept_EmptyCode(t *testing.T) {
 	assert.Equal(t, 404, resp.StatusCode)
 }
 
-// Test InviteHandler.Delete
-func TestInviteHandler_Delete(t *testing.T) {
+// Test InviteHandler.Delete - Success
+func TestInviteHandler_Delete_Success(t *testing.T) {
 	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
-	mockService := &mockMiscServerService{}
+	mockServerSvc := &mockMiscServerService{
+		deleteInviteFunc: func(ctx context.Context, code string, requesterID uuid.UUID) error {
+			assert.Equal(t, "DELETEME", code)
+			assert.Equal(t, testUserID, requesterID)
+			return nil
+		},
+	}
 	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("DELETE", "/invites/DELETEME", nil)
 	req.Header.Set("X-Test-User-ID", testUserID.String())
@@ -219,11 +352,83 @@ func TestInviteHandler_Delete(t *testing.T) {
 	assert.Equal(t, 204, resp.StatusCode)
 }
 
+// Test InviteHandler.Delete - Not Found
+func TestInviteHandler_Delete_NotFound(t *testing.T) {
+	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+
+	mockServerSvc := &mockMiscServerService{
+		deleteInviteFunc: func(ctx context.Context, code string, requesterID uuid.UUID) error {
+			return services.ErrInviteNotFound
+		},
+	}
+	mockGw := &mockMiscGateway{}
+	app := setupMiscTestApp(mockServerSvc, mockGw)
+
+	req := httptest.NewRequest("DELETE", "/invites/NOTFOUND", nil)
+	req.Header.Set("X-Test-User-ID", testUserID.String())
+	resp, err := app.Test(req, -1)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 404, resp.StatusCode)
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "invite not found", result["error"])
+}
+
+// Test InviteHandler.Delete - Forbidden (not member/owner)
+func TestInviteHandler_Delete_Forbidden(t *testing.T) {
+	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+
+	mockServerSvc := &mockMiscServerService{
+		deleteInviteFunc: func(ctx context.Context, code string, requesterID uuid.UUID) error {
+			return services.ErrNotServerMember
+		},
+	}
+	mockGw := &mockMiscGateway{}
+	app := setupMiscTestApp(mockServerSvc, mockGw)
+
+	req := httptest.NewRequest("DELETE", "/invites/NOPERM", nil)
+	req.Header.Set("X-Test-User-ID", testUserID.String())
+	resp, err := app.Test(req, -1)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 403, resp.StatusCode)
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "you don't have permission to delete this invite", result["error"])
+}
+
+// Test InviteHandler.Delete - Server Error
+func TestInviteHandler_Delete_ServerError(t *testing.T) {
+	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+
+	mockServerSvc := &mockMiscServerService{
+		deleteInviteFunc: func(ctx context.Context, code string, requesterID uuid.UUID) error {
+			return errors.New("database error")
+		},
+	}
+	mockGw := &mockMiscGateway{}
+	app := setupMiscTestApp(mockServerSvc, mockGw)
+
+	req := httptest.NewRequest("DELETE", "/invites/ANYCODE", nil)
+	req.Header.Set("X-Test-User-ID", testUserID.String())
+	resp, err := app.Test(req, -1)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 500, resp.StatusCode)
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, "database error", result["error"])
+}
+
 // Test VoiceHandler.GetRegions
 func TestVoiceHandler_GetRegions(t *testing.T) {
-	mockService := &mockMiscServerService{}
+	mockServerSvc := &mockMiscServerService{}
 	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("GET", "/voice/regions", nil)
 	resp, err := app.Test(req, -1)
@@ -255,7 +460,7 @@ func TestVoiceHandler_GetRegions(t *testing.T) {
 
 // Test GatewayHandler.GetStats
 func TestGatewayHandler_GetStats(t *testing.T) {
-	mockService := &mockMiscServerService{}
+	mockServerSvc := &mockMiscServerService{}
 	mockGw := &mockMiscGateway{
 		getStatsFunc: func() map[string]interface{} {
 			return map[string]interface{}{
@@ -266,7 +471,7 @@ func TestGatewayHandler_GetStats(t *testing.T) {
 			}
 		},
 	}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("GET", "/gateway/stats", nil)
 	resp, err := app.Test(req, -1)
@@ -285,9 +490,9 @@ func TestGatewayHandler_GetStats(t *testing.T) {
 
 // Test GatewayHandler.GetStats - Empty Stats
 func TestGatewayHandler_GetStats_Empty(t *testing.T) {
-	mockService := &mockMiscServerService{}
+	mockServerSvc := &mockMiscServerService{}
 	mockGw := &mockMiscGateway{}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("GET", "/gateway/stats", nil)
 	resp, err := app.Test(req, -1)
@@ -306,7 +511,7 @@ func TestGatewayHandler_GetStats_Empty(t *testing.T) {
 
 // Test GatewayHandler.GetStats - Custom Stats
 func TestGatewayHandler_GetStats_Custom(t *testing.T) {
-	mockService := &mockMiscServerService{}
+	mockServerSvc := &mockMiscServerService{}
 	mockGw := &mockMiscGateway{
 		getStatsFunc: func() map[string]interface{} {
 			return map[string]interface{}{
@@ -318,7 +523,7 @@ func TestGatewayHandler_GetStats_Custom(t *testing.T) {
 			}
 		},
 	}
-	app := setupMiscTestApp(mockService, mockGw)
+	app := setupMiscTestApp(mockServerSvc, mockGw)
 
 	req := httptest.NewRequest("GET", "/gateway/stats", nil)
 	resp, err := app.Test(req, -1)

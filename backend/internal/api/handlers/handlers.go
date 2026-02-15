@@ -18,7 +18,7 @@ type Handlers struct {
 
 // NewHandlers creates all handlers with dependencies
 func NewHandlers(
-	authService *services.AuthService,
+	authService services.AuthService,
 	userService *services.UserService,
 	serverService *services.ServerService,
 	channelService *services.ChannelService,
@@ -30,7 +30,7 @@ func NewHandlers(
 		Auth:     NewAuthHandler(authService),
 		Users:    NewUserHandler(userService, serverService, channelService),
 		Servers:  NewServerHandler(serverService, channelService, roleService),
-		Channels: NewChannelHandler(messageService),
+		Channels: NewChannelHandler(channelService, messageService),
 		Invites:  NewInviteHandler(serverService),
 		Voice:    NewVoiceHandler(),
 		Gateway:  NewGatewayHandler(gateway),

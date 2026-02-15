@@ -3,33 +3,126 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	
+
+	"hearth/internal/models"
 	"hearth/internal/services"
 )
 
 type ChannelHandler struct {
+	channelService *services.ChannelService
 	messageService *services.MessageService
 }
 
-func NewChannelHandler(messageService *services.MessageService) *ChannelHandler {
-	return &ChannelHandler{messageService: messageService}
+func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService) *ChannelHandler {
+	return &ChannelHandler{
+		channelService: channelService,
+		messageService: messageService,
+	}
 }
 
-// Get returns a channel
+// Get returns a channel by ID
 func (h *ChannelHandler) Get(c *fiber.Ctx) error {
-	// TODO: Implement
-	return c.JSON(fiber.Map{})
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	channel, err := h.channelService.GetChannel(c.Context(), channelID)
+	if err != nil {
+		if err == services.ErrChannelNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel",
+		})
+	}
+
+	return c.JSON(channel)
 }
 
 // Update updates a channel
 func (h *ChannelHandler) Update(c *fiber.Ctx) error {
-	// TODO: Implement
-	return c.JSON(fiber.Map{})
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	var req models.UpdateChannelRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	// Convert request to service update struct
+	update := &models.ChannelUpdate{
+		Name:     req.Name,
+		Topic:    req.Topic,
+		Position: req.Position,
+		NSFW:     req.NSFW,
+		Slowmode: req.SlowmodeSeconds,
+	}
+
+	channel, err := h.channelService.UpdateChannel(c.Context(), channelID, userID, update)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to update channel",
+			})
+		}
+	}
+
+	return c.JSON(channel)
 }
 
 // Delete deletes a channel
 func (h *ChannelHandler) Delete(c *fiber.Ctx) error {
-	// TODO: Implement
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	err = h.channelService.DeleteChannel(c.Context(), channelID, userID)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		case services.ErrCannotDeleteDM:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "cannot delete DM channel",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to delete channel",
+			})
+		}
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -42,7 +135,7 @@ func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
 			"error": "invalid channel id",
 		})
 	}
-	
+
 	var before, after *uuid.UUID
 	if b := c.Query("before"); b != "" {
 		if id, err := uuid.Parse(b); err == nil {
@@ -54,16 +147,16 @@ func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
 			after = &id
 		}
 	}
-	
+
 	limit := c.QueryInt("limit", 50)
-	
+
 	messages, err := h.messageService.GetMessages(c.Context(), channelID, userID, before, after, limit)
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(messages)
 }
 
@@ -76,26 +169,26 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 			"error": "invalid channel id",
 		})
 	}
-	
+
 	var req struct {
-		Content  string     `json:"content"`
-		ReplyTo  *uuid.UUID `json:"reply_to"`
+		Content string     `json:"content"`
+		ReplyTo *uuid.UUID `json:"reply_to"`
 		// Attachments handled separately via multipart
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
 	}
-	
+
 	message, err := h.messageService.SendMessage(c.Context(), userID, channelID, req.Content, nil, req.ReplyTo)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.Status(fiber.StatusCreated).JSON(message)
 }
 
@@ -114,24 +207,24 @@ func (h *ChannelHandler) EditMessage(c *fiber.Ctx) error {
 			"error": "invalid message id",
 		})
 	}
-	
+
 	var req struct {
 		Content string `json:"content"`
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
 	}
-	
+
 	message, err := h.messageService.EditMessage(c.Context(), messageID, userID, req.Content)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(message)
 }
 
@@ -144,13 +237,13 @@ func (h *ChannelHandler) DeleteMessage(c *fiber.Ctx) error {
 			"error": "invalid message id",
 		})
 	}
-	
+
 	if err := h.messageService.DeleteMessage(c.Context(), messageID, userID); err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -164,13 +257,13 @@ func (h *ChannelHandler) AddReaction(c *fiber.Ctx) error {
 		})
 	}
 	emoji := c.Params("emoji")
-	
+
 	if err := h.messageService.AddReaction(c.Context(), messageID, userID, emoji); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -184,13 +277,13 @@ func (h *ChannelHandler) RemoveReaction(c *fiber.Ctx) error {
 		})
 	}
 	emoji := c.Params("emoji")
-	
+
 	if err := h.messageService.RemoveReaction(c.Context(), messageID, userID, emoji); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -208,13 +301,13 @@ func (h *ChannelHandler) PinMessage(c *fiber.Ctx) error {
 			"error": "invalid message id",
 		})
 	}
-	
+
 	if err := h.messageService.PinMessage(c.Context(), messageID, userID); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

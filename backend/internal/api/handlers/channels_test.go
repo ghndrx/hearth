@@ -1123,3 +1123,4 @@ func TestChannelHandler_TriggerTyping_Success(t *testing.T) {
 func channelTimePtr(t time.Time) *time.Time {
 	return &t
 }
+
