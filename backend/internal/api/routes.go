@@ -40,6 +40,38 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	users.Post("/@me/channels/group", h.Users.CreateGroupDM)
 	users.Get("/:id", h.Users.GetUser)
 	
+	// User Settings
+	if h.Settings != nil {
+		users.Get("/@me/settings", h.Settings.GetSettings)
+		users.Patch("/@me/settings", h.Settings.UpdateSettings)
+		users.Delete("/@me/settings", h.Settings.ResetSettings)
+	}
+	
+	// Notifications
+	if h.Notifications != nil {
+		notifications := api.Group("/notifications")
+		notifications.Get("/", h.Notifications.GetNotifications)
+		notifications.Get("/stats", h.Notifications.GetNotificationStats)
+		notifications.Post("/read-all", h.Notifications.MarkAllAsRead)
+		notifications.Delete("/read", h.Notifications.DeleteAllRead)
+		notifications.Get("/:id", h.Notifications.GetNotification)
+		notifications.Post("/:id/read", h.Notifications.MarkAsRead)
+		notifications.Delete("/:id", h.Notifications.DeleteNotification)
+	}
+	
+	// Saved Messages (Bookmarks)
+	if h.SavedMessages != nil {
+		savedMessages := users.Group("/@me/saved-messages")
+		savedMessages.Post("/", h.SavedMessages.SaveMessage)
+		savedMessages.Get("/", h.SavedMessages.GetSavedMessages)
+		savedMessages.Get("/count", h.SavedMessages.GetSavedCount)
+		savedMessages.Get("/check/:messageId", h.SavedMessages.IsSaved)
+		savedMessages.Get("/:id", h.SavedMessages.GetSavedMessage)
+		savedMessages.Patch("/:id", h.SavedMessages.UpdateSavedMessage)
+		savedMessages.Delete("/:id", h.SavedMessages.RemoveSavedMessage)
+		savedMessages.Delete("/message/:messageId", h.SavedMessages.RemoveSavedMessageByMessage)
+	}
+	
 	// Relationships
 	users.Get("/@me/relationships", h.Users.GetRelationships)
 	users.Post("/@me/relationships", h.Users.CreateRelationship)

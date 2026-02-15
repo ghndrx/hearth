@@ -7,16 +7,19 @@ import (
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	Auth        *AuthHandler
-	Users       *UserHandler
-	Servers     *ServerHandler
-	Channels    *ChannelHandler
-	Threads     *ThreadHandler
-	Invites     *InviteHandler
-	Voice       *VoiceHandler
-	Gateway     *GatewayHandler
-	Search      *SearchHandler
-	Attachments *AttachmentHandler
+	Auth          *AuthHandler
+	Users         *UserHandler
+	Settings      *SettingsHandler
+	SavedMessages *SavedMessagesHandler
+	Notifications *NotificationHandler
+	Servers       *ServerHandler
+	Channels      *ChannelHandler
+	Threads       *ThreadHandler
+	Invites       *InviteHandler
+	Voice         *VoiceHandler
+	Gateway       *GatewayHandler
+	Search        *SearchHandler
+	Attachments   *AttachmentHandler
 }
 
 // NewHandlers creates all handlers with dependencies
