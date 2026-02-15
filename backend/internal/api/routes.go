@@ -94,6 +94,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	channels.Delete("/:id/messages/:messageId", h.Channels.DeleteMessage)
 	
 	// Reactions
+	channels.Get("/:id/messages/:messageId/reactions", h.Channels.GetReactions)
+	channels.Get("/:id/messages/:messageId/reactions/:emoji", h.Channels.GetReactionUsers)
 	channels.Put("/:id/messages/:messageId/reactions/:emoji/@me", h.Channels.AddReaction)
 	channels.Delete("/:id/messages/:messageId/reactions/:emoji/@me", h.Channels.RemoveReaction)
 	
@@ -104,6 +106,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	
 	// Typing indicator
 	channels.Post("/:id/typing", h.Channels.TriggerTyping)
+	channels.Get("/:id/typing", h.Channels.GetTypingUsers)
 	
 	// Channel threads
 	channels.Get("/:id/threads", h.Threads.GetChannelThreads)

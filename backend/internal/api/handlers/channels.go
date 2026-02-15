@@ -11,12 +11,22 @@ import (
 type ChannelHandler struct {
 	channelService *services.ChannelService
 	messageService *services.MessageService
+	typingService  *services.TypingService
 }
 
 func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService) *ChannelHandler {
 	return &ChannelHandler{
 		channelService: channelService,
 		messageService: messageService,
+	}
+}
+
+// NewChannelHandlerWithTyping creates a channel handler with typing service
+func NewChannelHandlerWithTyping(channelService *services.ChannelService, messageService *services.MessageService, typingService *services.TypingService) *ChannelHandler {
+	return &ChannelHandler{
+		channelService: channelService,
+		messageService: messageService,
+		typingService:  typingService,
 	}
 }
 
@@ -286,6 +296,79 @@ func (h *ChannelHandler) RemoveReaction(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// GetReactions returns all reactions for a message
+func (h *ChannelHandler) GetReactions(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	messageID, err := uuid.Parse(c.Params("messageId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid message id",
+		})
+	}
+
+	reactions, err := h.messageService.GetReactions(c.Context(), messageID, userID)
+	if err != nil {
+		switch err {
+		case services.ErrMessageNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "message not found",
+			})
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember, services.ErrNoPermission:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "access denied",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get reactions",
+			})
+		}
+	}
+
+	return c.JSON(reactions)
+}
+
+// GetReactionUsers returns users who reacted with a specific emoji
+func (h *ChannelHandler) GetReactionUsers(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	messageID, err := uuid.Parse(c.Params("messageId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid message id",
+		})
+	}
+	emoji := c.Params("emoji")
+
+	limit := c.QueryInt("limit", 25)
+
+	reactionUsers, err := h.messageService.GetReactionUsers(c.Context(), messageID, emoji, userID, limit)
+	if err != nil {
+		switch err {
+		case services.ErrMessageNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "message not found",
+			})
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember, services.ErrNoPermission:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "access denied",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get reaction users",
+			})
+		}
+	}
+
+	return c.JSON(reactionUsers)
+}
+
 // GetPins returns pinned messages
 func (h *ChannelHandler) GetPins(c *fiber.Ctx) error {
 	return c.JSON([]interface{}{})
@@ -318,8 +401,75 @@ func (h *ChannelHandler) UnpinMessage(c *fiber.Ctx) error {
 
 // TriggerTyping triggers typing indicator
 func (h *ChannelHandler) TriggerTyping(c *fiber.Ctx) error {
-	// TODO: Broadcast typing event via WebSocket
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	// Verify user has access to the channel
+	_, err = h.channelService.GetChannel(c.Context(), channelID)
+	if err != nil {
+		if err == services.ErrChannelNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel",
+		})
+	}
+
+	// Start typing (will broadcast via event bus)
+	if h.typingService != nil {
+		if err := h.typingService.StartTyping(c.Context(), channelID, userID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to trigger typing",
+			})
+		}
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// GetTypingUsers returns users currently typing in a channel
+func (h *ChannelHandler) GetTypingUsers(c *fiber.Ctx) error {
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	// Verify user has access to the channel
+	_, err = h.channelService.GetChannel(c.Context(), channelID)
+	if err != nil {
+		if err == services.ErrChannelNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel",
+		})
+	}
+
+	// Get typing users
+	if h.typingService == nil {
+		return c.JSON([]interface{}{})
+	}
+
+	indicators, err := h.typingService.GetTypingUsers(c.Context(), channelID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get typing users",
+		})
+	}
+
+	// Return typing indicators with timestamps
+	return c.JSON(indicators)
 }
 
 // CreateInvite creates a channel invite

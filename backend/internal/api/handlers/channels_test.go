@@ -19,13 +19,15 @@ import (
 
 // mockChannelMessageService mocks MessageService for channel handler tests
 type mockChannelMessageService struct {
-	sendMessageFunc    func(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error)
-	getMessagesFunc    func(ctx context.Context, channelID, requesterID uuid.UUID, before, after *uuid.UUID, limit int) ([]*models.Message, error)
-	editMessageFunc    func(ctx context.Context, messageID, authorID uuid.UUID, newContent string) (*models.Message, error)
-	deleteMessageFunc  func(ctx context.Context, messageID, requesterID uuid.UUID) error
-	addReactionFunc    func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
-	removeReactionFunc func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
-	pinMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) error
+	sendMessageFunc      func(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error)
+	getMessagesFunc      func(ctx context.Context, channelID, requesterID uuid.UUID, before, after *uuid.UUID, limit int) ([]*models.Message, error)
+	editMessageFunc      func(ctx context.Context, messageID, authorID uuid.UUID, newContent string) (*models.Message, error)
+	deleteMessageFunc    func(ctx context.Context, messageID, requesterID uuid.UUID) error
+	addReactionFunc      func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	removeReactionFunc   func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	getReactionsFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) ([]*models.Reaction, error)
+	getReactionUsersFunc func(ctx context.Context, messageID uuid.UUID, emoji string, requesterID uuid.UUID, limit int) ([]*models.ReactionUser, error)
+	pinMessageFunc       func(ctx context.Context, messageID, requesterID uuid.UUID) error
 }
 
 func (m *mockChannelMessageService) SendMessage(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error) {
@@ -68,6 +70,20 @@ func (m *mockChannelMessageService) RemoveReaction(ctx context.Context, messageI
 		return m.removeReactionFunc(ctx, messageID, userID, emoji)
 	}
 	return nil
+}
+
+func (m *mockChannelMessageService) GetReactions(ctx context.Context, messageID, requesterID uuid.UUID) ([]*models.Reaction, error) {
+	if m.getReactionsFunc != nil {
+		return m.getReactionsFunc(ctx, messageID, requesterID)
+	}
+	return nil, nil
+}
+
+func (m *mockChannelMessageService) GetReactionUsers(ctx context.Context, messageID uuid.UUID, emoji string, requesterID uuid.UUID, limit int) ([]*models.ReactionUser, error) {
+	if m.getReactionUsersFunc != nil {
+		return m.getReactionUsersFunc(ctx, messageID, emoji, requesterID, limit)
+	}
+	return nil, nil
 }
 
 func (m *mockChannelMessageService) PinMessage(ctx context.Context, messageID, requesterID uuid.UUID) error {
@@ -324,6 +340,78 @@ func setupChannelTestApp(messageService *mockChannelMessageService) *fiber.App {
 		}
 
 		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// GetReactions
+	app.Get("/channels/:id/messages/:messageId/reactions", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		messageID, err := uuid.Parse(c.Params("messageId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid message id",
+			})
+		}
+
+		reactions, err := messageService.GetReactions(c.Context(), messageID, userID)
+		if err != nil {
+			if errors.Is(err, services.ErrMessageNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "message not found",
+				})
+			}
+			if errors.Is(err, services.ErrChannelNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			}
+			if errors.Is(err, services.ErrNotServerMember) || errors.Is(err, services.ErrNoPermission) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "access denied",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get reactions",
+			})
+		}
+
+		return c.JSON(reactions)
+	})
+
+	// GetReactionUsers
+	app.Get("/channels/:id/messages/:messageId/reactions/:emoji", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		messageID, err := uuid.Parse(c.Params("messageId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid message id",
+			})
+		}
+		emoji := c.Params("emoji")
+		limit := c.QueryInt("limit", 25)
+
+		reactionUsers, err := messageService.GetReactionUsers(c.Context(), messageID, emoji, userID, limit)
+		if err != nil {
+			if errors.Is(err, services.ErrMessageNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "message not found",
+				})
+			}
+			if errors.Is(err, services.ErrChannelNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			}
+			if errors.Is(err, services.ErrNotServerMember) || errors.Is(err, services.ErrNoPermission) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "access denied",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get reaction users",
+			})
+		}
+
+		return c.JSON(reactionUsers)
 	})
 
 	// PinMessage
@@ -1644,5 +1732,501 @@ func TestChannelHandler_Delete_InvalidID(t *testing.T) {
 
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// ============================================================
+// Typing Indicator Tests
+// ============================================================
+
+// mockTypingService mocks the TypingService for tests
+type mockTypingService struct {
+	startTypingFunc     func(ctx context.Context, channelID, userID uuid.UUID) error
+	stopTypingFunc      func(ctx context.Context, channelID, userID uuid.UUID) error
+	getTypingUsersFunc  func(ctx context.Context, channelID uuid.UUID) ([]models.TypingIndicator, error)
+	isTypingFunc        func(ctx context.Context, channelID, userID uuid.UUID) (bool, error)
+}
+
+func (m *mockTypingService) StartTyping(ctx context.Context, channelID, userID uuid.UUID) error {
+	if m.startTypingFunc != nil {
+		return m.startTypingFunc(ctx, channelID, userID)
+	}
+	return nil
+}
+
+func (m *mockTypingService) StopTyping(ctx context.Context, channelID, userID uuid.UUID) error {
+	if m.stopTypingFunc != nil {
+		return m.stopTypingFunc(ctx, channelID, userID)
+	}
+	return nil
+}
+
+func (m *mockTypingService) GetTypingUsers(ctx context.Context, channelID uuid.UUID) ([]models.TypingIndicator, error) {
+	if m.getTypingUsersFunc != nil {
+		return m.getTypingUsersFunc(ctx, channelID)
+	}
+	return []models.TypingIndicator{}, nil
+}
+
+func (m *mockTypingService) IsTyping(ctx context.Context, channelID, userID uuid.UUID) (bool, error) {
+	if m.isTypingFunc != nil {
+		return m.isTypingFunc(ctx, channelID, userID)
+	}
+	return false, nil
+}
+
+// setupTypingTestApp creates a test Fiber app with typing routes
+func setupTypingTestApp(channelSvc *mockChannelCRUDService, typingSvc *mockTypingService) *fiber.App {
+	app := fiber.New()
+
+	// Inject userID middleware
+	app.Use(func(c *fiber.Ctx) error {
+		userID := c.Get("X-User-ID")
+		if userID != "" {
+			id, _ := uuid.Parse(userID)
+			c.Locals("userID", id)
+		}
+		return c.Next()
+	})
+
+	// TriggerTyping (POST /channels/:id/typing)
+	app.Post("/channels/:id/typing", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		// Verify channel exists
+		_, err = channelSvc.GetChannel(c.Context(), channelID)
+		if err != nil {
+			if err == services.ErrChannelNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get channel",
+			})
+		}
+
+		// Start typing
+		if typingSvc != nil {
+			if err := typingSvc.StartTyping(c.Context(), channelID, userID); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "failed to trigger typing",
+				})
+			}
+		}
+
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// GetTypingUsers (GET /channels/:id/typing)
+	app.Get("/channels/:id/typing", func(c *fiber.Ctx) error {
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		// Verify channel exists
+		_, err = channelSvc.GetChannel(c.Context(), channelID)
+		if err != nil {
+			if err == services.ErrChannelNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get channel",
+			})
+		}
+
+		// Get typing users
+		if typingSvc == nil {
+			return c.JSON([]interface{}{})
+		}
+
+		indicators, err := typingSvc.GetTypingUsers(c.Context(), channelID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get typing users",
+			})
+		}
+
+		return c.JSON(indicators)
+	})
+
+	return app
+}
+
+func TestTypingHandler_TriggerTyping_Success(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return &models.Channel{
+				ID:       channelID,
+				ServerID: &serverID,
+				Name:     "general",
+				Type:     models.ChannelTypeText,
+			}, nil
+		},
+	}
+
+	startCalled := false
+	typingSvc := &mockTypingService{
+		startTypingFunc: func(ctx context.Context, cID, uID uuid.UUID) error {
+			startCalled = true
+			if cID != channelID {
+				t.Errorf("Expected channel ID %s, got %s", channelID, cID)
+			}
+			if uID != userID {
+				t.Errorf("Expected user ID %s, got %s", userID, uID)
+			}
+			return nil
+		},
+	}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected 204, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	if !startCalled {
+		t.Error("Expected StartTyping to be called")
+	}
+}
+
+func TestTypingHandler_TriggerTyping_ChannelNotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	typingSvc := &mockTypingService{}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestTypingHandler_TriggerTyping_InvalidChannelID(t *testing.T) {
+	userID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{}
+	typingSvc := &mockTypingService{}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("POST", "/channels/invalid-uuid/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestTypingHandler_TriggerTyping_ServiceError(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return &models.Channel{
+				ID:       channelID,
+				ServerID: &serverID,
+				Name:     "general",
+				Type:     models.ChannelTypeText,
+			}, nil
+		},
+	}
+
+	typingSvc := &mockTypingService{
+		startTypingFunc: func(ctx context.Context, cID, uID uuid.UUID) error {
+			return errors.New("service error")
+		},
+	}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("Expected 500, got %d", resp.StatusCode)
+	}
+}
+
+func TestTypingHandler_GetTypingUsers_Success(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+	typingUser1 := uuid.New()
+	typingUser2 := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return &models.Channel{
+				ID:       channelID,
+				ServerID: &serverID,
+				Name:     "general",
+				Type:     models.ChannelTypeText,
+			}, nil
+		},
+	}
+
+	now := time.Now()
+	typingSvc := &mockTypingService{
+		getTypingUsersFunc: func(ctx context.Context, cID uuid.UUID) ([]models.TypingIndicator, error) {
+			return []models.TypingIndicator{
+				{ChannelID: channelID, UserID: typingUser1, Timestamp: now},
+				{ChannelID: channelID, UserID: typingUser2, Timestamp: now},
+			}, nil
+		},
+	}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected 200, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	var indicators []models.TypingIndicator
+	if err := json.NewDecoder(resp.Body).Decode(&indicators); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(indicators) != 2 {
+		t.Errorf("Expected 2 typing indicators, got %d", len(indicators))
+	}
+}
+
+func TestTypingHandler_GetTypingUsers_EmptyChannel(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return &models.Channel{
+				ID:       channelID,
+				ServerID: &serverID,
+				Name:     "general",
+				Type:     models.ChannelTypeText,
+			}, nil
+		},
+	}
+
+	typingSvc := &mockTypingService{
+		getTypingUsersFunc: func(ctx context.Context, cID uuid.UUID) ([]models.TypingIndicator, error) {
+			return []models.TypingIndicator{}, nil
+		},
+	}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	var indicators []models.TypingIndicator
+	if err := json.NewDecoder(resp.Body).Decode(&indicators); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(indicators) != 0 {
+		t.Errorf("Expected 0 typing indicators, got %d", len(indicators))
+	}
+}
+
+func TestTypingHandler_GetTypingUsers_ChannelNotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	typingSvc := &mockTypingService{}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestTypingHandler_GetTypingUsers_InvalidChannelID(t *testing.T) {
+	userID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{}
+	typingSvc := &mockTypingService{}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("GET", "/channels/invalid-uuid/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestTypingHandler_GetTypingUsers_NilTypingService(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return &models.Channel{
+				ID:       channelID,
+				ServerID: &serverID,
+				Name:     "general",
+				Type:     models.ChannelTypeText,
+			}, nil
+		},
+	}
+
+	// nil typing service
+	app := setupTypingTestApp(channelSvc, nil)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	// Should return empty array
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "[]" {
+		t.Errorf("Expected empty array, got %s", string(body))
+	}
+}
+
+func TestTypingHandler_GetTypingUsers_ServiceError(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channelSvc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return &models.Channel{
+				ID:       channelID,
+				ServerID: &serverID,
+				Name:     "general",
+				Type:     models.ChannelTypeText,
+			}, nil
+		},
+	}
+
+	typingSvc := &mockTypingService{
+		getTypingUsersFunc: func(ctx context.Context, cID uuid.UUID) ([]models.TypingIndicator, error) {
+			return nil, errors.New("service error")
+		},
+	}
+
+	app := setupTypingTestApp(channelSvc, typingSvc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("Expected 500, got %d", resp.StatusCode)
 	}
 }
