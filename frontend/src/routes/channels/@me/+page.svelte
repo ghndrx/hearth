@@ -23,9 +23,9 @@
 
 <div class="friends-content">
 	<div class="empty-state">
-		<div class="illustration">🤝</div>
-		<h2>Wumpus is waiting on friends</h2>
-		<p>You can add friends by their username.</p>
+		<div class="illustration">🔥</div>
+		<h2>Your hearth awaits friends</h2>
+		<p>Add friends by their username to start chatting.</p>
 	</div>
 </div>
 
