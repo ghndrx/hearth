@@ -11,7 +11,6 @@ import (
 
 var (
 	ErrSvelteNotFound = errors.New("svelte component not found")
-	ErrInvalidInput   = errors.New("invalid input provided")
 )
 
 // SvelteRepository defines the data access methods for Svelte components.

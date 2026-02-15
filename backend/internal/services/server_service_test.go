@@ -756,3 +756,529 @@ func TestCreateInvite_WithExpiration(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, invite.ExpiresAt)
 }
+
+// ============================================
+// GetUserServers Tests
+// ============================================
+
+func TestGetUserServers_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	expectedServers := []*models.Server{
+		{ID: uuid.New(), Name: "Server 1", OwnerID: userID},
+		{ID: uuid.New(), Name: "Server 2", OwnerID: uuid.New()},
+	}
+
+	serverRepo.On("GetUserServers", ctx, userID).Return(expectedServers, nil)
+
+	servers, err := service.GetUserServers(ctx, userID)
+
+	require.NoError(t, err)
+	assert.Len(t, servers, 2)
+	assert.Equal(t, "Server 1", servers[0].Name)
+}
+
+func TestGetUserServers_Empty(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	serverRepo.On("GetUserServers", ctx, userID).Return([]*models.Server{}, nil)
+
+	servers, err := service.GetUserServers(ctx, userID)
+
+	require.NoError(t, err)
+	assert.Len(t, servers, 0)
+}
+
+func TestGetUserServers_Error(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	serverRepo.On("GetUserServers", ctx, userID).Return(nil, errors.New("db error"))
+
+	servers, err := service.GetUserServers(ctx, userID)
+
+	assert.Nil(t, servers)
+	assert.Error(t, err)
+}
+
+// ============================================
+// GetMembers Tests
+// ============================================
+
+func TestGetMembers_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	expectedMembers := []*models.Member{
+		{UserID: uuid.New(), ServerID: serverID},
+		{UserID: uuid.New(), ServerID: serverID},
+	}
+
+	serverRepo.On("GetMembers", ctx, serverID, 100, 0).Return(expectedMembers, nil)
+
+	members, err := service.GetMembers(ctx, serverID, 100, 0)
+
+	require.NoError(t, err)
+	assert.Len(t, members, 2)
+}
+
+func TestGetMembers_Empty(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	serverRepo.On("GetMembers", ctx, serverID, 100, 0).Return([]*models.Member{}, nil)
+
+	members, err := service.GetMembers(ctx, serverID, 100, 0)
+
+	require.NoError(t, err)
+	assert.Len(t, members, 0)
+}
+
+func TestGetMembers_WithPagination(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	expectedMembers := []*models.Member{
+		{UserID: uuid.New(), ServerID: serverID},
+	}
+
+	serverRepo.On("GetMembers", ctx, serverID, 10, 5).Return(expectedMembers, nil)
+
+	members, err := service.GetMembers(ctx, serverID, 10, 5)
+
+	require.NoError(t, err)
+	assert.Len(t, members, 1)
+}
+
+// ============================================
+// GetMember Tests
+// ============================================
+
+func TestGetMember_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	userID := uuid.New()
+
+	expectedMember := &models.Member{
+		UserID:   userID,
+		ServerID: serverID,
+		JoinedAt: time.Now(),
+	}
+
+	serverRepo.On("GetMember", ctx, serverID, userID).Return(expectedMember, nil)
+
+	member, err := service.GetMember(ctx, serverID, userID)
+
+	require.NoError(t, err)
+	assert.Equal(t, userID, member.UserID)
+	assert.Equal(t, serverID, member.ServerID)
+}
+
+func TestGetMember_NotFound(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	userID := uuid.New()
+
+	serverRepo.On("GetMember", ctx, serverID, userID).Return(nil, nil)
+
+	member, err := service.GetMember(ctx, serverID, userID)
+
+	assert.Nil(t, member)
+	assert.ErrorIs(t, err, ErrNotServerMember)
+}
+
+func TestGetMember_Error(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	userID := uuid.New()
+
+	serverRepo.On("GetMember", ctx, serverID, userID).Return(nil, errors.New("db error"))
+
+	member, err := service.GetMember(ctx, serverID, userID)
+
+	assert.Nil(t, member)
+	assert.Error(t, err)
+}
+
+// ============================================
+// UpdateMember Tests
+// ============================================
+
+func TestUpdateMember_Success_Nickname(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	nickname := "NewNickname"
+
+	existingMember := &models.Member{
+		UserID:   targetID,
+		ServerID: serverID,
+		JoinedAt: time.Now(),
+	}
+
+	serverRepo.On("GetMember", ctx, serverID, targetID).Return(existingMember, nil)
+	serverRepo.On("UpdateMember", ctx, mock.MatchedBy(func(m *models.Member) bool {
+		return m.Nickname != nil && *m.Nickname == nickname
+	})).Return(nil)
+
+	member, err := service.UpdateMember(ctx, serverID, requesterID, targetID, &nickname, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, &nickname, member.Nickname)
+}
+
+func TestUpdateMember_Success_Roles(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	roles := []uuid.UUID{uuid.New(), uuid.New()}
+
+	existingMember := &models.Member{
+		UserID:   targetID,
+		ServerID: serverID,
+		JoinedAt: time.Now(),
+	}
+
+	serverRepo.On("GetMember", ctx, serverID, targetID).Return(existingMember, nil)
+	serverRepo.On("UpdateMember", ctx, mock.MatchedBy(func(m *models.Member) bool {
+		return len(m.Roles) == 2
+	})).Return(nil)
+
+	member, err := service.UpdateMember(ctx, serverID, requesterID, targetID, nil, roles)
+
+	require.NoError(t, err)
+	assert.Len(t, member.Roles, 2)
+}
+
+func TestUpdateMember_NotFound(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	nickname := "NewNickname"
+
+	serverRepo.On("GetMember", ctx, serverID, targetID).Return(nil, nil)
+
+	member, err := service.UpdateMember(ctx, serverID, requesterID, targetID, &nickname, nil)
+
+	assert.Nil(t, member)
+	assert.ErrorIs(t, err, ErrNotServerMember)
+}
+
+func TestUpdateMember_UpdateFails(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	nickname := "NewNickname"
+
+	existingMember := &models.Member{
+		UserID:   targetID,
+		ServerID: serverID,
+	}
+
+	serverRepo.On("GetMember", ctx, serverID, targetID).Return(existingMember, nil)
+	serverRepo.On("UpdateMember", ctx, mock.Anything).Return(errors.New("db error"))
+
+	member, err := service.UpdateMember(ctx, serverID, requesterID, targetID, &nickname, nil)
+
+	assert.Nil(t, member)
+	assert.Error(t, err)
+}
+
+// ============================================
+// GetBans Tests
+// ============================================
+
+func TestGetBans_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	reason1 := "spam"
+	reason2 := "harassment"
+
+	expectedBans := []*models.Ban{
+		{ServerID: serverID, UserID: uuid.New(), Reason: &reason1},
+		{ServerID: serverID, UserID: uuid.New(), Reason: &reason2},
+	}
+
+	serverRepo.On("GetBans", ctx, serverID).Return(expectedBans, nil)
+
+	bans, err := service.GetBans(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, bans, 2)
+}
+
+func TestGetBans_Empty(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	serverRepo.On("GetBans", ctx, serverID).Return([]*models.Ban{}, nil)
+
+	bans, err := service.GetBans(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, bans, 0)
+}
+
+// ============================================
+// UnbanMember Tests
+// ============================================
+
+func TestUnbanMember_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	targetID := uuid.New()
+
+	serverRepo.On("RemoveBan", ctx, serverID, targetID).Return(nil)
+
+	err := service.UnbanMember(ctx, serverID, requesterID, targetID)
+
+	require.NoError(t, err)
+}
+
+func TestUnbanMember_Error(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	targetID := uuid.New()
+
+	serverRepo.On("RemoveBan", ctx, serverID, targetID).Return(errors.New("db error"))
+
+	err := service.UnbanMember(ctx, serverID, requesterID, targetID)
+
+	assert.Error(t, err)
+}
+
+// ============================================
+// GetInvites Tests
+// ============================================
+
+func TestGetInvites_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	expectedInvites := []*models.Invite{
+		{Code: "abc123", ServerID: serverID},
+		{Code: "xyz789", ServerID: serverID},
+	}
+
+	serverRepo.On("GetInvites", ctx, serverID).Return(expectedInvites, nil)
+
+	invites, err := service.GetInvites(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, invites, 2)
+}
+
+func TestGetInvites_Empty(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	serverRepo.On("GetInvites", ctx, serverID).Return([]*models.Invite{}, nil)
+
+	invites, err := service.GetInvites(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, invites, 0)
+}
+
+// ============================================
+// GetInvite Tests (ServerService)
+// ============================================
+
+func TestServerGetInvite_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	code := "test-invite-code"
+
+	expectedInvite := &models.Invite{
+		Code:     code,
+		ServerID: uuid.New(),
+		MaxUses:  10,
+	}
+
+	serverRepo.On("GetInvite", ctx, code).Return(expectedInvite, nil)
+
+	invite, err := service.GetInvite(ctx, code)
+
+	require.NoError(t, err)
+	assert.Equal(t, code, invite.Code)
+}
+
+func TestServerGetInvite_NotFound(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	code := "nonexistent"
+
+	serverRepo.On("GetInvite", ctx, code).Return(nil, nil)
+
+	invite, err := service.GetInvite(ctx, code)
+
+	assert.Nil(t, invite)
+	assert.ErrorIs(t, err, ErrInviteNotFound)
+}
+
+func TestServerGetInvite_Error(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	code := "test-code"
+
+	serverRepo.On("GetInvite", ctx, code).Return(nil, errors.New("db error"))
+
+	invite, err := service.GetInvite(ctx, code)
+
+	assert.Nil(t, invite)
+	assert.Error(t, err)
+}
+
+// ============================================
+// DeleteInvite Tests (ServerService)
+// ============================================
+
+func TestServerDeleteInvite_Success(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	code := "test-invite-code"
+	requesterID := uuid.New()
+
+	existingInvite := &models.Invite{
+		Code:      code,
+		ServerID:  uuid.New(),
+		CreatorID: requesterID,
+	}
+
+	serverRepo.On("GetInvite", ctx, code).Return(existingInvite, nil)
+	serverRepo.On("DeleteInvite", ctx, code).Return(nil)
+
+	err := service.DeleteInvite(ctx, code, requesterID)
+
+	require.NoError(t, err)
+}
+
+func TestServerDeleteInvite_NotFound(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	code := "nonexistent"
+	requesterID := uuid.New()
+
+	serverRepo.On("GetInvite", ctx, code).Return(nil, nil)
+
+	err := service.DeleteInvite(ctx, code, requesterID)
+
+	assert.ErrorIs(t, err, ErrInviteNotFound)
+}
+
+func TestServerDeleteInvite_Error(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	code := "test-code"
+	requesterID := uuid.New()
+
+	existingInvite := &models.Invite{
+		Code:      code,
+		ServerID:  uuid.New(),
+		CreatorID: requesterID,
+	}
+
+	serverRepo.On("GetInvite", ctx, code).Return(existingInvite, nil)
+	serverRepo.On("DeleteInvite", ctx, code).Return(errors.New("db error"))
+
+	err := service.DeleteInvite(ctx, code, requesterID)
+
+	assert.Error(t, err)
+}
+
+// ============================================
+// GetChannels Tests
+// ============================================
+
+func TestGetChannels_Success(t *testing.T) {
+	service, _, channelRepo, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	expectedChannels := []*models.Channel{
+		{ID: uuid.New(), Name: "general", ServerID: &serverID},
+		{ID: uuid.New(), Name: "random", ServerID: &serverID},
+	}
+
+	channelRepo.On("GetByServerID", ctx, serverID).Return(expectedChannels, nil)
+
+	channels, err := service.GetChannels(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, channels, 2)
+}
+
+func TestGetChannels_Empty(t *testing.T) {
+	service, _, channelRepo, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	channelRepo.On("GetByServerID", ctx, serverID).Return([]*models.Channel{}, nil)
+
+	channels, err := service.GetChannels(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, channels, 0)
+}
+
+// ============================================
+// GetRoles Tests
+// ============================================
+
+func TestGetRoles_Success(t *testing.T) {
+	service, _, _, roleRepo, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	expectedRoles := []*models.Role{
+		{ID: uuid.New(), Name: "Admin", ServerID: serverID},
+		{ID: uuid.New(), Name: "Member", ServerID: serverID},
+	}
+
+	roleRepo.On("GetByServerID", ctx, serverID).Return(expectedRoles, nil)
+
+	roles, err := service.GetRoles(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, roles, 2)
+}
+
+func TestGetRoles_Empty(t *testing.T) {
+	service, _, _, roleRepo, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	roleRepo.On("GetByServerID", ctx, serverID).Return([]*models.Role{}, nil)
+
+	roles, err := service.GetRoles(ctx, serverID)
+
+	require.NoError(t, err)
+	assert.Len(t, roles, 0)
+}

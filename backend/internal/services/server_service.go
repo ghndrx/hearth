@@ -19,7 +19,7 @@ type ServerRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Server, error)
 	Update(ctx context.Context, server *models.Server) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	
+
 	// Members
 	GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error)
 	GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error)
@@ -27,17 +27,17 @@ type ServerRepository interface {
 	UpdateMember(ctx context.Context, member *models.Member) error
 	RemoveMember(ctx context.Context, serverID, userID uuid.UUID) error
 	GetMemberCount(ctx context.Context, serverID uuid.UUID) (int, error)
-	
+
 	// User's servers
 	GetUserServers(ctx context.Context, userID uuid.UUID) ([]*models.Server, error)
 	GetOwnedServersCount(ctx context.Context, userID uuid.UUID) (int, error)
-	
+
 	// Bans
 	GetBan(ctx context.Context, serverID, userID uuid.UUID) (*models.Ban, error)
 	AddBan(ctx context.Context, ban *models.Ban) error
 	RemoveBan(ctx context.Context, serverID, userID uuid.UUID) error
 	GetBans(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error)
-	
+
 	// Invites
 	CreateInvite(ctx context.Context, invite *models.Invite) error
 	GetInvite(ctx context.Context, code string) (*models.Invite, error)
@@ -82,16 +82,16 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 	if err != nil {
 		return nil, err
 	}
-	
+
 	limits, err := s.quotaService.GetEffectiveLimits(ctx, ownerID, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if limits.MaxServersOwned > 0 && ownedCount >= limits.MaxServersOwned {
 		return nil, ErrMaxServersReached
 	}
-	
+
 	// Create server
 	var iconURL *string
 	if icon != "" {
@@ -105,11 +105,11 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	if err := s.repo.Create(ctx, server); err != nil {
 		return nil, err
 	}
-	
+
 	// Create @everyone role (color 0x99AAB5 = 10066613 in decimal)
 	everyoneRole := &models.Role{
 		ID:          uuid.New(),
@@ -126,7 +126,7 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 		_ = s.repo.Delete(ctx, server.ID)
 		return nil, err
 	}
-	
+
 	// Create default channels
 	defaultChannels := []struct {
 		name     string
@@ -135,7 +135,7 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 		{"general", models.ChannelTypeText},
 		{"General", models.ChannelTypeVoice},
 	}
-	
+
 	for i, ch := range defaultChannels {
 		channel := &models.Channel{
 			ID:        uuid.New(),
@@ -150,7 +150,7 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 			continue
 		}
 	}
-	
+
 	// Add owner as member with all roles
 	member := &models.Member{
 		UserID:   ownerID,
@@ -162,13 +162,13 @@ func (s *ServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, nam
 	if err := s.repo.AddMember(ctx, member); err != nil {
 		return nil, err
 	}
-	
+
 	// Emit event
 	s.eventBus.Publish("server.created", &ServerCreatedEvent{
 		Server:  server,
 		OwnerID: ownerID,
 	})
-	
+
 	return server, nil
 }
 
@@ -193,7 +193,7 @@ func (s *ServerService) UpdateServer(ctx context.Context, id uuid.UUID, requeste
 	if server == nil {
 		return nil, ErrServerNotFound
 	}
-	
+
 	// Check permissions (owner or admin)
 	if server.OwnerID != requesterID {
 		member, err := s.repo.GetMember(ctx, id, requesterID)
@@ -202,7 +202,7 @@ func (s *ServerService) UpdateServer(ctx context.Context, id uuid.UUID, requeste
 		}
 		// TODO: Check admin permission via roles
 	}
-	
+
 	// Apply updates
 	if updates.Name != nil {
 		server.Name = *updates.Name
@@ -216,17 +216,17 @@ func (s *ServerService) UpdateServer(ctx context.Context, id uuid.UUID, requeste
 	if updates.Description != nil {
 		server.Description = updates.Description
 	}
-	
+
 	server.UpdatedAt = time.Now()
-	
+
 	if err := s.repo.Update(ctx, server); err != nil {
 		return nil, err
 	}
-	
+
 	s.eventBus.Publish("server.updated", &ServerUpdatedEvent{
 		Server: server,
 	})
-	
+
 	return server, nil
 }
 
@@ -239,20 +239,20 @@ func (s *ServerService) DeleteServer(ctx context.Context, id uuid.UUID, requeste
 	if server == nil {
 		return ErrServerNotFound
 	}
-	
+
 	if server.OwnerID != requesterID {
 		return ErrNotServerOwner
 	}
-	
+
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
-	
+
 	s.eventBus.Publish("server.deleted", &ServerDeletedEvent{
 		ServerID: id,
 		OwnerID:  requesterID,
 	})
-	
+
 	return nil
 }
 
@@ -265,17 +265,17 @@ func (s *ServerService) JoinServer(ctx context.Context, userID uuid.UUID, invite
 	if invite == nil {
 		return nil, ErrInviteNotFound
 	}
-	
+
 	// Check expiration
 	if invite.ExpiresAt != nil && invite.ExpiresAt.Before(time.Now()) {
 		return nil, ErrInviteExpired
 	}
-	
+
 	// Check max uses
 	if invite.MaxUses > 0 && invite.Uses >= invite.MaxUses {
 		return nil, ErrInviteExpired
 	}
-	
+
 	server, err := s.repo.GetByID(ctx, invite.ServerID)
 	if err != nil {
 		return nil, err
@@ -283,34 +283,34 @@ func (s *ServerService) JoinServer(ctx context.Context, userID uuid.UUID, invite
 	if server == nil {
 		return nil, ErrServerNotFound
 	}
-	
+
 	// Check if banned
 	ban, _ := s.repo.GetBan(ctx, invite.ServerID, userID)
 	if ban != nil {
 		return nil, ErrBannedFromServer
 	}
-	
+
 	// Check if already member
 	existing, _ := s.repo.GetMember(ctx, invite.ServerID, userID)
 	if existing != nil {
 		return nil, ErrAlreadyMember
 	}
-	
+
 	// Check quota
 	limits, err := s.quotaService.GetEffectiveLimits(ctx, userID, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	userServers, err := s.repo.GetUserServers(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if limits.MaxServersJoined > 0 && len(userServers) >= limits.MaxServersJoined {
 		return nil, ErrMaxServersReached
 	}
-	
+
 	// Get @everyone role
 	roles, err := s.roleRepo.GetByServerID(ctx, invite.ServerID)
 	if err != nil {
@@ -323,7 +323,7 @@ func (s *ServerService) JoinServer(ctx context.Context, userID uuid.UUID, invite
 			break
 		}
 	}
-	
+
 	// Add member
 	member := &models.Member{
 		UserID:   userID,
@@ -331,20 +331,20 @@ func (s *ServerService) JoinServer(ctx context.Context, userID uuid.UUID, invite
 		JoinedAt: time.Now(),
 		Roles:    []uuid.UUID{everyoneRoleID},
 	}
-	
+
 	if err := s.repo.AddMember(ctx, member); err != nil {
 		return nil, err
 	}
-	
+
 	// Increment invite uses
 	_ = s.repo.IncrementInviteUses(ctx, inviteCode)
-	
+
 	s.eventBus.Publish("server.member_joined", &MemberJoinedEvent{
 		ServerID:   invite.ServerID,
 		UserID:     userID,
 		InviteCode: inviteCode,
 	})
-	
+
 	return server, nil
 }
 
@@ -357,21 +357,21 @@ func (s *ServerService) LeaveServer(ctx context.Context, serverID, userID uuid.U
 	if server == nil {
 		return ErrServerNotFound
 	}
-	
+
 	// Owner can't leave, must transfer or delete
 	if server.OwnerID == userID {
 		return errors.New("owner cannot leave server, transfer ownership or delete")
 	}
-	
+
 	if err := s.repo.RemoveMember(ctx, serverID, userID); err != nil {
 		return err
 	}
-	
+
 	s.eventBus.Publish("server.member_left", &MemberLeftEvent{
 		ServerID: serverID,
 		UserID:   userID,
 	})
-	
+
 	return nil
 }
 
@@ -384,25 +384,25 @@ func (s *ServerService) KickMember(ctx context.Context, serverID, requesterID, t
 	if server == nil {
 		return ErrServerNotFound
 	}
-	
+
 	// Can't kick owner
 	if server.OwnerID == targetID {
 		return errors.New("cannot kick server owner")
 	}
-	
+
 	// TODO: Check requester has KICK_MEMBERS permission
-	
+
 	if err := s.repo.RemoveMember(ctx, serverID, targetID); err != nil {
 		return err
 	}
-	
+
 	s.eventBus.Publish("server.member_kicked", &MemberKickedEvent{
 		ServerID: serverID,
 		UserID:   targetID,
 		KickedBy: requesterID,
 		Reason:   reason,
 	})
-	
+
 	return nil
 }
 
@@ -415,17 +415,17 @@ func (s *ServerService) BanMember(ctx context.Context, serverID, requesterID, ta
 	if server == nil {
 		return ErrServerNotFound
 	}
-	
+
 	// Can't ban owner
 	if server.OwnerID == targetID {
 		return errors.New("cannot ban server owner")
 	}
-	
+
 	// TODO: Check requester has BAN_MEMBERS permission
-	
+
 	// Remove member first
 	_ = s.repo.RemoveMember(ctx, serverID, targetID)
-	
+
 	// Add ban
 	var banReason *string
 	if reason != "" {
@@ -438,20 +438,20 @@ func (s *ServerService) BanMember(ctx context.Context, serverID, requesterID, ta
 		BannedBy:  &requesterID,
 		CreatedAt: time.Now(),
 	}
-	
+
 	if err := s.repo.AddBan(ctx, ban); err != nil {
 		return err
 	}
-	
+
 	// TODO: Delete messages from last N days if deleteDays > 0
-	
+
 	s.eventBus.Publish("server.member_banned", &MemberBannedEvent{
 		ServerID:    serverID,
 		UserID:      targetID,
 		ModeratorID: requesterID,
 		Reason:      reason,
 	})
-	
+
 	return nil
 }
 
@@ -462,21 +462,21 @@ func (s *ServerService) CreateInvite(ctx context.Context, serverID, channelID, c
 	if err != nil || member == nil {
 		return nil, ErrNotServerMember
 	}
-	
+
 	// TODO: Check CREATE_INVITE permission
-	
+
 	// Generate invite code
 	code, err := generateInviteCode()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var expiresAt *time.Time
 	if expiresIn != nil {
 		t := time.Now().Add(*expiresIn)
 		expiresAt = &t
 	}
-	
+
 	invite := &models.Invite{
 		Code:      code,
 		ServerID:  serverID,
@@ -487,11 +487,11 @@ func (s *ServerService) CreateInvite(ctx context.Context, serverID, channelID, c
 		ExpiresAt: expiresAt,
 		CreatedAt: time.Now(),
 	}
-	
+
 	if err := s.repo.CreateInvite(ctx, invite); err != nil {
 		return nil, err
 	}
-	
+
 	return invite, nil
 }
 
@@ -553,20 +553,20 @@ func (s *ServerService) UpdateMember(ctx context.Context, serverID, requesterID,
 	if err != nil || member == nil {
 		return nil, ErrNotServerMember
 	}
-	
+
 	// TODO: Check permissions (user editing self vs. admin editing others)
-	
+
 	if nickname != nil {
 		member.Nickname = nickname
 	}
 	if roles != nil {
 		member.Roles = roles
 	}
-	
+
 	if err := s.repo.UpdateMember(ctx, member); err != nil {
 		return nil, err
 	}
-	
+
 	return member, nil
 }
 
@@ -604,9 +604,9 @@ func (s *ServerService) DeleteInvite(ctx context.Context, code string, requester
 	if err != nil || invite == nil {
 		return ErrInviteNotFound
 	}
-	
+
 	// TODO: Check permissions (creator or admin)
-	
+
 	return s.repo.DeleteInvite(ctx, code)
 }
 

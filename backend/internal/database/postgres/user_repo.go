@@ -9,7 +9,10 @@ import (
 	"github.com/jmoiron/sqlx"
 	
 	"hearth/internal/models"
+	"hearth/internal/services"
 )
+
+var ErrUserNotFound = services.ErrUserNotFound
 
 type UserRepository struct {
 	db *sqlx.DB
@@ -57,7 +60,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 	query := `SELECT * FROM users WHERE email = $1`
 	err := r.db.GetContext(ctx, &user, query, email)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, ErrUserNotFound
 	}
 	return &user, err
 }

@@ -334,3 +334,69 @@ func TestGetFriends_Success(t *testing.T) {
 	assert.Len(t, friends, 2)
 	assert.Equal(t, "friend1", friends[0].Username)
 }
+
+func TestGetUserByUsername_Success(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	username := "testuser"
+
+	expectedUser := &models.User{
+		ID:       uuid.New(),
+		Username: username,
+		Email:    "test@example.com",
+	}
+
+	repo.On("GetByUsername", ctx, username).Return(expectedUser, nil)
+
+	user, err := service.GetUserByUsername(ctx, username)
+
+	assert.NoError(t, err)
+	assert.Equal(t, username, user.Username)
+	repo.AssertExpectations(t)
+}
+
+func TestGetUserByUsername_NotFound(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	username := "nonexistent"
+
+	repo.On("GetByUsername", ctx, username).Return(nil, nil)
+
+	user, err := service.GetUserByUsername(ctx, username)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrUserNotFound, err)
+	assert.Nil(t, user)
+}
+
+func TestRemoveFriend_Success(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+	friendID := uuid.New()
+
+	repo.On("RemoveFriend", ctx, userID, friendID).Return(nil)
+	eventBus.On("Publish", "friend.removed", mock.AnythingOfType("*services.FriendRemovedEvent")).Return()
+
+	err := service.RemoveFriend(ctx, userID, friendID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestUnblockUser_Success(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+	blockedID := uuid.New()
+
+	repo.On("UnblockUser", ctx, userID, blockedID).Return(nil)
+	eventBus.On("Publish", "user.unblocked", mock.AnythingOfType("*services.UserUnblockedEvent")).Return()
+
+	err := service.UnblockUser(ctx, userID, blockedID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
