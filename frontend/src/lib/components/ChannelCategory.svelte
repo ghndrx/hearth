@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import { createEventDispatcher } from 'svelte';
 
 	export let name: string;
@@ -22,7 +24,12 @@
 </script>
 
 <div class="channel-category" class:collapsed>
-	<button class="category-header" on:click={handleToggle}>
+	<button
+		class="category-header"
+		on:click={handleToggle}
+		aria-expanded={!collapsed}
+		aria-controls="category-channels-{name}"
+	>
 		<svg
 			viewBox="0 0 24 24"
 			width="12"
@@ -30,6 +37,7 @@
 			fill="currentColor"
 			class="collapse-icon"
 			class:rotated={!collapsed}
+			aria-hidden="true"
 		>
 			<path d="M9.29 15.88L13.17 12 9.29 8.12a1 1 0 0 1 1.42-1.42l4.59 4.59a1 1 0 0 1 0 1.42l-4.59 4.59a1 1 0 0 1-1.42 0 1 1 0 0 1 0-1.42z"/>
 		</svg>
@@ -40,9 +48,10 @@
 		<button
 			class="add-channel"
 			title="Create Channel"
+			aria-label="Create new channel in {name}"
 			on:click={handleAddChannel}
 		>
-			<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+			<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
 				<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
 			</svg>
 		</button>
@@ -50,7 +59,11 @@
 </div>
 
 {#if !collapsed}
-	<div class="category-channels">
+	<div
+		id="category-channels-{name}"
+		class="category-channels"
+		transition:slide={{ duration: 150, easing: cubicOut }}
+	>
 		<slot />
 	</div>
 {/if}
@@ -59,7 +72,7 @@
 	.channel-category {
 		display: flex;
 		align-items: center;
-		padding: 16px 8px 4px 2px;
+		padding: var(--spacing-md) var(--spacing-sm) var(--spacing-xs) 2px;
 		user-select: none;
 	}
 
@@ -69,8 +82,8 @@
 		gap: 2px;
 		background: none;
 		border: none;
-		color: #949ba4;
-		font-size: 12px;
+		color: var(--text-muted);
+		font-size: var(--font-size-xs);
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		cursor: pointer;
@@ -78,14 +91,21 @@
 		text-align: left;
 		padding: 0;
 		text-transform: uppercase;
+		transition: color var(--transition-fast);
 	}
 
 	.category-header:hover {
-		color: #dbdee1;
+		color: var(--text-normal);
+	}
+
+	.category-header:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px var(--blurple);
+		border-radius: var(--radius-sm);
 	}
 
 	.collapse-icon {
-		transition: transform 0.1s ease;
+		transition: transform var(--transition-fast);
 		flex-shrink: 0;
 	}
 
@@ -102,7 +122,7 @@
 	.add-channel {
 		background: none;
 		border: none;
-		color: #949ba4;
+		color: var(--text-muted);
 		cursor: pointer;
 		padding: 0;
 		opacity: 0;
@@ -111,13 +131,22 @@
 		justify-content: center;
 		width: 18px;
 		height: 18px;
+		transition: opacity var(--transition-fast), color var(--transition-fast);
 	}
 
 	.add-channel:hover {
-		color: #dbdee1;
+		color: var(--text-normal);
 	}
 
-	.channel-category:hover .add-channel {
+	.add-channel:focus-visible {
+		opacity: 1;
+		outline: none;
+		box-shadow: 0 0 0 2px var(--blurple);
+		border-radius: var(--radius-sm);
+	}
+
+	.channel-category:hover .add-channel,
+	.channel-category:focus-within .add-channel {
 		opacity: 1;
 	}
 
