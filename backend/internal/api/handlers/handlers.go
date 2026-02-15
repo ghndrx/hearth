@@ -30,7 +30,7 @@ func NewHandlers(
 		Auth:     NewAuthHandler(authService),
 		Users:    NewUserHandler(userService, serverService, channelService),
 		Servers:  NewServerHandler(serverService, channelService, roleService),
-		Channels: NewChannelHandler(messageService),
+		Channels: NewChannelHandler(channelService, messageService),
 		Invites:  NewInviteHandler(serverService),
 		Voice:    NewVoiceHandler(),
 		Gateway:  NewGatewayHandler(gateway),

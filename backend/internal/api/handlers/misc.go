@@ -20,9 +20,26 @@ func NewInviteHandler(serverService *services.ServerService) *InviteHandler {
 
 // Get returns invite info
 func (h *InviteHandler) Get(c *fiber.Ctx) error {
-	// code := c.Params("code")
-	// TODO: Get invite
-	return c.JSON(fiber.Map{})
+	code := c.Params("code")
+	if code == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invite code is required",
+		})
+	}
+
+	invite, err := h.serverService.GetInvite(c.Context(), code)
+	if err != nil {
+		if err == services.ErrInviteNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "invite not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(invite)
 }
 
 // Accept accepts an invite
@@ -42,7 +59,31 @@ func (h *InviteHandler) Accept(c *fiber.Ctx) error {
 
 // Delete deletes an invite
 func (h *InviteHandler) Delete(c *fiber.Ctx) error {
-	// TODO: Implement
+	userID := c.Locals("userID").(uuid.UUID)
+	code := c.Params("code")
+	if code == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invite code is required",
+		})
+	}
+
+	err := h.serverService.DeleteInvite(c.Context(), code, userID)
+	if err != nil {
+		if err == services.ErrInviteNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "invite not found",
+			})
+		}
+		if err == services.ErrNotServerMember {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "you don't have permission to delete this invite",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

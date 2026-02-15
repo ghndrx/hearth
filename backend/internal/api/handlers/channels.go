@@ -4,32 +4,125 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"hearth/internal/models"
 	"hearth/internal/services"
 )
 
 type ChannelHandler struct {
+	channelService *services.ChannelService
 	messageService *services.MessageService
 }
 
-func NewChannelHandler(messageService *services.MessageService) *ChannelHandler {
-	return &ChannelHandler{messageService: messageService}
+func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService) *ChannelHandler {
+	return &ChannelHandler{
+		channelService: channelService,
+		messageService: messageService,
+	}
 }
 
-// Get returns a channel
+// Get returns a channel by ID
 func (h *ChannelHandler) Get(c *fiber.Ctx) error {
-	// TODO: Implement
-	return c.JSON(fiber.Map{})
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	channel, err := h.channelService.GetChannel(c.Context(), channelID)
+	if err != nil {
+		if err == services.ErrChannelNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel",
+		})
+	}
+
+	return c.JSON(channel)
 }
 
 // Update updates a channel
 func (h *ChannelHandler) Update(c *fiber.Ctx) error {
-	// TODO: Implement
-	return c.JSON(fiber.Map{})
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	var req models.UpdateChannelRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	// Convert request to service update struct
+	update := &models.ChannelUpdate{
+		Name:     req.Name,
+		Topic:    req.Topic,
+		Position: req.Position,
+		NSFW:     req.NSFW,
+		Slowmode: req.SlowmodeSeconds,
+	}
+
+	channel, err := h.channelService.UpdateChannel(c.Context(), channelID, userID, update)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to update channel",
+			})
+		}
+	}
+
+	return c.JSON(channel)
 }
 
 // Delete deletes a channel
 func (h *ChannelHandler) Delete(c *fiber.Ctx) error {
-	// TODO: Implement
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	err = h.channelService.DeleteChannel(c.Context(), channelID, userID)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		case services.ErrCannotDeleteDM:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "cannot delete DM channel",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to delete channel",
+			})
+		}
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
