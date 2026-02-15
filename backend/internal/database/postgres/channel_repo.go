@@ -189,3 +189,71 @@ func (r *ChannelRepository) CreateGroupDM(ctx context.Context, ownerID uuid.UUID
 	
 	return channel, nil
 }
+
+// GetSharedChannels returns channels that both users have access to (in mutual servers)
+// This includes text channels in servers where both users are members
+func (r *ChannelRepository) GetSharedChannels(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Channel, int, error) {
+	// Get total count first
+	var total int
+	countQuery := `
+		SELECT COUNT(DISTINCT c.id) FROM channels c
+		INNER JOIN servers s ON c.server_id = s.id
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		WHERE c.type IN ('text', 'announcement')
+	`
+	if err := r.db.GetContext(ctx, &total, countQuery, userID1, userID2); err != nil {
+		return nil, 0, err
+	}
+
+	// Get channels with server info, ordered by last message activity
+	query := `
+		SELECT c.* FROM channels c
+		INNER JOIN servers s ON c.server_id = s.id
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		WHERE c.type IN ('text', 'announcement')
+		ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC
+		LIMIT $3
+	`
+	var channels []*models.Channel
+	err := r.db.SelectContext(ctx, &channels, query, userID1, userID2, limit)
+	return channels, total, err
+}
+
+// GetSharedChannelsWithServerNames returns shared channels including server names for display
+type ChannelWithServer struct {
+	models.Channel
+	ServerName string  `db:"server_name"`
+	ServerIcon *string `db:"server_icon"`
+}
+
+func (r *ChannelRepository) GetSharedChannelsWithServerNames(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*ChannelWithServer, int, error) {
+	// Get total count first
+	var total int
+	countQuery := `
+		SELECT COUNT(DISTINCT c.id) FROM channels c
+		INNER JOIN servers s ON c.server_id = s.id
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		WHERE c.type IN ('text', 'announcement')
+	`
+	if err := r.db.GetContext(ctx, &total, countQuery, userID1, userID2); err != nil {
+		return nil, 0, err
+	}
+
+	// Get channels with server info
+	query := `
+		SELECT c.*, s.name as server_name, s.icon_url as server_icon 
+		FROM channels c
+		INNER JOIN servers s ON c.server_id = s.id
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		WHERE c.type IN ('text', 'announcement')
+		ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC
+		LIMIT $3
+	`
+	var channels []*ChannelWithServer
+	err := r.db.SelectContext(ctx, &channels, query, userID1, userID2, limit)
+	return channels, total, err
+}

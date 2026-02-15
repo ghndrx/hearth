@@ -403,3 +403,53 @@ type FriendRequestDeclinedEvent struct {
 	UserID  uuid.UUID
 	OtherID uuid.UUID
 }
+
+// RecentActivityInfo represents a user's recent activity for profile display
+type RecentActivityInfo struct {
+	LastMessageAt   *time.Time
+	ServerName      *string
+	ChannelName     *string
+	MessageCount24h int
+}
+
+// GetMutualFriends returns friends that both users have in common
+func (s *UserService) GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error) {
+	// Use the repository method if available via type assertion
+	if repo, ok := s.repo.(interface {
+		GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error)
+	}); ok {
+		return repo.GetMutualFriends(ctx, userID1, userID2, limit)
+	}
+	// Fallback: return empty if method not available
+	return []*models.User{}, 0, nil
+}
+
+// GetRecentActivity returns a user's recent activity visible to the requester
+func (s *UserService) GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*RecentActivityInfo, error) {
+	// Use the repository method if available via type assertion
+	if repo, ok := s.repo.(interface {
+		GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*struct {
+			LastMessageAt     *time.Time
+			LastMessageServer *uuid.UUID
+			ServerName        *string
+			ChannelName       *string
+			MessageCount24h   int
+		}, error)
+	}); ok {
+		activity, err := repo.GetRecentActivity(ctx, requesterID, targetID)
+		if err != nil {
+			return nil, err
+		}
+		if activity == nil {
+			return nil, nil
+		}
+		return &RecentActivityInfo{
+			LastMessageAt:   activity.LastMessageAt,
+			ServerName:      activity.ServerName,
+			ChannelName:     activity.ChannelName,
+			MessageCount24h: activity.MessageCount24h,
+		}, nil
+	}
+	// Fallback: return nil if method not available
+	return nil, nil
+}

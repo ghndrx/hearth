@@ -664,6 +664,33 @@ func (s *ServerService) DeleteInvite(ctx context.Context, code string, requester
 	return s.repo.DeleteInvite(ctx, code)
 }
 
+// GetMutualServersLimited returns mutual servers between two users with a limit
+func (s *ServerService) GetMutualServersLimited(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Server, int, error) {
+	// Check if repo has the limited method
+	if repo, ok := s.repo.(interface {
+		GetMutualServersLimited(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Server, int, error)
+	}); ok {
+		return repo.GetMutualServersLimited(ctx, userID1, userID2, limit)
+	}
+	
+	// Fallback to getting all and limiting in memory
+	if repo, ok := s.repo.(interface {
+		GetMutualServers(ctx context.Context, userID1, userID2 uuid.UUID) ([]*models.Server, error)
+	}); ok {
+		servers, err := repo.GetMutualServers(ctx, userID1, userID2)
+		if err != nil {
+			return nil, 0, err
+		}
+		total := len(servers)
+		if limit > 0 && len(servers) > limit {
+			servers = servers[:limit]
+		}
+		return servers, total, nil
+	}
+	
+	return []*models.Server{}, 0, nil
+}
+
 // GetChannels retrieves all channels for a server
 func (s *ServerService) GetChannels(ctx context.Context, serverID uuid.UUID) ([]*models.Channel, error) {
 	return s.channelRepo.GetByServerID(ctx, serverID)

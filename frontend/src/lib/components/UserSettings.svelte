@@ -26,6 +26,7 @@
     { id: 'profile', label: 'User Profile', icon: 'profile' },
     { id: 'privacy', label: 'Privacy & Safety', icon: 'shield' },
     { id: 'divider-app', label: 'App Settings', divider: true },
+    { id: 'voice', label: 'Voice & Video', icon: 'mic' },
     { id: 'appearance', label: 'Appearance', icon: 'palette' },
     { id: 'notifications', label: 'Notifications', icon: 'bell' },
     { id: 'keybinds', label: 'Keybinds', icon: 'keyboard' },
@@ -33,6 +34,94 @@
     { id: 'about', label: 'About Hearth', icon: 'info' },
     { id: 'logout', label: 'Log Out', icon: 'logout', danger: true }
   ];
+
+  // Voice & Video settings
+  let audioInputDevices: MediaDeviceInfo[] = [];
+  let audioOutputDevices: MediaDeviceInfo[] = [];
+  let videoInputDevices: MediaDeviceInfo[] = [];
+  let selectedAudioInput = '';
+  let selectedAudioOutput = '';
+  let selectedVideoInput = '';
+  let inputVolume = 100;
+  let outputVolume = 100;
+  let micTestActive = false;
+  let micLevel = 0;
+  let micTestInterval: ReturnType<typeof setInterval> | null = null;
+
+  async function loadMediaDevices() {
+    try {
+      // Request permission first
+      await navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      }).catch(() => {});
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      audioInputDevices = devices.filter(d => d.kind === 'audioinput');
+      audioOutputDevices = devices.filter(d => d.kind === 'audiooutput');
+      videoInputDevices = devices.filter(d => d.kind === 'videoinput');
+      
+      // Set defaults
+      if (!selectedAudioInput && audioInputDevices.length) {
+        selectedAudioInput = audioInputDevices[0].deviceId;
+      }
+      if (!selectedAudioOutput && audioOutputDevices.length) {
+        selectedAudioOutput = audioOutputDevices[0].deviceId;
+      }
+      if (!selectedVideoInput && videoInputDevices.length) {
+        selectedVideoInput = videoInputDevices[0].deviceId;
+      }
+    } catch (err) {
+      console.error('Failed to enumerate devices:', err);
+    }
+  }
+
+  async function startMicTest() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: selectedAudioInput ? { deviceId: selectedAudioInput } : true 
+      });
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      micTestActive = true;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      micTestInterval = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        micLevel = Math.min(100, avg * 2);
+      }, 50);
+      
+      // Store cleanup function
+      (window as any).__micTestCleanup = () => {
+        stream.getTracks().forEach(track => track.stop());
+        audioContext.close();
+        if (micTestInterval) clearInterval(micTestInterval);
+        micTestActive = false;
+        micLevel = 0;
+      };
+    } catch (err) {
+      console.error('Mic test failed:', err);
+    }
+  }
+
+  function stopMicTest() {
+    if ((window as any).__micTestCleanup) {
+      (window as any).__micTestCleanup();
+      (window as any).__micTestCleanup = null;
+    }
+  }
+
+  $: if (activeSection === 'voice' && open) {
+    loadMediaDevices();
+  }
+
+  $: if (activeSection !== 'voice' || !open) {
+    stopMicTest();
+  }
   
   $: if (open && $user) {
     profileForm = {
@@ -560,6 +649,112 @@
                     <span class="absolute cursor-pointer inset-0 bg-[var(--bg-modifier-accent)] rounded-full transition-colors before:content-[''] before:absolute before:h-[18px] before:w-[18px] before:left-[3px] before:bottom-[3px] before:bg-white before:rounded-full before:transition-transform [&:has(input:checked)]:bg-[var(--brand-primary)] [&:has(input:checked)]:before:translate-x-4"></span>
                   </label>
                 </div>
+              </div>
+            </section>
+          
+          {:else if activeSection === 'voice'}
+            <section>
+              <h1 class="text-xl font-semibold text-[var(--text-primary)] mb-5">Voice & Video</h1>
+              
+              <div class="bg-[var(--bg-secondary)] rounded-lg p-4 mb-6">
+                <h2 class="text-xs font-bold uppercase text-[var(--text-muted)] mb-4">Voice Settings</h2>
+                
+                <div class="mb-4">
+                  <label class="block text-sm text-[var(--text-secondary)] mb-2">Input Device</label>
+                  <select 
+                    bind:value={selectedAudioInput}
+                    class="w-full p-2.5 bg-[var(--bg-tertiary)] border border-[var(--bg-modifier-accent)] rounded text-[var(--text-primary)] text-sm"
+                  >
+                    {#if audioInputDevices.length === 0}
+                      <option value="">No microphones found</option>
+                    {:else}
+                      {#each audioInputDevices as device}
+                        <option value={device.deviceId}>{device.label || 'Microphone'}</option>
+                      {/each}
+                    {/if}
+                  </select>
+                </div>
+                
+                <div class="mb-4">
+                  <label class="block text-sm text-[var(--text-secondary)] mb-2">Input Volume</label>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    bind:value={inputVolume}
+                    class="w-full accent-[var(--brand-primary)]"
+                  />
+                  <span class="text-xs text-[var(--text-muted)]">{inputVolume}%</span>
+                </div>
+                
+                <div class="mb-4">
+                  <button 
+                    on:click={() => micTestActive ? stopMicTest() : startMicTest()}
+                    class="px-4 py-2 bg-[var(--brand-primary)] text-white rounded text-sm hover:bg-[var(--brand-primary-dark)] transition-colors"
+                  >
+                    {micTestActive ? 'Stop Mic Test' : 'Test Microphone'}
+                  </button>
+                  {#if micTestActive}
+                    <div class="mt-2 h-2 bg-[var(--bg-tertiary)] rounded overflow-hidden">
+                      <div 
+                        class="h-full bg-[var(--text-positive)] transition-all duration-75"
+                        style="width: {micLevel}%"
+                      ></div>
+                    </div>
+                  {/if}
+                </div>
+                
+                <div class="mb-4">
+                  <label class="block text-sm text-[var(--text-secondary)] mb-2">Output Device</label>
+                  <select 
+                    bind:value={selectedAudioOutput}
+                    class="w-full p-2.5 bg-[var(--bg-tertiary)] border border-[var(--bg-modifier-accent)] rounded text-[var(--text-primary)] text-sm"
+                  >
+                    {#if audioOutputDevices.length === 0}
+                      <option value="">Default</option>
+                    {:else}
+                      {#each audioOutputDevices as device}
+                        <option value={device.deviceId}>{device.label || 'Speaker'}</option>
+                      {/each}
+                    {/if}
+                  </select>
+                </div>
+                
+                <div class="mb-4">
+                  <label class="block text-sm text-[var(--text-secondary)] mb-2">Output Volume</label>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    bind:value={outputVolume}
+                    class="w-full accent-[var(--brand-primary)]"
+                  />
+                  <span class="text-xs text-[var(--text-muted)]">{outputVolume}%</span>
+                </div>
+              </div>
+              
+              <div class="bg-[var(--bg-secondary)] rounded-lg p-4">
+                <h2 class="text-xs font-bold uppercase text-[var(--text-muted)] mb-4">Video Settings</h2>
+                
+                <div class="mb-4">
+                  <label class="block text-sm text-[var(--text-secondary)] mb-2">Camera</label>
+                  <select 
+                    bind:value={selectedVideoInput}
+                    class="w-full p-2.5 bg-[var(--bg-tertiary)] border border-[var(--bg-modifier-accent)] rounded text-[var(--text-primary)] text-sm"
+                  >
+                    {#if videoInputDevices.length === 0}
+                      <option value="">No cameras found</option>
+                    {:else}
+                      {#each videoInputDevices as device}
+                        <option value={device.deviceId}>{device.label || 'Camera'}</option>
+                      {/each}
+                    {/if}
+                  </select>
+                </div>
+                
+                <p class="text-sm text-[var(--text-muted)]">
+                  Camera preview will be available when you join a video call.
+                </p>
               </div>
             </section>
           

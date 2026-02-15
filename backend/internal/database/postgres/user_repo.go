@@ -303,3 +303,113 @@ func (r *UserRepository) GetPresenceBulk(ctx context.Context, userIDs []uuid.UUI
 	}
 	return result, nil
 }
+
+// RecentActivity represents a user's recent activity for profile display
+type RecentActivity struct {
+	LastMessageAt     *time.Time `db:"last_message_at"`
+	LastMessageServer *uuid.UUID `db:"last_message_server"`
+	ServerName        *string    `db:"server_name"`
+	ChannelName       *string    `db:"channel_name"`
+	MessageCount24h   int        `db:"message_count_24h"`
+}
+
+// GetRecentActivity gets a user's recent activity (visible to requester via mutual servers)
+func (r *UserRepository) GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*RecentActivity, error) {
+	// Get the most recent message in a mutual server (both users are members)
+	activity := &RecentActivity{}
+	
+	query := `
+		SELECT 
+			MAX(m.created_at) as last_message_at,
+			(SELECT server_id FROM channels c2 
+			 INNER JOIN messages m2 ON m2.channel_id = c2.id 
+			 WHERE m2.author_id = $2 AND c2.server_id IS NOT NULL
+			 ORDER BY m2.created_at DESC LIMIT 1) as last_message_server
+		FROM messages m
+		INNER JOIN channels c ON c.id = m.channel_id
+		INNER JOIN servers s ON s.id = c.server_id
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		WHERE m.author_id = $2
+	`
+	
+	err := r.db.GetContext(ctx, activity, query, requesterID, targetID)
+	if err == sql.ErrNoRows {
+		return activity, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get server and channel name for last message if we have server ID
+	if activity.LastMessageServer != nil {
+		var info struct {
+			ServerName  string  `db:"server_name"`
+			ChannelName *string `db:"channel_name"`
+		}
+		infoQuery := `
+			SELECT s.name as server_name, c.name as channel_name
+			FROM messages m
+			INNER JOIN channels c ON c.id = m.channel_id
+			INNER JOIN servers s ON s.id = c.server_id
+			WHERE m.author_id = $1 AND c.server_id = $2
+			ORDER BY m.created_at DESC
+			LIMIT 1
+		`
+		if err := r.db.GetContext(ctx, &info, infoQuery, targetID, *activity.LastMessageServer); err == nil {
+			activity.ServerName = &info.ServerName
+			activity.ChannelName = info.ChannelName
+		}
+	}
+	
+	// Get message count in last 24 hours (in mutual servers)
+	countQuery := `
+		SELECT COUNT(*) FROM messages m
+		INNER JOIN channels c ON c.id = m.channel_id
+		INNER JOIN servers s ON s.id = c.server_id
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		WHERE m.author_id = $2 AND m.created_at > NOW() - INTERVAL '24 hours'
+	`
+	_ = r.db.GetContext(ctx, &activity.MessageCount24h, countQuery, requesterID, targetID)
+	
+	return activity, nil
+}
+
+// GetMutualFriends gets friends that both users have in common
+func (r *UserRepository) GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error) {
+	// Get total count
+	var total int
+	countQuery := `
+		SELECT COUNT(DISTINCT u.id) FROM users u
+		WHERE EXISTS (
+			SELECT 1 FROM relationships r1 
+			WHERE r1.user_id = $1 AND r1.target_id = u.id AND r1.type = 1
+		)
+		AND EXISTS (
+			SELECT 1 FROM relationships r2 
+			WHERE r2.user_id = $2 AND r2.target_id = u.id AND r2.type = 1
+		)
+	`
+	if err := r.db.GetContext(ctx, &total, countQuery, userID1, userID2); err != nil {
+		return nil, 0, err
+	}
+	
+	// Get mutual friends
+	query := `
+		SELECT u.* FROM users u
+		WHERE EXISTS (
+			SELECT 1 FROM relationships r1 
+			WHERE r1.user_id = $1 AND r1.target_id = u.id AND r1.type = 1
+		)
+		AND EXISTS (
+			SELECT 1 FROM relationships r2 
+			WHERE r2.user_id = $2 AND r2.target_id = u.id AND r2.type = 1
+		)
+		ORDER BY u.username
+		LIMIT $3
+	`
+	var users []*models.User
+	err := r.db.SelectContext(ctx, &users, query, userID1, userID2, limit)
+	return users, total, err
+}

@@ -513,6 +513,188 @@ func (h *UserHandler) GetUser(c *fiber.Ctx) error {
 	})
 }
 
+// MutualServerResponse represents a mutual server in API responses
+type MutualServerResponse struct {
+	ID      uuid.UUID `json:"id"`
+	Name    string    `json:"name"`
+	IconURL *string   `json:"icon_url,omitempty"`
+}
+
+// SharedChannelResponse represents a shared channel in API responses
+type SharedChannelResponse struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	ServerID   uuid.UUID `json:"server_id"`
+	ServerName string    `json:"server_name"`
+	ServerIcon *string   `json:"server_icon,omitempty"`
+}
+
+// RecentActivityResponse represents recent activity in API responses
+type RecentActivityResponse struct {
+	LastMessageAt   *time.Time `json:"last_message_at,omitempty"`
+	ServerName      *string    `json:"server_name,omitempty"`
+	ChannelName     *string    `json:"channel_name,omitempty"`
+	MessageCount24h int        `json:"message_count_24h"`
+}
+
+// MutualFriendResponse represents a mutual friend in API responses
+type MutualFriendResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Username  string    `json:"username"`
+	AvatarURL *string   `json:"avatar_url,omitempty"`
+}
+
+// UserProfileResponse represents enhanced user profile data
+type UserProfileResponse struct {
+	User           UserResponse            `json:"user"`
+	MutualServers  []MutualServerResponse  `json:"mutual_servers"`
+	SharedChannels []SharedChannelResponse `json:"shared_channels"`
+	MutualFriends  []MutualFriendResponse  `json:"mutual_friends"`
+	RecentActivity *RecentActivityResponse `json:"recent_activity,omitempty"`
+	TotalMutual    struct {
+		Servers  int `json:"servers"`
+		Channels int `json:"channels"`
+		Friends  int `json:"friends"`
+	} `json:"total_mutual"`
+}
+
+// GetUserProfile returns enhanced user profile with mutual servers, shared channels, etc.
+func (h *UserHandler) GetUserProfile(c *fiber.Ctx) error {
+	requesterID := c.Locals("userID").(uuid.UUID)
+	
+	idParam := c.Params("id")
+	targetID, err := uuid.Parse(idParam)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid user id",
+		})
+	}
+
+	// Get target user
+	user, err := h.userService.GetUser(c.Context(), targetID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "user not found",
+		})
+	}
+
+	response := UserProfileResponse{
+		User: UserResponse{
+			ID:            user.ID,
+			Username:      user.Username,
+			Discriminator: user.Discriminator,
+			AvatarURL:     user.AvatarURL,
+			BannerURL:     user.BannerURL,
+			Bio:           user.Bio,
+			Flags:         user.Flags,
+			CreatedAt:     user.CreatedAt,
+		},
+		MutualServers:  []MutualServerResponse{},
+		SharedChannels: []SharedChannelResponse{},
+		MutualFriends:  []MutualFriendResponse{},
+	}
+
+	// If viewing own profile, return basic info only (no "mutual" concept)
+	if requesterID == targetID {
+		return c.JSON(response)
+	}
+
+	// Get mutual servers (limit to 10 for popout)
+	if h.serverService != nil {
+		if svc, ok := h.serverService.(interface {
+			GetMutualServersLimited(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Server, int, error)
+		}); ok {
+			servers, total, err := svc.GetMutualServersLimited(c.Context(), requesterID, targetID, 10)
+			if err == nil {
+				response.TotalMutual.Servers = total
+				for _, s := range servers {
+					response.MutualServers = append(response.MutualServers, MutualServerResponse{
+						ID:      s.ID,
+						Name:    s.Name,
+						IconURL: s.IconURL,
+					})
+				}
+			}
+		}
+	}
+
+	// Get shared channels (limit to 10 for popout)
+	if h.channelService != nil {
+		if svc, ok := h.channelService.(interface {
+			GetSharedChannelsWithServerNames(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]SharedChannelInfo, int, error)
+		}); ok {
+			channels, total, err := svc.GetSharedChannelsWithServerNames(c.Context(), requesterID, targetID, 10)
+			if err == nil {
+				response.TotalMutual.Channels = total
+				for _, ch := range channels {
+					response.SharedChannels = append(response.SharedChannels, SharedChannelResponse{
+						ID:         ch.ID,
+						Name:       ch.Name,
+						ServerID:   *ch.ServerID,
+						ServerName: ch.ServerName,
+						ServerIcon: ch.ServerIcon,
+					})
+				}
+			}
+		}
+	}
+
+	// Get mutual friends (limit to 10 for popout)
+	if h.userService != nil {
+		if svc, ok := h.userService.(interface {
+			GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error)
+		}); ok {
+			friends, total, err := svc.GetMutualFriends(c.Context(), requesterID, targetID, 10)
+			if err == nil {
+				response.TotalMutual.Friends = total
+				for _, f := range friends {
+					response.MutualFriends = append(response.MutualFriends, MutualFriendResponse{
+						ID:        f.ID,
+						Username:  f.Username,
+						AvatarURL: f.AvatarURL,
+					})
+				}
+			}
+		}
+	}
+
+	// Get recent activity
+	if h.userService != nil {
+		if svc, ok := h.userService.(interface {
+			GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*RecentActivityInfo, error)
+		}); ok {
+			activity, err := svc.GetRecentActivity(c.Context(), requesterID, targetID)
+			if err == nil && activity != nil {
+				response.RecentActivity = &RecentActivityResponse{
+					LastMessageAt:   activity.LastMessageAt,
+					ServerName:      activity.ServerName,
+					ChannelName:     activity.ChannelName,
+					MessageCount24h: activity.MessageCount24h,
+				}
+			}
+		}
+	}
+
+	return c.JSON(response)
+}
+
+// SharedChannelInfo is used by the service layer
+type SharedChannelInfo struct {
+	ID         uuid.UUID  `json:"id"`
+	Name       string     `json:"name"`
+	ServerID   *uuid.UUID `json:"server_id"`
+	ServerName string     `json:"server_name"`
+	ServerIcon *string    `json:"server_icon"`
+}
+
+// RecentActivityInfo is used by the service layer
+type RecentActivityInfo struct {
+	LastMessageAt   *time.Time
+	ServerName      *string
+	ChannelName     *string
+	MessageCount24h int
+}
+
 // RelationshipType defines the type of relationship
 type RelationshipType int
 

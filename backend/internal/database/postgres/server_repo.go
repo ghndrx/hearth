@@ -232,3 +232,29 @@ func (r *ServerRepository) GetMutualServers(ctx context.Context, userID1, userID
 	err := r.db.SelectContext(ctx, &servers, query, userID1, userID2)
 	return servers, err
 }
+
+// GetMutualServersLimited returns mutual servers with a limit (for popout display)
+func (r *ServerRepository) GetMutualServersLimited(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Server, int, error) {
+	// Get total count first
+	var total int
+	countQuery := `
+		SELECT COUNT(*) FROM servers s
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+	`
+	if err := r.db.GetContext(ctx, &total, countQuery, userID1, userID2); err != nil {
+		return nil, 0, err
+	}
+
+	// Get limited results
+	query := `
+		SELECT s.* FROM servers s
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		ORDER BY s.name
+		LIMIT $3
+	`
+	var servers []*models.Server
+	err := r.db.SelectContext(ctx, &servers, query, userID1, userID2, limit)
+	return servers, total, err
+}

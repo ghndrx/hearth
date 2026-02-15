@@ -42,6 +42,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	users.Post("/@me/channels", h.Users.CreateDM)
 	users.Post("/@me/channels/group", h.Users.CreateGroupDM)
 	users.Get("/:id", h.Users.GetUser)
+	users.Get("/:id/profile", h.Users.GetUserProfile)
 	
 	// User Settings
 	if h.Settings != nil {
