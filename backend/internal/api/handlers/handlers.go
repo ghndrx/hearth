@@ -28,6 +28,7 @@ func NewHandlers(
 	messageService *services.MessageService,
 	roleService *services.RoleService,
 	inviteService *services.InviteService,
+	webhookService WebhookService,
 	gateway *websocket.Gateway,
 ) *Handlers {
 	return &Handlers{
@@ -40,6 +41,6 @@ func NewHandlers(
 		Gateway:  NewGatewayHandler(gateway),
 		Messages: NewMessageHandlers(messageService, channelService),
 		Roles:    NewRoleHandlers(roleService),
-		Webhooks: NewWebhookHandlers(),
+		Webhooks: NewWebhookHandlers(webhookService),
 	}
 }

@@ -118,6 +118,7 @@ func main() {
 
 	// Initialize additional services
 	inviteSvc := services.NewInviteService(nil, nil, repos.Servers, nil, serviceBus)
+	webhookSvc := services.NewWebhookService(repos.Webhooks, repos.Channels, repos.Servers, serviceBus)
 	attachmentSvc := services.NewAttachmentService()
 	bookmarkSvc := services.NewBookmarkService()
 	emojiSvc := services.NewEmojiService()
@@ -191,7 +192,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, inviteSvc, wsGateway)
+	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, inviteSvc, webhookSvc, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes
