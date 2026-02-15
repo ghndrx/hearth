@@ -3,6 +3,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"hearth/internal/models"
@@ -144,6 +145,22 @@ func TestComprehensiveService_RegisterUser(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, user)
 		assert.Equal(t, ErrUsernameTaken, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Repository Error on Username Check", func(t *testing.T) {
+		username := "testuser"
+		email := "test@example.com"
+		pass := "hash"
+
+		// Simulate database error (not ErrUserNotFound)
+		mockRepo.On("GetUserByUsername", ctx, username).Return(nil, errors.New("database connection failed")).Once()
+
+		user, err := service.RegisterUser(ctx, username, email, pass)
+
+		assert.Error(t, err)
+		assert.Nil(t, user)
+		assert.Equal(t, "database connection failed", err.Error())
 		mockRepo.AssertExpectations(t)
 	})
 

@@ -318,6 +318,49 @@ func TestWebhookService_CreateWebhook_Success(t *testing.T) {
 	eventBus.AssertExpectations(t)
 }
 
+func TestWebhookService_CreateWebhook_DMChannel(t *testing.T) {
+	service, webhookRepo, channelRepo, _, eventBus := newTestWebhookService()
+	ctx := context.Background()
+
+	channelID := uuid.New()
+	creatorID := uuid.New()
+
+	// DM channel has nil ServerID
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: nil, // DM channel - no server
+		Name:     "dm-channel",
+		Type:     models.ChannelTypeDM,
+	}
+
+	channelRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	// Note: No serverRepo.GetMember call for DM channels
+	webhookRepo.On("CountByChannelID", ctx, channelID).Return(0, nil)
+	webhookRepo.On("Create", ctx, mock.AnythingOfType("*models.Webhook")).Return(nil)
+	eventBus.On("Publish", "webhook.created", mock.AnythingOfType("*services.WebhookCreatedEvent")).Return()
+
+	req := &CreateWebhookRequest{
+		ChannelID: channelID,
+		CreatorID: creatorID,
+		Name:      "DM Webhook",
+		Avatar:    nil,
+	}
+
+	webhook, err := service.CreateWebhook(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, webhook)
+	assert.Equal(t, "DM Webhook", webhook.Name)
+	assert.Equal(t, channelID, webhook.ChannelID)
+	assert.Nil(t, webhook.ServerID) // ServerID should be nil for DM channels
+	assert.Equal(t, creatorID, *webhook.CreatorID)
+	assert.NotEmpty(t, webhook.Token)
+
+	channelRepo.AssertExpectations(t)
+	webhookRepo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
 func TestWebhookService_CreateWebhook_ChannelNotFound(t *testing.T) {
 	service, _, channelRepo, _, _ := newTestWebhookService()
 	ctx := context.Background()
