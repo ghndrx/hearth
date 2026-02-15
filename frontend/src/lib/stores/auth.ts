@@ -7,13 +7,13 @@ import { setCurrentUserId } from './typing';
 export interface User {
 	id: string;
 	username: string;
-	discriminator?: string;
-	email?: string;
-	avatar_url?: string | null;
-	banner_url?: string | null;
-	bio?: string | null;
-	custom_status?: string | null;
-	flags?: number;
+	display_name: string | null;
+	email: string;
+	avatar: string | null;
+	banner: string | null;
+	bio: string | null;
+	pronouns: string | null;
+	bot: boolean;
 	created_at: string;
 }
 
