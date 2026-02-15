@@ -230,7 +230,7 @@
                       <input 
                         type="file" 
                         accept="image/*" 
-                        class="hidden" 
+                        style="display: none; position: absolute; visibility: hidden;"
                         on:change={handleAvatarUpload}
                         disabled={uploadingAvatar}
                       />
@@ -377,14 +377,14 @@
                     <div class="flex items-center gap-4">
                       <Avatar src={$user?.avatar} alt={$user?.username || ''} size="lg" />
                       <div>
-                        <label class="relative cursor-pointer">
+                        <label class="relative cursor-pointer inline-block">
                           <span class="px-4 py-2 rounded bg-[var(--brand-primary)] text-white text-sm font-medium hover:bg-[var(--brand-hover)] transition-colors inline-block {uploadingAvatar ? 'opacity-50 cursor-not-allowed' : ''}">
                             {uploadingAvatar ? 'Uploading...' : 'Change Avatar'}
                           </span>
                           <input 
                             type="file" 
                             accept="image/*" 
-                            class="hidden" 
+                            style="display: none; position: absolute; visibility: hidden;"
                             on:change={handleAvatarUpload}
                             disabled={uploadingAvatar}
                           />
@@ -669,7 +669,7 @@
         </div>
         
         <!-- Close button -->
-        <button class="absolute top-15 right-10 flex flex-col items-center gap-1 bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]" on:click={close} aria-label="Close settings">
+        <button class="absolute top-[60px] right-8 flex flex-col items-center gap-1 bg-transparent border-none cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors" on:click={close} aria-label="Close settings" type="button">
           <div class="w-9 h-9 flex items-center justify-center border-2 border-current rounded-full">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path d="M18.3 5.71a.996.996 0 0 0-1.41 0L12 10.59 7.11 5.7A.996.996 0 1 0 5.7 7.11L10.59 12 5.7 16.89a.996.996 0 1 0 1.41 1.41L12 13.41l4.89 4.89a.996.996 0 1 0 1.41-1.41L13.41 12l4.89-4.89c.38-.38.38-1.02 0-1.4z"/>
