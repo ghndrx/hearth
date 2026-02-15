@@ -75,6 +75,27 @@ func (m *MockUserService) UnblockUser(ctx context.Context, userID, blockedID uui
 	return args.Error(0)
 }
 
+func (m *MockUserService) GetBlockedUsers(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.User), args.Error(1)
+}
+
+// MockFriendService mocks the FriendService for testing
+type MockFriendService struct {
+	mock.Mock
+}
+
+func (m *MockFriendService) GetPendingRequests(ctx context.Context, userID uuid.UUID) ([]models.Friendship, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Friendship), args.Error(1)
+}
+
 // MockServerServiceForUsers mocks the ServerService for user handler testing
 type MockServerServiceForUsers struct {
 	mock.Mock
@@ -105,6 +126,7 @@ func (m *MockChannelServiceForUsers) GetUserDMs(ctx context.Context, userID uuid
 type testUserHandler struct {
 	handler        *UserHandler
 	userService    *MockUserService
+	friendService  *MockFriendService
 	serverService  *MockServerServiceForUsers
 	channelService *MockChannelServiceForUsers
 	app            *fiber.App
@@ -113,11 +135,13 @@ type testUserHandler struct {
 
 func newTestUserHandler() *testUserHandler {
 	userService := new(MockUserService)
+	friendService := new(MockFriendService)
 	serverService := new(MockServerServiceForUsers)
 	channelService := new(MockChannelServiceForUsers)
 
 	handler := &UserHandler{
 		userService:    userService,
+		friendService:  friendService,
 		serverService:  serverService,
 		channelService: channelService,
 	}
@@ -144,6 +168,7 @@ func newTestUserHandler() *testUserHandler {
 	return &testUserHandler{
 		handler:        handler,
 		userService:    userService,
+		friendService:  friendService,
 		serverService:  serverService,
 		channelService: channelService,
 		app:            app,
@@ -380,6 +405,8 @@ func TestUserHandler_GetRelationships(t *testing.T) {
 	}
 
 	th.userService.On("GetFriends", mock.Anything, th.userID).Return(friends, nil)
+	th.userService.On("GetBlockedUsers", mock.Anything, th.userID).Return([]*models.User{}, nil)
+	th.friendService.On("GetPendingRequests", mock.Anything, th.userID).Return([]models.Friendship{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/users/@me/relationships", nil)
 	resp, err := th.app.Test(req)
@@ -395,6 +422,7 @@ func TestUserHandler_GetRelationships(t *testing.T) {
 	assert.Equal(t, RelationshipTypeFriend, result[0].Type)
 
 	th.userService.AssertExpectations(t)
+	th.friendService.AssertExpectations(t)
 }
 
 func TestUserHandler_CreateRelationship_AddFriend(t *testing.T) {
