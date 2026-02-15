@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { user, auth } from '$lib/stores/auth';
-	import { gatewayState } from '$lib/gateway';
+	import { isConnected } from '$lib/stores/gateway';
 	import { settings } from '$lib/stores/settings';
 
 	export let status: 'online' | 'idle' | 'dnd' | 'offline' = 'online';

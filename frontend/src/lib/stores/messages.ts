@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { api } from '$lib/api';
-import { gateway } from '$lib/gateway';
+import { gateway, Op } from './gateway';
 
 export interface Message {
 	id: string;
@@ -147,6 +147,7 @@ export async function removeReaction(messageId: string, channelId: string, emoji
 
 export function sendTypingIndicator(channelId: string) {
 	gateway.send({
+		op: Op.DISPATCH,
 		t: 'TYPING_START',
 		d: { channel_id: channelId }
 	});
