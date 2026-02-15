@@ -54,13 +54,20 @@
 
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
-	
+	import { currentUser } from '$lib/stores';
+
 	export let message: any;
 	export let grouped = false;
 	export let isOwn = false;
 	export let roleColor: string | null = null;
-	
+
 	const dispatch = createEventDispatcher();
+
+	// Check if current user has reacted to a message
+	function hasUserReacted(reaction: any): boolean {
+		if (!reaction.userIds || !$currentUser) return false;
+		return reaction.userIds.includes($currentUser.id);
+	}
 	
 	let showActions = false;
 	let editing = false;
@@ -226,14 +233,15 @@
 		{#if message.reactions?.length > 0}
 			<div class="flex flex-wrap gap-1 mt-1">
 				{#each message.reactions as reaction}
-					<button 
+					{@const userReacted = hasUserReacted(reaction)}
+					<button
 						class="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm transition-colors border"
-						class:reaction-active={reaction.me}
-						class:reaction-inactive={!reaction.me}
+						class:reaction-active={userReacted}
+						class:reaction-inactive={!userReacted}
 						on:click={() => handleReaction(reaction.emoji)}
 					>
 						<span>{reaction.emoji}</span>
-						<span class="text-xs" class:text-[#dbdee1]={reaction.me} class:text-[#949ba4]={!reaction.me}>{reaction.count}</span>
+						<span class="text-xs" class:text-[#dbdee1]={userReacted} class:text-[#949ba4]={!userReacted}>{reaction.count}</span>
 					</button>
 				{/each}
 			</div>
