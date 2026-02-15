@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -61,11 +62,11 @@ func setupMockRepo() *MockPollRepository {
 
 func setupTestPoll(id uuid.UUID) *models.Poll {
 	return &models.Poll{
-		ID:       id,
-		GuildID:  uuid.New(),
-		AuthorID: uuid.New(),
-		Title:    "Test Poll",
-		Options: []*models.PollOption{
+		ID:        id,
+		ChannelID: uuid.New(),
+		CreatorID: uuid.New(),
+		Question:  "Test Poll",
+		Options: []models.PollOption{
 			{
 				ID:   uuid.New(),
 				Text: "Yes",

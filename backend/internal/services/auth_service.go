@@ -22,10 +22,8 @@ type AuthService interface {
 
 // authRepository defines the storage interface required by the auth service.
 type authRepository interface {
-	CreateUser(ctx context.Context, user *models.User) error
-	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
-	// Ideally, we would have a CreateSession method here, but for simplicity
-	// we will return a generated token in the service layer for this implementation.
+	Create(ctx context.Context, user *models.User) error
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
 }
 
 type authService struct {
@@ -42,7 +40,7 @@ func NewAuthService(repo authRepository) AuthService {
 // Register handles new user registration.
 func (s *authService) Register(ctx context.Context, email, username, password string) (*models.User, error) {
 	// Check if user already exists
-	_, err := s.repo.GetUserByEmail(ctx, email)
+	_, err := s.repo.GetByEmail(ctx, email)
 	if err == nil {
 		return nil, ErrUserExists
 	}
@@ -63,7 +61,7 @@ func (s *authService) Register(ctx context.Context, email, username, password st
 		PasswordHash: string(hashedPassword),
 	}
 
-	if err := s.repo.CreateUser(ctx, user); err != nil {
+	if err := s.repo.Create(ctx, user); err != nil {
 		return nil, err
 	}
 
@@ -72,7 +70,7 @@ func (s *authService) Register(ctx context.Context, email, username, password st
 
 // Login handles user login and credentials verification.
 func (s *authService) Login(ctx context.Context, email, password string) (string, *models.User, error) {
-	user, err := s.repo.GetUserByEmail(ctx, email)
+	user, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return "", nil, ErrInvalidCredentials

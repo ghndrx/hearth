@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	
+
 	"hearth/internal/services"
 	ws "hearth/internal/websocket"
 )
@@ -29,14 +29,14 @@ func (h *InviteHandler) Get(c *fiber.Ctx) error {
 func (h *InviteHandler) Accept(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
 	code := c.Params("code")
-	
+
 	server, err := h.serverService.JoinServer(c.Context(), userID, code)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(server)
 }
 

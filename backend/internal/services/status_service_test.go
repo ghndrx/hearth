@@ -45,19 +45,21 @@ func (m *MockStatusRepository) Create(ctx context.Context, status *models.Status
 func TestStatusService_UpdateOrCreateStatus_Success(t *testing.T) {
 	// Arrange
 	userID := uuid.New()
+	gameID := "valheim"
+	activityDetails := "Entering the woods..."
 	statusInput := models.Status{
-		Status:       "Playing Valheim",
-		GameID:       "valheim",
-		ActivityDetails: "Entering the woods...",
+		Status:          "Playing Valheim",
+		GameID:          &gameID,
+		ActivityDetails: &activityDetails,
 	}
-	
+
 	// Mock existing status
 	expectedStatus := &models.Status{
-		ID: uuid.New(),
-		UserID:         userID,
-		Status:         "Playing Valheim",
-		GameID:         "valheim",
-		ActivityDetails: "Entering the woods...",
+		ID:              uuid.New(),
+		UserID:          userID,
+		Status:          "Playing Valheim",
+		GameID:          &gameID,
+		ActivityDetails: &activityDetails,
 	}
 
 	mockRepo := new(MockStatusRepository)
@@ -78,23 +80,18 @@ func TestStatusService_UpdateOrCreateStatus_Success(t *testing.T) {
 func TestStatusService_UpdateOrCreateStatus_New(t *testing.T) {
 	// Arrange
 	userID := uuid.New()
+	emptyGameID := ""
+	emptyActivityDetails := ""
 	statusInput := models.Status{
-		Status:       "Online",
-		GameID:       "",
-		ActivityDetails: "",
+		Status:          "Online",
+		GameID:          &emptyGameID,
+		ActivityDetails: &emptyActivityDetails,
 	}
 
 	mockRepo := new(MockStatusRepository)
 	// Mock not found (GetByUserID returns nil, nil)
 	mockRepo.On("GetByUserID", mock.Anything, userID).Return(nil, nil)
 	// Mock creation
-	newStatus := &models.Status{
-		ID:           uuid.New(),
-		UserID:       userID,
-		Status:       "Online",
-		GameID:       "",
-		ActivityDetails: "",
-	}
 	mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(s *models.Status) bool {
 		return s.UserID == userID && s.Status == "Online"
 	})).Return(nil)
@@ -134,9 +131,9 @@ func TestStatusService_GetUserStatus(t *testing.T) {
 	// Arrange
 	userID := uuid.New()
 	expectedStatus := &models.Status{
-		ID:      uuid.New(),
-		UserID:  userID,
-		Status:  "Playing Minecraft",
+		ID:     uuid.New(),
+		UserID: userID,
+		Status: "Playing Minecraft",
 	}
 	mockRepo := new(MockStatusRepository)
 	mockRepo.On("GetByUserID", mock.Anything, userID).Return(expectedStatus, nil)

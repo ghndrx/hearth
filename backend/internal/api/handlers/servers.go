@@ -362,9 +362,9 @@ func (h *ServerHandler) CreateBan(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Reason                 string `json:"reason"`
-		DeleteMessageDays      int    `json:"delete_message_days"`
-		DeleteMessageSeconds   int    `json:"delete_message_seconds"`
+		Reason               string `json:"reason"`
+		DeleteMessageDays    int    `json:"delete_message_days"`
+		DeleteMessageSeconds int    `json:"delete_message_seconds"`
 	}
 	_ = c.BodyParser(&req)
 

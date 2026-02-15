@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 	"hearth/internal/models"
 )
 
@@ -48,7 +51,7 @@ func (s *StatusService) UpdateOrCreateStatus(ctx context.Context, userID uuid.UU
 		existingStatus.Status = status.Status
 		existingStatus.GameID = status.GameID
 		existingStatus.ActivityDetails = status.ActivityDetails
-		existingStatus.Timestamp = models.Now()
+		existingStatus.Timestamp = time.Now()
 
 		if err := s.repo.Update(ctx, existingStatus); err != nil {
 			return nil, err
@@ -58,11 +61,11 @@ func (s *StatusService) UpdateOrCreateStatus(ctx context.Context, userID uuid.UU
 
 	// 3. If not exists, create it
 	newStatus := &models.Status{
-		UserID:         userID,
-		Status:         status.Status,
-		GameID:         status.GameID,
+		UserID:          userID,
+		Status:          status.Status,
+		GameID:          status.GameID,
 		ActivityDetails: status.ActivityDetails,
-		Timestamp: models.Now(),
+		Timestamp:       time.Now(),
 	}
 
 	if err := s.repo.Create(ctx, newStatus); err != nil {

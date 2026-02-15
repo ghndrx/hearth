@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -50,13 +49,6 @@ func TestFriendService_AddFriend_Success(t *testing.T) {
 	ctx := context.Background()
 	userA := uuid.New()
 	userB := uuid.New()
-	expectedFriendship := &models.Friendship{
-		ID:        uuid.New(),
-		UserID1:   userA,
-		UserID2:   userB,
-		CreatedAt: models.Now(),
-	}
-
 	mockClient.On("FetchByMembers", ctx, userA, userB).Return(nil, models.ErrRecordNotFound)
 	mockClient.On("Create", ctx, mock.MatchedBy(func(f *models.Friendship) bool {
 		return f.UserID1 == userA && f.UserID2 == userB

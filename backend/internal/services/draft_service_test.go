@@ -2,14 +2,13 @@ package services
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
-	"hearth/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"hearth/internal/models"
 )
 
 // MockDraftRepository implements the DraftRepository interface for testing.
@@ -53,18 +52,17 @@ func TestCreateDraft_Success(t *testing.T) {
 	service := NewDraftService(new(MockDraftRepository))
 	ctx := context.Background()
 	req := models.CreateDraftRequest{
-		Title:    "Test Title",
-		Content:  "Test Content",
-		GuildID:  uuid.New(),
+		Title:     "Test Title",
+		Content:   "Test Content",
+		GuildID:   uuid.New(),
 		ChannelID: uuid.New(),
-		CreatedBy: "user123",
+		CreatedBy: uuid.New(),
 	}
 
-	uuid := uuid.New()
 	// We expect the repo to be called exactly once
 	mockRepo := service.repo.(*MockDraftRepository)
 	mockRepo.On("CreateDraft", ctx, mock.MatchedBy(func(d *models.Draft) bool {
-		return d.ID == uuid && d.Title == req.Title && d.Status == models.DraftStatusDraft
+		return d.Title == req.Title && d.Status == models.DraftStatusDraft
 	})).Return(nil)
 
 	// Act
@@ -83,9 +81,9 @@ func TestCreateDraft_EmptyTitle(t *testing.T) {
 	service := NewDraftService(new(MockDraftRepository))
 	ctx := context.Background()
 	req := models.CreateDraftRequest{
-		Title: "",
-		Content:  "Some content",
-		GuildID:  uuid.New(),
+		Title:   "",
+		Content: "Some content",
+		GuildID: uuid.New(),
 	}
 
 	// Act
@@ -134,7 +132,7 @@ func TestUpdateDraft_UpdateExisting(t *testing.T) {
 
 	// Act
 	req := models.UpdateDraftRequest{
-		Title: &newTitle, 
+		Title:   &newTitle,
 		Content: nil,
 	}
 	err := service.UpdateDraft(ctx, draftID, req)

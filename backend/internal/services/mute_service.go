@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"hearth/internal/models"
@@ -46,28 +47,22 @@ func (s *MuteService) MuteUser(ctx context.Context, channelID, userID uuid.UUID,
 	}
 
 	// Calculate end time
-	var endsAt *models.TimeRange
+	var endsAt *time.Time
 	if durationMinutes > 0 {
-		// Note: we assume a helper for time addition or rely on database logic.
-		// For example, in Postgres we might want to pass the sql.Date argument.
-		// Here we pass 0 for validity checking, Set ended_at in DB logic if needed.
-		// However, for the model structure, we initialize the pointer.
-		now := models.TimeRange{}
-		endsAt = &models.TimeRange{
-      End: now.AddDuration(minutes, durationMinutes),
-    }
+		endTime := time.Now().Add(time.Duration(durationMinutes) * time.Minute)
+		endsAt = &endTime
 	}
 
 	mute := &models.Mute{
-		ID:           uuid.New(),
-		ChannelID:    channelID,
-		UserID:       userID,
-		MutedBy:      nil, // Could be populated from context if a bot/superuser ID is passed
-		RoleID:       nil, // Could be populated if using roles
-		Reason:       "",  // Could be added via params
-		StartedAt:    models.TimeRange{End: models.TimeRange{}}, // Set End to 0, DB handles logic
-		EndedAt:      endsAt,
-		RestoredAt:   nil,
+		ID:         uuid.New(),
+		ChannelID:  channelID,
+		UserID:     userID,
+		MutedBy:    nil, // Could be populated from context if a bot/superuser ID is passed
+		RoleID:     nil, // Could be populated if using roles
+		Reason:     "",  // Could be added via params
+		StartedAt:  time.Now(),
+		EndedAt:    endsAt,
+		RestoredAt: nil,
 	}
 
 	if err := s.repo.Create(ctx, mute); err != nil {
@@ -90,8 +85,8 @@ func (s *MuteService) UnmuteUser(ctx context.Context, channelID, userID uuid.UUI
 	}
 
 	// 2. Update the mute record
-	currentTime := models.TimeRange{}.Now() // Helper to get current time in DB-compatible format
-	
+	currentTime := time.Now()
+
 	mute.EndedAt = &currentTime
 	mute.RestoredAt = &currentTime
 
@@ -114,15 +109,10 @@ func (s *MuteService) IsUserMuted(ctx context.Context, channelID, userID uuid.UU
 		return false, nil
 	}
 
-	// If EndedAt is nil (never ended) or End is > Now, user is currently muted.
-	// Note: Comparison logic might depend on ` models.TimeRange ` implementation.
-	// Assuming standard pointer check and logic.
-	now := models.TimeRange{}.Now()
-	
-	// This logic assumes models.TimeRange implements comparison methods or explicit Time fields.
-	// For this example, we assume if EndedAt exists, we check dates.
-	
-	return mute.EndedAt == nil || mute.EndedAt.IsAfter(no), nil
+	// If EndedAt is nil (never ended) or EndedAt is in the future, user is currently muted.
+	now := time.Now()
+
+	return mute.EndedAt == nil || mute.EndedAt.After(now), nil
 }
 
 var ErrUserNotMuted = errors.New("user is not muted in this channel")

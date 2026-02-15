@@ -52,14 +52,6 @@ func TestMuteService_MuteUser(t *testing.T) {
 	userID := uuid.New()
 	duration := 60 // minutes
 
-	expectedMute := &models.Mute{
-		ID:        uuid.New(),
-		ChannelID: channelID,
-		UserID:    userID,
-		StartedAt: models.TimeRange{End: models.TimeRange{}},
-		// EndsAt would be calculated by service, mock expects final state or intermediate
-	}
-
 	repo.On("Create", ctx, mock.AnythingOfType("*models.Mute")).Return(nil)
 
 	// Act
@@ -80,12 +72,11 @@ func TestMuteService_UnmuteUser_Success(t *testing.T) {
 	channelID := uuid.New()
 	userID := uuid.New()
 
-	now := time.Now()
 	activeMute := &models.Mute{
 		ID:        uuid.New(),
 		ChannelID: channelID,
 		UserID:    userID,
-		StartedAt: models.TimeRange{End: models.TimeRange{}},
+		StartedAt: time.Now(),
 	}
 
 	repo.On("GetByChannelAndUser", ctx, channelID, userID).Return(activeMute, nil)
@@ -113,7 +104,7 @@ func TestMuteService_IsUserMuted_Muted(t *testing.T) {
 		ID:        uuid.New(),
 		ChannelID: channelID,
 		UserID:    userID,
-		StartedAt: models.TimeRange{End: models.TimeRange{}},
+		StartedAt: time.Now(),
 		EndedAt:   nil, // Still active
 	}
 

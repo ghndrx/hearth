@@ -18,12 +18,12 @@ type MockAuthRepository struct {
 	mock.Mock
 }
 
-func (m *MockAuthRepository) CreateUser(ctx context.Context, user *models.User) error {
+func (m *MockAuthRepository) Create(ctx context.Context, user *models.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockAuthRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
+func (m *MockAuthRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -41,10 +41,10 @@ func TestAuthService_Register_Success(t *testing.T) {
 	password := "password123"
 
 	// Expect check for existing user returns not found
-	mockRepo.On("GetUserByEmail", ctx, email).Return(nil, ErrUserNotFound)
+	mockRepo.On("GetByEmail", ctx, email).Return(nil, ErrUserNotFound)
 
 	// Expect create user to be called
-	mockRepo.On("CreateUser", ctx, mock.AnythingOfType("*models.User")).Return(nil).Run(func(args mock.Arguments) {
+	mockRepo.On("Create", ctx, mock.AnythingOfType("*models.User")).Return(nil).Run(func(args mock.Arguments) {
 		user := args.Get(1).(*models.User)
 		assert.Equal(t, email, user.Email)
 		assert.Equal(t, username, user.Username)
@@ -71,7 +71,7 @@ func TestAuthService_Register_UserExists(t *testing.T) {
 	password := "password123"
 
 	existingUser := &models.User{Email: email}
-	mockRepo.On("GetUserByEmail", ctx, email).Return(existingUser, nil)
+	mockRepo.On("GetByEmail", ctx, email).Return(existingUser, nil)
 
 	user, err := service.Register(ctx, email, username, password)
 
@@ -90,7 +90,7 @@ func TestAuthService_Register_RepositoryError(t *testing.T) {
 	password := "password123"
 
 	// Database error when checking for existing user
-	mockRepo.On("GetUserByEmail", ctx, email).Return(nil, errors.New("db error"))
+	mockRepo.On("GetByEmail", ctx, email).Return(nil, errors.New("db error"))
 
 	user, err := service.Register(ctx, email, username, password)
 
@@ -117,7 +117,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 		PasswordHash: string(hashedPassword),
 	}
 
-	mockRepo.On("GetUserByEmail", ctx, email).Return(user, nil)
+	mockRepo.On("GetByEmail", ctx, email).Return(user, nil)
 
 	token, returnedUser, err := service.Login(ctx, email, password)
 
@@ -136,7 +136,7 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 	email := "test@example.com"
 	password := "password123"
 
-	mockRepo.On("GetUserByEmail", ctx, email).Return(nil, ErrUserNotFound)
+	mockRepo.On("GetByEmail", ctx, email).Return(nil, ErrUserNotFound)
 
 	token, user, err := service.Login(ctx, email, password)
 
@@ -164,7 +164,7 @@ func TestAuthService_Login_InvalidPassword(t *testing.T) {
 		PasswordHash: string(hashedPassword),
 	}
 
-	mockRepo.On("GetUserByEmail", ctx, email).Return(user, nil)
+	mockRepo.On("GetByEmail", ctx, email).Return(user, nil)
 
 	token, returnedUser, err := service.Login(ctx, email, wrongPassword)
 
@@ -182,7 +182,7 @@ func TestAuthService_Login_RepositoryError(t *testing.T) {
 	email := "test@example.com"
 	password := "password123"
 
-	mockRepo.On("GetUserByEmail", ctx, email).Return(nil, errors.New("db error"))
+	mockRepo.On("GetByEmail", ctx, email).Return(nil, errors.New("db error"))
 
 	token, user, err := service.Login(ctx, email, password)
 
