@@ -3,7 +3,6 @@
 **Self-hosted chat. Full control.**
 
 [![License](https://img.shields.io/github/license/ghndrx/hearth)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ghndrx/hearth)](https://goreportcard.com/report/github.com/ghndrx/hearth)
 
 A Discord-compatible communication platform you own. Text channels, voice, DMs, threads—all on your infrastructure.
 
