@@ -8,6 +8,7 @@ import (
 
 	"hearth/internal/events"
 	"hearth/internal/models"
+	"hearth/internal/services"
 )
 
 // EventBridge connects the domain event bus to the WebSocket hub
@@ -104,54 +105,49 @@ func (b *EventBridge) registerHandlers() {
 
 // Message event handlers
 
-type MessageEventData struct {
-	Message   *models.Message `json:"message"`
-	ChannelID uuid.UUID       `json:"channel_id"`
-	ServerID  *uuid.UUID      `json:"server_id,omitempty"`
-}
-
 func (b *EventBridge) onMessageCreated(event events.Event) {
-	data, ok := event.Data.(*MessageEventData)
+	data, ok := event.Data.(*services.MessageCreatedEvent)
 	if !ok {
+		log.Printf("[EventBridge] onMessageCreated: wrong type %T", event.Data)
 		return
 	}
+	log.Printf("[EventBridge] Broadcasting MESSAGE_CREATE to channel %s", data.ChannelID)
 	b.sendToChannel(data.ChannelID, EventTypeMessageCreate, b.messageToWS(data.Message))
 }
 
 func (b *EventBridge) onMessageUpdated(event events.Event) {
-	data, ok := event.Data.(*MessageEventData)
+	data, ok := event.Data.(*services.MessageUpdatedEvent)
 	if !ok {
+		log.Printf("[EventBridge] onMessageUpdated: wrong type %T", event.Data)
 		return
 	}
+	log.Printf("[EventBridge] Broadcasting MESSAGE_UPDATE to channel %s", data.ChannelID)
 	b.sendToChannel(data.ChannelID, EventTypeMessageUpdate, b.messageToWS(data.Message))
 }
 
 func (b *EventBridge) onMessageDeleted(event events.Event) {
-	data, ok := event.Data.(*MessageDeleteData)
+	data, ok := event.Data.(*services.MessageDeletedEvent)
 	if !ok {
+		log.Printf("[EventBridge] onMessageDeleted: wrong type %T", event.Data)
 		return
 	}
-	b.sendToChannel(data.ChannelID, EventTypeMessageDelete, data)
-}
-
-type MessageDeleteData struct {
-	MessageID uuid.UUID  `json:"id"`
-	ChannelID uuid.UUID  `json:"channel_id"`
-	ServerID  *uuid.UUID `json:"guild_id,omitempty"`
+	log.Printf("[EventBridge] Broadcasting MESSAGE_DELETE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventTypeMessageDelete, map[string]interface{}{
+		"id":         data.MessageID.String(),
+		"channel_id": data.ChannelID.String(),
+	})
 }
 
 func (b *EventBridge) onMessagePinned(event events.Event) {
-	data, ok := event.Data.(*ChannelPinsData)
+	data, ok := event.Data.(*services.MessagePinnedEvent)
 	if !ok {
+		log.Printf("[EventBridge] onMessagePinned: wrong type %T", event.Data)
 		return
 	}
-	b.sendToChannel(data.ChannelID, EventTypeChannelPinsUpdate, data)
-}
-
-type ChannelPinsData struct {
-	ChannelID          uuid.UUID `json:"channel_id"`
-	ServerID           *uuid.UUID `json:"guild_id,omitempty"`
-	LastPinTimestamp   string    `json:"last_pin_timestamp"`
+	log.Printf("[EventBridge] Broadcasting CHANNEL_PINS_UPDATE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventTypeChannelPinsUpdate, map[string]interface{}{
+		"channel_id": data.ChannelID.String(),
+	})
 }
 
 // Reaction event handlers

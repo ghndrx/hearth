@@ -14,8 +14,9 @@ data/
 *.db-wal
 # Dependencies
 dist/
-# Documentation - keep API docs, exclude generated
-docs/performance/*-results.json
+docs/
+docs/*
+# Documentation (generated docs, but keep research)
 .DS_Store
 .env
 # Environment
@@ -48,9 +49,3 @@ uploads/
 # Uploads (in dev)
 vendor/
 .vscode/
-
-# Agent orchestration (local only)
-TASKS.json
-specs/
-AGENTS.md
-docs/

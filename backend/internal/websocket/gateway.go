@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
 
@@ -270,9 +271,102 @@ func (g *Gateway) handleMessage(conn *websocket.Conn, client *Client, session *S
 		
 	case OpRequestGuildMembers:
 		g.handleRequestMembers(conn, client, session, &msg)
+	
+	case OpDispatch:
+		// Handle client-sent dispatch events (like SUBSCRIBE)
+		g.handleClientDispatch(conn, client, session, &msg)
 		
 	default:
+		log.Printf("[Gateway] Unknown opcode: %d from user %s", msg.Op, session.UserID)
 		g.sendError(conn, "unknown opcode")
+	}
+}
+
+func (g *Gateway) handleClientDispatch(conn *websocket.Conn, client *Client, session *Session, msg *Message) {
+	// Parse the dispatch event
+	var dispatchData struct {
+		T string          `json:"t"` // Event type
+		D json.RawMessage `json:"d"` // Event data
+	}
+	
+	if msg.Data != nil {
+		if err := json.Unmarshal(msg.Data, &dispatchData); err != nil {
+			log.Printf("[Gateway] Failed to parse dispatch data: %v", err)
+			return
+		}
+	}
+	
+	log.Printf("[Gateway] Client dispatch: %s from user %s", dispatchData.T, session.UserID)
+	
+	switch dispatchData.T {
+	case "SUBSCRIBE":
+		g.handleSubscribe(conn, client, session, dispatchData.D)
+	case "UNSUBSCRIBE":
+		g.handleUnsubscribe(conn, client, session, dispatchData.D)
+	default:
+		log.Printf("[Gateway] Unknown client dispatch type: %s", dispatchData.T)
+	}
+}
+
+func (g *Gateway) handleSubscribe(conn *websocket.Conn, client *Client, session *Session, data json.RawMessage) {
+	var subData struct {
+		ChannelID string `json:"channel_id,omitempty"`
+		ServerID  string `json:"server_id,omitempty"`
+	}
+	
+	if err := json.Unmarshal(data, &subData); err != nil {
+		log.Printf("[Gateway] Failed to parse subscribe data: %v", err)
+		return
+	}
+	
+	if subData.ChannelID != "" {
+		channelID, err := uuid.Parse(subData.ChannelID)
+		if err != nil {
+			log.Printf("[Gateway] Invalid channel ID: %s", subData.ChannelID)
+			return
+		}
+		client.SubscribeChannel(channelID)
+		log.Printf("[Gateway] User %s subscribed to channel %s", session.UserID, channelID)
+	}
+	
+	if subData.ServerID != "" {
+		serverID, err := uuid.Parse(subData.ServerID)
+		if err != nil {
+			log.Printf("[Gateway] Invalid server ID: %s", subData.ServerID)
+			return
+		}
+		client.SubscribeServer(serverID)
+		log.Printf("[Gateway] User %s subscribed to server %s", session.UserID, serverID)
+	}
+}
+
+func (g *Gateway) handleUnsubscribe(conn *websocket.Conn, client *Client, session *Session, data json.RawMessage) {
+	var subData struct {
+		ChannelID string `json:"channel_id,omitempty"`
+		ServerID  string `json:"server_id,omitempty"`
+	}
+	
+	if err := json.Unmarshal(data, &subData); err != nil {
+		log.Printf("[Gateway] Failed to parse unsubscribe data: %v", err)
+		return
+	}
+	
+	if subData.ChannelID != "" {
+		channelID, err := uuid.Parse(subData.ChannelID)
+		if err != nil {
+			return
+		}
+		client.UnsubscribeChannel(channelID)
+		log.Printf("[Gateway] User %s unsubscribed from channel %s", session.UserID, channelID)
+	}
+	
+	if subData.ServerID != "" {
+		serverID, err := uuid.Parse(subData.ServerID)
+		if err != nil {
+			return
+		}
+		client.UnsubscribeServer(serverID)
+		log.Printf("[Gateway] User %s unsubscribed from server %s", session.UserID, serverID)
 	}
 }
 

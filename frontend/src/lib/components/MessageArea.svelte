@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { messages, activeChannel, websocket, currentUser } from '$stores';
+	import { messages, activeChannel, currentUser } from '$stores';
 	import { loadMessages, addMessage, sendMessage as sendMessageFn, sendTypingIndicator, editMessage, deleteMessage } from '$lib/stores/messages';
 	import type { Message } from '$lib/stores/messages';
+	import { gateway, onGatewayEvent } from '$lib/gateway';
 	import TypingIndicator from './TypingIndicator.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 
@@ -11,6 +12,7 @@
 	let textareaEl: HTMLTextAreaElement;
 	let unsubscribeWS: (() => void) | null = null;
 	let lastTypingTime = 0;
+	let currentSubscribedChannel: string | null = null;
 	
 	// Reply state
 	let replyingTo: Message | null = null;
@@ -30,22 +32,41 @@
 		: [];
 
 	$: if ($activeChannel) {
+		console.log('[MessageArea] Active channel changed:', $activeChannel.id);
 		loadMessages($activeChannel.id);
 		// Clear reply state when changing channels
 		replyingTo = null;
 		editingMessage = null;
+		
+		// Subscribe to channel for real-time updates
+		if (currentSubscribedChannel && currentSubscribedChannel !== $activeChannel.id) {
+			gateway.unsubscribeChannel(currentSubscribedChannel);
+		}
+		gateway.subscribeChannel($activeChannel.id);
+		currentSubscribedChannel = $activeChannel.id;
 	}
 
 	onMount(() => {
-		unsubscribeWS = websocket.on('MESSAGE_CREATE', (event) => {
-			const message = event.data as Message;
-			addMessage(message);
-			scrollToBottom();
+		console.log('[MessageArea] Mounted, subscribing to gateway events');
+		
+		// Listen for new messages from gateway
+		unsubscribeWS = onGatewayEvent('MESSAGE_CREATE', (data) => {
+			console.log('[MessageArea] MESSAGE_CREATE event received:', data);
+			const message = data as Message;
+			// Only process messages for the current channel
+			if (message.channel_id === $activeChannel?.id) {
+				addMessage(message);
+				scrollToBottom();
+			}
 		});
 	});
 
 	onDestroy(() => {
+		console.log('[MessageArea] Unmounting, cleaning up');
 		unsubscribeWS?.();
+		if (currentSubscribedChannel) {
+			gateway.unsubscribeChannel(currentSubscribedChannel);
+		}
 	});
 
 	function scrollToBottom() {
@@ -72,10 +93,17 @@
 		const content = messageInput.trim();
 		const replyToId = replyingTo?.id;
 		
+		console.log('[MessageArea] Sending message to channel:', $activeChannel.id, 'content:', content);
+		
 		messageInput = '';
 		replyingTo = null;
 		
-		await sendMessageFn($activeChannel.id, content, [], replyToId);
+		try {
+			const result = await sendMessageFn($activeChannel.id, content, [], replyToId);
+			console.log('[MessageArea] Message sent successfully:', result);
+		} catch (error) {
+			console.error('[MessageArea] Failed to send message:', error);
+		}
 	}
 	
 	function startReply(message: Message) {

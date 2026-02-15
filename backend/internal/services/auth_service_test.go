@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/crypto/bcrypt"
 
+	"hearth/internal/auth"
 	"hearth/internal/models"
 )
 
@@ -31,9 +33,15 @@ func (m *MockAuthRepository) GetByEmail(ctx context.Context, email string) (*mod
 	return args.Get(0).(*models.User), args.Error(1)
 }
 
+// testJWTService creates a JWT service for tests
+func testJWTService() *auth.JWTService {
+	return auth.NewJWTService("test-secret-key", 15*time.Minute, 7*24*time.Hour)
+}
+
 func TestAuthService_Register_Success(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -52,10 +60,13 @@ func TestAuthService_Register_Success(t *testing.T) {
 		assert.NotEqual(t, password, user.PasswordHash)
 	})
 
-	user, err := service.Register(ctx, email, username, password)
+	user, tokens, err := service.Register(ctx, email, username, password)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
+	assert.NotNil(t, tokens)
+	assert.NotEmpty(t, tokens.AccessToken)
+	assert.NotEmpty(t, tokens.RefreshToken)
 	assert.Equal(t, email, user.Email)
 	assert.Equal(t, username, user.Username)
 	mockRepo.AssertExpectations(t)
@@ -63,7 +74,8 @@ func TestAuthService_Register_Success(t *testing.T) {
 
 func TestAuthService_Register_UserExists(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -73,16 +85,18 @@ func TestAuthService_Register_UserExists(t *testing.T) {
 	existingUser := &models.User{Email: email}
 	mockRepo.On("GetByEmail", ctx, email).Return(existingUser, nil)
 
-	user, err := service.Register(ctx, email, username, password)
+	user, tokens, err := service.Register(ctx, email, username, password)
 
-	assert.ErrorIs(t, err, ErrUserExists)
+	assert.ErrorIs(t, err, ErrEmailTaken)
 	assert.Nil(t, user)
+	assert.Nil(t, tokens)
 	mockRepo.AssertExpectations(t)
 }
 
 func TestAuthService_Register_RepositoryError(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -92,16 +106,18 @@ func TestAuthService_Register_RepositoryError(t *testing.T) {
 	// Database error when checking for existing user
 	mockRepo.On("GetByEmail", ctx, email).Return(nil, errors.New("db error"))
 
-	user, err := service.Register(ctx, email, username, password)
+	user, tokens, err := service.Register(ctx, email, username, password)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
+	assert.Nil(t, tokens)
 	mockRepo.AssertExpectations(t)
 }
 
 func TestAuthService_Login_Success(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -119,10 +135,12 @@ func TestAuthService_Login_Success(t *testing.T) {
 
 	mockRepo.On("GetByEmail", ctx, email).Return(user, nil)
 
-	token, returnedUser, err := service.Login(ctx, email, password)
+	returnedUser, tokens, err := service.Login(ctx, email, password)
 
 	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
+	assert.NotNil(t, tokens)
+	assert.NotEmpty(t, tokens.AccessToken)
+	assert.NotEmpty(t, tokens.RefreshToken)
 	assert.NotNil(t, returnedUser)
 	assert.Equal(t, user.ID, returnedUser.ID)
 	mockRepo.AssertExpectations(t)
@@ -130,7 +148,8 @@ func TestAuthService_Login_Success(t *testing.T) {
 
 func TestAuthService_Login_UserNotFound(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -138,17 +157,18 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 
 	mockRepo.On("GetByEmail", ctx, email).Return(nil, ErrUserNotFound)
 
-	token, user, err := service.Login(ctx, email, password)
+	user, tokens, err := service.Login(ctx, email, password)
 
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 	assert.Nil(t, user)
-	assert.Empty(t, token)
+	assert.Nil(t, tokens)
 	mockRepo.AssertExpectations(t)
 }
 
 func TestAuthService_Login_InvalidPassword(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -166,17 +186,18 @@ func TestAuthService_Login_InvalidPassword(t *testing.T) {
 
 	mockRepo.On("GetByEmail", ctx, email).Return(user, nil)
 
-	token, returnedUser, err := service.Login(ctx, email, wrongPassword)
+	returnedUser, tokens, err := service.Login(ctx, email, wrongPassword)
 
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 	assert.Nil(t, returnedUser)
-	assert.Empty(t, token)
+	assert.Nil(t, tokens)
 	mockRepo.AssertExpectations(t)
 }
 
 func TestAuthService_Login_RepositoryError(t *testing.T) {
 	mockRepo := new(MockAuthRepository)
-	service := NewAuthService(mockRepo)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
 	ctx := context.Background()
 
 	email := "test@example.com"
@@ -184,10 +205,66 @@ func TestAuthService_Login_RepositoryError(t *testing.T) {
 
 	mockRepo.On("GetByEmail", ctx, email).Return(nil, errors.New("db error"))
 
-	token, user, err := service.Login(ctx, email, password)
+	user, tokens, err := service.Login(ctx, email, password)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
-	assert.Empty(t, token)
+	assert.Nil(t, tokens)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestAuthService_ValidateToken_Success(t *testing.T) {
+	mockRepo := new(MockAuthRepository)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	accessToken, _ := jwtService.GenerateAccessToken(userID, "testuser")
+
+	validatedUserID, err := service.ValidateToken(ctx, accessToken)
+
+	assert.NoError(t, err)
+	assert.Equal(t, userID, validatedUserID)
+}
+
+func TestAuthService_ValidateToken_Invalid(t *testing.T) {
+	mockRepo := new(MockAuthRepository)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
+	ctx := context.Background()
+
+	validatedUserID, err := service.ValidateToken(ctx, "invalid-token")
+
+	assert.Error(t, err)
+	assert.Equal(t, uuid.Nil, validatedUserID)
+}
+
+func TestAuthService_RefreshTokens_Success(t *testing.T) {
+	mockRepo := new(MockAuthRepository)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	_, refreshToken, _ := jwtService.GenerateTokenPair(userID, "testuser")
+
+	tokens, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, tokens)
+	assert.NotEmpty(t, tokens.AccessToken)
+	assert.NotEmpty(t, tokens.RefreshToken)
+}
+
+func TestAuthService_RefreshTokens_Invalid(t *testing.T) {
+	mockRepo := new(MockAuthRepository)
+	jwtService := testJWTService()
+	service := NewAuthService(mockRepo, jwtService)
+	ctx := context.Background()
+
+	tokens, err := service.RefreshTokens(ctx, "invalid-refresh-token")
+
+	assert.Error(t, err)
+	assert.Nil(t, tokens)
 }

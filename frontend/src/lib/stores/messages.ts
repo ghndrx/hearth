@@ -24,31 +24,6 @@ export interface Message {
 	edited_at: string | null;
 }
 
-// Backend message format (for normalization)
-interface BackendMessage {
-	id: string;
-	channel_id: string;
-	guild_id?: string;
-	author_id?: string;
-	author?: {
-		id: string;
-		username: string;
-		display_name?: string | null;
-		avatar?: string | null;
-	};
-	content: string;
-	timestamp?: string;
-	created_at?: string;
-	edited_timestamp?: string | null;
-	edited_at?: string | null;
-	pinned: boolean;
-	tts?: boolean;
-	referenced_message_id?: string | null;
-	reply_to?: string | null;
-	attachments?: Attachment[];
-	reactions?: Reaction[];
-}
-
 export interface Attachment {
 	id: string;
 	filename: string;
@@ -69,29 +44,6 @@ export const messages = writable<Record<string, Message[]>>({});
 // Loading states
 export const loadingMessages = writable<Record<string, boolean>>({});
 
-// Normalize backend message to frontend format
-function normalizeMessage(msg: BackendMessage): Message {
-	return {
-		id: msg.id,
-		channel_id: msg.channel_id,
-		author_id: msg.author?.id || msg.author_id || '',
-		author: msg.author ? {
-			id: msg.author.id,
-			username: msg.author.username,
-			display_name: msg.author.display_name ?? null,
-			avatar: msg.author.avatar ?? null,
-		} : undefined,
-		content: msg.content,
-		encrypted: false,
-		attachments: msg.attachments || [],
-		reactions: msg.reactions || [],
-		reply_to: msg.referenced_message_id || msg.reply_to || null,
-		pinned: msg.pinned,
-		created_at: msg.timestamp || msg.created_at || new Date().toISOString(),
-		edited_at: msg.edited_timestamp || msg.edited_at || null,
-	};
-}
-
 export async function loadMessages(channelId: string, before?: string) {
 	loadingMessages.update(l => ({ ...l, [channelId]: true }));
 	
@@ -99,24 +51,18 @@ export async function loadMessages(channelId: string, before?: string) {
 		const params = new URLSearchParams({ limit: '50' });
 		if (before) params.set('before', before);
 		
-		const data = await api.get<BackendMessage[]>(`/channels/${channelId}/messages?${params}`);
-		const normalized = data.map(normalizeMessage);
+		const data = await api.get<Message[]>(`/channels/${channelId}/messages?${params}`);
 		
 		messages.update(m => {
 			const existing = m[channelId] || [];
 			if (before) {
 				// Prepend older messages
-				return { ...m, [channelId]: [...normalized.reverse(), ...existing] };
+				return { ...m, [channelId]: [...data.reverse(), ...existing] };
 			}
-			return { ...m, [channelId]: normalized.reverse() };
+			return { ...m, [channelId]: data.reverse() };
 		});
 	} catch (error) {
 		console.error('Failed to load messages:', error);
-		if (error instanceof ApiError && error.status === 403) {
-			// No permission - clear messages for this channel
-			messages.update(m => ({ ...m, [channelId]: [] }));
-		}
-		throw error;
 	} finally {
 		loadingMessages.update(l => ({ ...l, [channelId]: false }));
 	}
@@ -147,8 +93,7 @@ export async function sendMessage(
 			data = formData;
 		}
 		
-		const response = await api.post<BackendMessage>(`/channels/${channelId}/messages`, data);
-		const message = normalizeMessage(response);
+		const message = await api.post<Message>(`/channels/${channelId}/messages`, data);
 		
 		// Add to local store (will also come via WebSocket)
 		addMessage(message);
@@ -162,8 +107,7 @@ export async function sendMessage(
 
 export async function editMessage(messageId: string, channelId: string, content: string) {
 	try {
-		const response = await api.patch<BackendMessage>(`/channels/${channelId}/messages/${messageId}`, { content });
-		const message = normalizeMessage(response);
+		const message = await api.patch<Message>(`/channels/${channelId}/messages/${messageId}`, { content });
 		updateMessage(message);
 		return message;
 	} catch (error) {
@@ -200,7 +144,7 @@ export async function removeReaction(messageId: string, channelId: string, emoji
 	}
 }
 
-// Send typing indicator via REST API (not WebSocket)
+// Send typing indicator via REST API
 let typingThrottle: ReturnType<typeof setTimeout> | null = null;
 export async function sendTypingIndicator(channelId: string) {
 	// Throttle typing requests (backend typing indicator lasts ~10 seconds)
@@ -240,7 +184,7 @@ export function updateMessage(message: Message) {
 		return {
 			...m,
 			[message.channel_id]: channelMessages.map(msg =>
-				msg.id === message.id ? { ...msg, ...message } : msg
+				msg.id === message.id ? message : msg
 			)
 		};
 	});
@@ -256,15 +200,16 @@ export function removeMessage(channelId: string, messageId: string) {
 	});
 }
 
-// Handle incoming WebSocket events (data already normalized by gateway)
+// Handle incoming WebSocket events (data normalized by gateway)
 export function handleMessageCreate(data: Record<string, unknown>) {
-	// Ensure required fields exist
+	console.log('[messages store] handleMessageCreate called with:', data);
+	
 	const message: Message = {
 		id: data.id as string,
 		channel_id: data.channel_id as string,
-		author_id: data.author_id as string || '',
+		author_id: (data.author_id as string) || ((data.author as Record<string, unknown>)?.id as string) || '',
 		author: data.author as Message['author'],
-		content: data.content as string || '',
+		content: (data.content as string) || '',
 		encrypted: false,
 		attachments: (data.attachments as Attachment[]) || [],
 		reactions: (data.reactions as Reaction[]) || [],
@@ -273,16 +218,19 @@ export function handleMessageCreate(data: Record<string, unknown>) {
 		created_at: (data.created_at as string) || new Date().toISOString(),
 		edited_at: (data.edited_at as string) || null,
 	};
+	
+	console.log('[messages store] Adding message:', message);
 	addMessage(message);
 }
 
 export function handleMessageUpdate(data: Record<string, unknown>) {
+	console.log('[messages store] handleMessageUpdate called with:', data);
+	
 	const message: Partial<Message> & { id: string; channel_id: string } = {
 		id: data.id as string,
 		channel_id: data.channel_id as string,
 	};
 	
-	// Only include fields that are present
 	if (data.content !== undefined) message.content = data.content as string;
 	if (data.edited_at !== undefined) message.edited_at = data.edited_at as string;
 	if (data.pinned !== undefined) message.pinned = Boolean(data.pinned);
@@ -293,5 +241,6 @@ export function handleMessageUpdate(data: Record<string, unknown>) {
 }
 
 export function handleMessageDelete(data: { id: string; channel_id: string }) {
+	console.log('[messages store] handleMessageDelete called with:', data);
 	removeMessage(data.channel_id, data.id);
 }

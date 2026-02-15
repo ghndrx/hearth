@@ -35,23 +35,63 @@ const defaultSettings: AppSettings = {
 	developerMode: false
 };
 
+function isValidTheme(value: unknown): value is Theme {
+	return typeof value === 'string' && ['dark', 'light', 'midnight'].includes(value);
+}
+
+function isValidMessageDisplay(value: unknown): value is MessageDisplay {
+	return typeof value === 'string' && ['cozy', 'compact'].includes(value);
+}
+
+function isValidFontSize(value: unknown): value is number {
+	return typeof value === 'number' && value >= 12 && value <= 24;
+}
+
 function loadSettings(): AppSettings {
 	if (!browser) return defaultSettings;
 	
 	try {
 		const stored = localStorage.getItem('hearth_settings');
 		if (stored) {
-			return { ...defaultSettings, ...JSON.parse(stored) };
+			const parsed = JSON.parse(stored);
+			
+			// Validate parsed data is an object
+			if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+				console.warn('Invalid settings format, using defaults');
+				return defaultSettings;
+			}
+			
+			// Merge with defaults, validating each property
+			return {
+				theme: isValidTheme(parsed.theme) ? parsed.theme : defaultSettings.theme,
+				messageDisplay: isValidMessageDisplay(parsed.messageDisplay) ? parsed.messageDisplay : defaultSettings.messageDisplay,
+				compactMode: typeof parsed.compactMode === 'boolean' ? parsed.compactMode : defaultSettings.compactMode,
+				showSendButton: typeof parsed.showSendButton === 'boolean' ? parsed.showSendButton : defaultSettings.showSendButton,
+				enableAnimations: typeof parsed.enableAnimations === 'boolean' ? parsed.enableAnimations : defaultSettings.enableAnimations,
+				enableSounds: typeof parsed.enableSounds === 'boolean' ? parsed.enableSounds : defaultSettings.enableSounds,
+				notificationsEnabled: typeof parsed.notificationsEnabled === 'boolean' ? parsed.notificationsEnabled : defaultSettings.notificationsEnabled,
+				fontSize: isValidFontSize(parsed.fontSize) ? parsed.fontSize : defaultSettings.fontSize,
+				developerMode: typeof parsed.developerMode === 'boolean' ? parsed.developerMode : defaultSettings.developerMode,
+			};
 		}
-	} catch {
-		// Ignore parse errors
+	} catch (error) {
+		console.error('Failed to load settings:', error);
 	}
 	return defaultSettings;
 }
 
 function saveSettings(settings: AppSettings) {
 	if (!browser) return;
-	localStorage.setItem('hearth_settings', JSON.stringify(settings));
+	
+	try {
+		localStorage.setItem('hearth_settings', JSON.stringify(settings));
+	} catch (error) {
+		if (error instanceof Error && error.name === 'QuotaExceededError') {
+			console.error('Failed to save settings: localStorage quota exceeded');
+		} else {
+			console.error('Failed to save settings:', error);
+		}
+	}
 }
 
 function applyTheme(theme: Theme) {

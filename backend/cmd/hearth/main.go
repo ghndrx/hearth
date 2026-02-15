@@ -83,7 +83,7 @@ func main() {
 	// Initialize services
 	quotaService := services.NewQuotaService(cfg.Quotas, nil, nil, nil)
 	userService := services.NewUserService(repos.Users, nil, serviceBus)
-	authService := services.NewAuthService(repos.Users)
+	authService := services.NewAuthService(repos.Users, jwtService)
 	roleService := services.NewRoleService(
 		repos.Roles,
 		repos.Servers,

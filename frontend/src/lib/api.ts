@@ -33,6 +33,8 @@ class ApiError extends Error {
 	}
 }
 
+const DEFAULT_TIMEOUT = 30000; // 30 seconds
+
 async function request<T, B = unknown>(
 	method: string,
 	path: string,
@@ -58,34 +60,51 @@ async function request<T, B = unknown>(
 		}
 	}
 	
-	const response = await fetch(`${BASE_URL}${path}`, {
-		method,
-		headers,
-		body: requestBody,
-		...options
-	});
+	// Create abort controller for timeout
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
 	
-	if (!response.ok) {
-		let errorData;
-		try {
-			errorData = await response.json();
-		} catch {
-			errorData = { error: response.statusText };
+	try {
+		const response = await fetch(`${BASE_URL}${path}`, {
+			method,
+			headers,
+			body: requestBody,
+			signal: controller.signal,
+			...options
+		});
+		
+		clearTimeout(timeoutId);
+		
+		if (!response.ok) {
+			let errorData;
+			try {
+				errorData = await response.json();
+			} catch {
+				errorData = { error: response.statusText };
+			}
+			
+			throw new ApiError(
+				errorData.message || errorData.error || 'Request failed',
+				response.status,
+				errorData
+			);
 		}
 		
-		throw new ApiError(
-			errorData.message || errorData.error || 'Request failed',
-			response.status,
-			errorData
-		);
+		// Handle empty responses
+		if (response.status === 204) {
+			return undefined as T;
+		}
+		
+		return response.json();
+	} catch (error) {
+		clearTimeout(timeoutId);
+		
+		if (error instanceof Error && error.name === 'AbortError') {
+			throw new ApiError('Request timeout', 408, { error: 'Request timeout' });
+		}
+		
+		throw error;
 	}
-	
-	// Handle empty responses
-	if (response.status === 204) {
-		return undefined as T;
-	}
-	
-	return response.json();
 }
 
 export const api = {

@@ -11,6 +11,19 @@ import (
 	"hearth/internal/services"
 )
 
+// getUserIDFromContext safely extracts userID from Fiber context
+func getUserIDFromContext(c *fiber.Ctx) (uuid.UUID, error) {
+	userIDVal := c.Locals("userID")
+	if userIDVal == nil {
+		return uuid.Nil, fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	}
+	userID, ok := userIDVal.(uuid.UUID)
+	if !ok {
+		return uuid.Nil, fiber.NewError(fiber.StatusUnauthorized, "invalid user id")
+	}
+	return userID, nil
+}
+
 type ServerHandler struct {
 	serverService  *services.ServerService
 	channelService *services.ChannelService
@@ -31,7 +44,12 @@ func NewServerHandler(
 
 // Create creates a new server
 func (h *ServerHandler) Create(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 
 	var req struct {
 		Name string `json:"name" validate:"required,min=2,max=100"`
@@ -91,7 +109,12 @@ func (h *ServerHandler) Get(c *fiber.Ctx) error {
 
 // Update updates a server
 func (h *ServerHandler) Update(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -142,7 +165,12 @@ func (h *ServerHandler) Update(c *fiber.Ctx) error {
 
 // Delete deletes a server
 func (h *ServerHandler) Delete(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -179,15 +207,18 @@ func (h *ServerHandler) GetMembers(c *fiber.Ctx) error {
 		})
 	}
 
-	// Parse pagination
-	limit, _ := strconv.Atoi(c.Query("limit", "100"))
-	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-
+	// Parse pagination with defaults
+	limit, err := strconv.Atoi(c.Query("limit", "100"))
+	if err != nil || limit < 1 {
+		limit = 100
+	}
 	if limit > 1000 {
 		limit = 1000
 	}
-	if limit < 1 {
-		limit = 100
+
+	offset, err := strconv.Atoi(c.Query("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
 	}
 
 	members, err := h.serverService.GetMembers(c.Context(), id, limit, offset)
@@ -233,7 +264,12 @@ func (h *ServerHandler) GetMember(c *fiber.Ctx) error {
 
 // UpdateMember updates a member (nickname, roles)
 func (h *ServerHandler) UpdateMember(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -276,7 +312,12 @@ func (h *ServerHandler) UpdateMember(c *fiber.Ctx) error {
 
 // RemoveMember kicks a member
 func (h *ServerHandler) RemoveMember(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -305,7 +346,12 @@ func (h *ServerHandler) RemoveMember(c *fiber.Ctx) error {
 
 // Leave leaves the server
 func (h *ServerHandler) Leave(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -346,7 +392,12 @@ func (h *ServerHandler) GetBans(c *fiber.Ctx) error {
 
 // CreateBan bans a user
 func (h *ServerHandler) CreateBan(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -385,7 +436,12 @@ func (h *ServerHandler) CreateBan(c *fiber.Ctx) error {
 
 // RemoveBan unbans a user
 func (h *ServerHandler) RemoveBan(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -433,7 +489,12 @@ func (h *ServerHandler) GetInvites(c *fiber.Ctx) error {
 
 // GetRoles returns server roles
 func (h *ServerHandler) GetRoles(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -456,7 +517,12 @@ func (h *ServerHandler) GetRoles(c *fiber.Ctx) error {
 
 // CreateRole creates a new role
 func (h *ServerHandler) CreateRole(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -492,8 +558,13 @@ func (h *ServerHandler) CreateRole(c *fiber.Ctx) error {
 
 // UpdateRole updates a role
 func (h *ServerHandler) UpdateRole(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
-	_, err := uuid.Parse(c.Params("id"))
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+	_, err = uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid server id",
@@ -543,8 +614,13 @@ func (h *ServerHandler) UpdateRole(c *fiber.Ctx) error {
 
 // DeleteRole deletes a role
 func (h *ServerHandler) DeleteRole(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
-	_, err := uuid.Parse(c.Params("id"))
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+	_, err = uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid server id",
@@ -569,7 +645,12 @@ func (h *ServerHandler) DeleteRole(c *fiber.Ctx) error {
 
 // GetChannels returns server channels
 func (h *ServerHandler) GetChannels(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -592,7 +673,12 @@ func (h *ServerHandler) GetChannels(c *fiber.Ctx) error {
 
 // CreateChannel creates a new channel
 func (h *ServerHandler) CreateChannel(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -642,7 +728,12 @@ func (h *ServerHandler) CreateChannel(c *fiber.Ctx) error {
 
 // CreateInvite creates a new invite for this server (convenience endpoint)
 func (h *ServerHandler) CreateInvite(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

@@ -39,18 +39,12 @@ type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
-// TokenResponse represents auth tokens
+// TokenResponse represents auth tokens - matches frontend expectations
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
-}
-
-// AuthResponse includes user and tokens
-type AuthResponse struct {
-	User   *UserResponse  `json:"user"`
-	Tokens *TokenResponse `json:"tokens"`
+	ExpiresIn    int    `json:"expires_in,omitempty"`
+	TokenType    string `json:"token_type,omitempty"`
 }
 
 // Register handles user registration
@@ -96,14 +90,17 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	}
 
 	// Call auth service
-	user, err := h.authService.Register(c.Context(), req.Email, req.Username, req.Password)
-
+	_, tokens, err := h.authService.Register(c.Context(), req.Email, req.Username, req.Password)
 	if err != nil {
 		return handleAuthError(c, err)
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(AuthResponse{
-		User: toUserResponse(user),
+	// Return tokens in the format frontend expects
+	return c.Status(fiber.StatusCreated).JSON(TokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
+		TokenType:    "Bearer",
 	})
 }
 
@@ -124,17 +121,17 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	token, user, err := h.authService.Login(c.Context(), req.Email, req.Password)
+	_, tokens, err := h.authService.Login(c.Context(), req.Email, req.Password)
 	if err != nil {
 		return handleAuthError(c, err)
 	}
 
-	return c.JSON(AuthResponse{
-		User: toUserResponse(user),
-		Tokens: &TokenResponse{
-			AccessToken: token,
-			TokenType:   "Bearer",
-		},
+	// Return tokens in the format frontend expects
+	return c.JSON(TokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
+		TokenType:    "Bearer",
 	})
 }
 
@@ -155,27 +152,26 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement refresh token logic
-	// For now, return not implemented
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error":   "not_implemented",
-		"message": "Token refresh is not yet implemented",
+	tokens, err := h.authService.RefreshTokens(c.Context(), req.RefreshToken)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error":   "invalid_refresh_token",
+			"message": "Invalid or expired refresh token",
+		})
+	}
+
+	return c.JSON(TokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresIn:    tokens.ExpiresIn,
+		TokenType:    "Bearer",
 	})
 }
 
 // Logout handles logout
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	// Get tokens from request
-	accessToken := extractBearerToken(c)
-
-	var req RefreshRequest
-	_ = c.BodyParser(&req) // Optional body with refresh token
-
-	// TODO: Implement logout logic
-	// For now, just return success
-	_ = accessToken
-	_ = req.RefreshToken
-
+	// For stateless JWT, logout is handled client-side by removing tokens
+	// In a production app, we could add refresh tokens to a revocation list
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -193,7 +189,6 @@ func (h *AuthHandler) OAuthRedirect(c *fiber.Ctx) error {
 	}
 
 	// TODO: Generate state, build OAuth URL based on provider
-	// For now, return not implemented
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 		"error":   "not_implemented",
 		"message": "OAuth login is not yet implemented",
@@ -287,13 +282,6 @@ func toUserResponse(user *models.User) *UserResponse {
 		Flags:         user.Flags,
 		CreatedAt:     user.CreatedAt,
 	}
-}
-
-func toTokenResponse(tokens *TokenResponse) *TokenResponse {
-	if tokens == nil {
-		return nil
-	}
-	return tokens
 }
 
 // UserResponse represents a user in API responses

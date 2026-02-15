@@ -9,11 +9,13 @@
 	import ServerHeader from './ServerHeader.svelte';
 	import ChannelCategory from './ChannelCategory.svelte';
 	import ChannelItem from './ChannelItem.svelte';
+	import InviteModal from './InviteModal.svelte';
 
 	const dispatch = createEventDispatcher();
 
 	let textCategoryCollapsed = false;
 	let voiceCategoryCollapsed = false;
+	let showInviteModal = false;
 
 	// Mock connected users for voice channels (would come from voice state in real app)
 	let voiceConnectedUsers: Record<string, Array<{
@@ -54,7 +56,16 @@
 	}
 
 	function handleInvitePeople() {
-		// TODO: Open invite modal
+		showInviteModal = true;
+	}
+
+	function handleInviteClose() {
+		showInviteModal = false;
+	}
+
+	function handleInviteCreated(event: CustomEvent<{ code: string; maxUses: number; expiresIn: number }>) {
+		// In production, this would send the invite to the API
+		console.log('Invite created:', event.detail);
 	}
 
 	function handleAddTextChannel() {
@@ -158,6 +169,19 @@
 
 	<UserPanel />
 </div>
+
+<!-- Invite Modal -->
+{#if $currentServer}
+	<InviteModal
+		open={showInviteModal}
+		serverName={$currentServer.name}
+		serverId={$currentServer.id}
+		channelName={$currentChannel?.name ?? ''}
+		channelId={$currentChannel?.id ?? ''}
+		on:close={handleInviteClose}
+		on:invite={handleInviteCreated}
+	/>
+{/if}
 
 <style>
 	.channel-list {

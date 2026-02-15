@@ -6,6 +6,32 @@ export type GatewayState = 'disconnected' | 'connecting' | 'connected' | 'reconn
 
 export const gatewayState = writable<GatewayState>('disconnected');
 
+// Event emitter for components to subscribe to raw gateway events
+type GatewayEventHandler = (data: unknown) => void;
+const eventHandlers = new Map<string, Set<GatewayEventHandler>>();
+
+export function onGatewayEvent(eventType: string, handler: GatewayEventHandler): () => void {
+	if (!eventHandlers.has(eventType)) {
+		eventHandlers.set(eventType, new Set());
+	}
+	eventHandlers.get(eventType)!.add(handler);
+	return () => {
+		eventHandlers.get(eventType)?.delete(handler);
+	};
+}
+
+function emitGatewayEvent(eventType: string, data: unknown) {
+	const handlers = eventHandlers.get(eventType);
+	if (handlers) {
+		handlers.forEach(handler => handler(data));
+	}
+	// Also emit to wildcard listeners
+	const wildcardHandlers = eventHandlers.get('*');
+	if (wildcardHandlers) {
+		wildcardHandlers.forEach(handler => handler({ type: eventType, data }));
+	}
+}
+
 // Gateway opcodes (match backend)
 const Op = {
 	DISPATCH: 0,
@@ -183,29 +209,37 @@ class Gateway {
 	}
 	
 	private handleDispatch(eventType: string, data: unknown) {
+		console.log('[Gateway] Dispatch event:', eventType, data);
+		
+		// Emit to event listeners
+		emitGatewayEvent(eventType, data);
+		
 		switch (eventType) {
 			case 'READY': {
 				const readyData = data as { session_id: string };
 				this.sessionId = readyData.session_id;
 				gatewayState.set('connected');
-				console.log('Gateway ready');
+				console.log('[Gateway] Ready with session:', this.sessionId);
 				break;
 			}
 			
 			case 'RESUMED':
 				gatewayState.set('connected');
-				console.log('Gateway resumed');
+				console.log('[Gateway] Resumed');
 				break;
 				
 			case 'MESSAGE_CREATE':
+				console.log('[Gateway] MESSAGE_CREATE received:', data);
 				handleMessageCreate(this.normalizeMessage(data));
 				break;
 				
 			case 'MESSAGE_UPDATE':
+				console.log('[Gateway] MESSAGE_UPDATE received:', data);
 				handleMessageUpdate(this.normalizeMessage(data));
 				break;
 				
 			case 'MESSAGE_DELETE':
+				console.log('[Gateway] MESSAGE_DELETE received:', data);
 				handleMessageDelete(data as { id: string; channel_id: string });
 				break;
 				
@@ -227,11 +261,11 @@ class Gateway {
 			case 'GUILD_MEMBER_ADD':
 			case 'GUILD_MEMBER_REMOVE':
 			case 'GUILD_MEMBER_UPDATE':
-				// TODO: Handle these events
+				console.log('[Gateway] Guild event:', eventType, data);
 				break;
 				
 			default:
-				console.log('Unknown gateway event:', eventType, data);
+				console.log('[Gateway] Unknown event:', eventType, data);
 		}
 	}
 	
@@ -318,6 +352,34 @@ class Gateway {
 			activities,
 			since: status === 'idle' ? Date.now() : null,
 			afk: status === 'idle'
+		});
+	}
+	
+	// Subscribe to a channel for real-time events
+	subscribeChannel(channelId: string) {
+		console.log('[Gateway] Subscribing to channel:', channelId);
+		// Send as dispatch event type SUBSCRIBE
+		this.send(Op.DISPATCH, {
+			t: 'SUBSCRIBE',
+			d: { channel_id: channelId }
+		});
+	}
+	
+	// Unsubscribe from a channel
+	unsubscribeChannel(channelId: string) {
+		console.log('[Gateway] Unsubscribing from channel:', channelId);
+		this.send(Op.DISPATCH, {
+			t: 'UNSUBSCRIBE', 
+			d: { channel_id: channelId }
+		});
+	}
+	
+	// Subscribe to a server for real-time events
+	subscribeServer(serverId: string) {
+		console.log('[Gateway] Subscribing to server:', serverId);
+		this.send(Op.DISPATCH, {
+			t: 'SUBSCRIBE',
+			d: { server_id: serverId }
 		});
 	}
 }
