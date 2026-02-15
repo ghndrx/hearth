@@ -314,7 +314,33 @@ func (h *ChannelHandler) RemoveReaction(c *fiber.Ctx) error {
 
 // GetPins returns pinned messages
 func (h *ChannelHandler) GetPins(c *fiber.Ctx) error {
-	return c.JSON([]interface{}{})
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	messages, err := h.messageService.GetPinnedMessages(c.Context(), channelID, userID)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNoPermission:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "no permission to view pinned messages",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get pinned messages",
+			})
+		}
+	}
+
+	return c.JSON(messages)
 }
 
 // PinMessage pins a message

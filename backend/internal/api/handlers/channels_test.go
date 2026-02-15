@@ -19,15 +19,16 @@ import (
 
 // mockChannelMessageService mocks MessageService for channel handler tests
 type mockChannelMessageService struct {
-	sendMessageFunc    func(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error)
-	getMessagesFunc    func(ctx context.Context, channelID, requesterID uuid.UUID, before, after *uuid.UUID, limit int) ([]*models.Message, error)
-	getMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) (*models.Message, error)
-	editMessageFunc    func(ctx context.Context, messageID, authorID uuid.UUID, newContent string) (*models.Message, error)
-	deleteMessageFunc  func(ctx context.Context, messageID, requesterID uuid.UUID) error
-	addReactionFunc    func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
-	removeReactionFunc func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
-	pinMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) error
-	unpinMessageFunc   func(ctx context.Context, messageID, requesterID uuid.UUID) error
+	sendMessageFunc       func(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error)
+	getMessagesFunc       func(ctx context.Context, channelID, requesterID uuid.UUID, before, after *uuid.UUID, limit int) ([]*models.Message, error)
+	getMessageFunc        func(ctx context.Context, messageID, requesterID uuid.UUID) (*models.Message, error)
+	getPinnedMessagesFunc func(ctx context.Context, channelID, requesterID uuid.UUID) ([]*models.Message, error)
+	editMessageFunc       func(ctx context.Context, messageID, authorID uuid.UUID, newContent string) (*models.Message, error)
+	deleteMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) error
+	addReactionFunc       func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	removeReactionFunc    func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	pinMessageFunc        func(ctx context.Context, messageID, requesterID uuid.UUID) error
+	unpinMessageFunc      func(ctx context.Context, messageID, requesterID uuid.UUID) error
 }
 
 func (m *mockChannelMessageService) SendMessage(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error) {
@@ -91,6 +92,13 @@ func (m *mockChannelMessageService) GetMessage(ctx context.Context, messageID, r
 		return m.getMessageFunc(ctx, messageID, requesterID)
 	}
 	return nil, services.ErrMessageNotFound
+}
+
+func (m *mockChannelMessageService) GetPinnedMessages(ctx context.Context, channelID, requesterID uuid.UUID) ([]*models.Message, error) {
+	if m.getPinnedMessagesFunc != nil {
+		return m.getPinnedMessagesFunc(ctx, channelID, requesterID)
+	}
+	return []*models.Message{}, nil
 }
 
 // setupChannelTestApp creates a test Fiber app with channel routes
@@ -371,9 +379,35 @@ func setupChannelTestApp(messageService *mockChannelMessageService) *fiber.App {
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
-	// GetPins (stub)
+	// GetPins
 	app.Get("/channels/:id/pins", func(c *fiber.Ctx) error {
-		return c.JSON([]interface{}{})
+		userID := c.Locals("userID").(uuid.UUID)
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		messages, err := messageService.GetPinnedMessages(c.Context(), channelID, userID)
+		if err != nil {
+			switch err {
+			case services.ErrChannelNotFound:
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			case services.ErrNoPermission:
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "no permission to view pinned messages",
+				})
+			default:
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "failed to get pinned messages",
+				})
+			}
+		}
+
+		return c.JSON(messages)
 	})
 
 	// UnpinMessage
@@ -1148,8 +1182,27 @@ func TestChannelHandler_PinMessage_NoPermission(t *testing.T) {
 func TestChannelHandler_GetPins_Success(t *testing.T) {
 	userID := uuid.New()
 	channelID := uuid.New()
+	messageID := uuid.New()
 
-	svc := &mockChannelMessageService{}
+	svc := &mockChannelMessageService{
+		getPinnedMessagesFunc: func(ctx context.Context, chID, reqID uuid.UUID) ([]*models.Message, error) {
+			if chID != channelID {
+				t.Errorf("Expected channelID %v, got %v", channelID, chID)
+			}
+			if reqID != userID {
+				t.Errorf("Expected userID %v, got %v", userID, reqID)
+			}
+			return []*models.Message{
+				{
+					ID:        messageID,
+					ChannelID: channelID,
+					AuthorID:  userID,
+					Content:   "Pinned message",
+					Pinned:    true,
+				},
+			}, nil
+		},
+	}
 	app := setupChannelTestApp(svc)
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
@@ -1163,6 +1216,127 @@ func TestChannelHandler_GetPins_Success(t *testing.T) {
 
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	var messages []*models.Message
+	if err := json.Unmarshal(body, &messages); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if len(messages) != 1 {
+		t.Errorf("Expected 1 message, got %d", len(messages))
+	}
+	if messages[0].ID != messageID {
+		t.Errorf("Expected message ID %v, got %v", messageID, messages[0].ID)
+	}
+	if messages[0].Content != "Pinned message" {
+		t.Errorf("Expected content 'Pinned message', got %s", messages[0].Content)
+	}
+}
+
+func TestChannelHandler_GetPins_InvalidChannelID(t *testing.T) {
+	userID := uuid.New()
+
+	svc := &mockChannelMessageService{}
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/invalid-uuid/pins", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_GetPins_ChannelNotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		getPinnedMessagesFunc: func(ctx context.Context, chID, reqID uuid.UUID) ([]*models.Message, error) {
+			return nil, services.ErrChannelNotFound
+		},
+	}
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_GetPins_NoPermission(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		getPinnedMessagesFunc: func(ctx context.Context, chID, reqID uuid.UUID) ([]*models.Message, error) {
+			return nil, services.ErrNoPermission
+		},
+	}
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("Expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_GetPins_Empty(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		getPinnedMessagesFunc: func(ctx context.Context, chID, reqID uuid.UUID) ([]*models.Message, error) {
+			return []*models.Message{}, nil
+		},
+	}
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	var messages []*models.Message
+	if err := json.Unmarshal(body, &messages); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if len(messages) != 0 {
+		t.Errorf("Expected 0 messages, got %d", len(messages))
 	}
 }
 
@@ -1408,4 +1582,3 @@ func TestChannelHandler_UnpinMessage_InvalidID(t *testing.T) {
 		t.Errorf("Expected 400, got %d", resp.StatusCode)
 	}
 }
-
