@@ -36,6 +36,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	users.Patch("/@me", h.Users.UpdateMe)
 	users.Get("/@me/servers", h.Users.GetMyServers)
 	users.Get("/@me/channels", h.Users.GetMyDMs)
+	users.Post("/@me/channels", h.Users.CreateDM)
+	users.Post("/@me/channels/group", h.Users.CreateGroupDM)
 	users.Get("/:id", h.Users.GetUser)
 	
 	// Relationships
