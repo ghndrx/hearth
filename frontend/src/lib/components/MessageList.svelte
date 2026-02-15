@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onMount, afterUpdate } from 'svelte';
+	import { afterUpdate } from 'svelte';
 	import { messages, loadMessages, sendMessage } from '$lib/stores/messages';
 	import { currentChannel } from '$lib/stores/channels';
 	import { user } from '$lib/stores/auth';
 	import { currentServer } from '$lib/stores/servers';
-	import Message from './Message.svelte';
+	import MessageGroup from './MessageGroup.svelte';
 	import MessageInput from './MessageInput.svelte';
 
 	let replyTo: { id: string; content: string; author: { username: string } } | null = null;
@@ -29,6 +29,21 @@
 			content: message.content,
 			author: message.author || { username: 'Unknown' }
 		};
+	}
+
+	function handleReact(event: CustomEvent<{ messageId: string; emoji: string }>) {
+		// TODO: Implement reaction functionality
+		console.log('React:', event.detail);
+	}
+
+	function handleEdit(event: CustomEvent<{ messageId: string; content: string }>) {
+		// TODO: Implement edit functionality
+		console.log('Edit:', event.detail);
+	}
+
+	function handleDelete(event: CustomEvent<{ messageId: string }>) {
+		// TODO: Implement delete functionality
+		console.log('Delete:', event.detail);
 	}
 
 	let messageContainer: HTMLElement;
@@ -68,16 +83,22 @@
 		return current !== prev;
 	}
 
-	function shouldGroupWithPrevious(index: number): boolean {
-		if (index === 0) return false;
-		const current = channelMessages[index];
-		const prev = channelMessages[index - 1];
-
-		if (current.author_id !== prev.author_id) return false;
-
-		const timeDiff = new Date(current.created_at).getTime() - new Date(prev.created_at).getTime();
-		return timeDiff < 7 * 60 * 1000;
-	}
+	// Convert messages to MessageGroup format with date dividers
+	$: groupedMessagesWithDates = channelMessages.reduce((acc, message, index) => {
+		// Add date divider if needed
+		if (shouldShowDate(index)) {
+			acc.push({
+				type: 'date' as const,
+				date: formatDate(message.created_at)
+			});
+		}
+		// Add message
+		acc.push({
+			type: 'message' as const,
+			message
+		});
+		return acc;
+	}, [] as Array<{ type: 'date'; date: string } | { type: 'message'; message: typeof channelMessages[0] }>);
 </script>
 
 <div class="flex-1 flex flex-col min-w-0">
@@ -170,24 +191,25 @@
 				</p>
 			</div>
 
-			<!-- Message List -->
-			{#each channelMessages as message, i (message.id)}
-				{#if shouldShowDate(i)}
+			<!-- Message Groups with Date Dividers -->
+			{#each groupedMessagesWithDates as item}
+				{#if item.type === 'date'}
 					<div class="flex items-center my-4">
 						<div class="flex-1 h-px bg-[#3f4147]"></div>
-						<span class="px-2 text-xs font-semibold text-[#949ba4] uppercase"
-							>{formatDate(message.created_at)}</span
-						>
+						<span class="px-2 text-xs font-semibold text-[#949ba4] uppercase">{item.date}</span>
 						<div class="flex-1 h-px bg-[#3f4147]"></div>
 					</div>
+				{:else}
+					<!-- Use MessageGroup for proper message grouping -->
+					<MessageGroup
+						messages={[item.message]}
+						currentUserId={$user?.id}
+						on:react={handleReact}
+						on:edit={handleEdit}
+						on:delete={handleDelete}
+						on:reply={handleReply}
+					/>
 				{/if}
-
-				<Message
-					{message}
-					grouped={shouldGroupWithPrevious(i)}
-					isOwn={message.author_id === $user?.id}
-					on:reply={handleReply}
-				/>
 			{/each}
 		{:else}
 			<div class="flex items-center justify-center h-full">
@@ -199,7 +221,7 @@
 	<!-- Message Input -->
 	{#if $currentChannel}
 		<MessageInput 
-			replyTo={replyTo}
+			{replyTo}
 			on:send={handleSend}
 		/>
 	{/if}
