@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"mime/multipart"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +12,7 @@ import (
 
 	"hearth/internal/models"
 	"hearth/internal/services"
+	"hearth/internal/storage"
 )
 
 // UserServiceInterface defines the methods needed from UserService
@@ -33,10 +37,17 @@ type ChannelServiceForUsersInterface interface {
 	GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error)
 }
 
+// StorageServiceInterface defines the methods needed for file storage
+type StorageServiceInterface interface {
+	UploadFile(ctx context.Context, file *multipart.FileHeader, uploaderID uuid.UUID, category string) (*storage.FileInfo, error)
+	DeleteFile(ctx context.Context, path string) error
+}
+
 type UserHandler struct {
 	userService    UserServiceInterface
 	serverService  ServerServiceForUsersInterface
 	channelService ChannelServiceForUsersInterface
+	storageService StorageServiceInterface
 }
 
 func NewUserHandler(
@@ -48,6 +59,21 @@ func NewUserHandler(
 		userService:    userService,
 		serverService:  serverService,
 		channelService: channelService,
+	}
+}
+
+// NewUserHandlerWithStorage creates a user handler with storage support for avatar uploads
+func NewUserHandlerWithStorage(
+	userService UserServiceInterface,
+	serverService ServerServiceForUsersInterface,
+	channelService ChannelServiceForUsersInterface,
+	storageService StorageServiceInterface,
+) *UserHandler {
+	return &UserHandler{
+		userService:    userService,
+		serverService:  serverService,
+		channelService: channelService,
+		storageService: storageService,
 	}
 }
 

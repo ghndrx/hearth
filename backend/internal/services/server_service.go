@@ -19,6 +19,7 @@ type ServerRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Server, error)
 	Update(ctx context.Context, server *models.Server) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	TransferOwnership(ctx context.Context, serverID, newOwnerID uuid.UUID) error
 
 	// Members
 	GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error)
@@ -254,6 +255,53 @@ func (s *ServerService) DeleteServer(ctx context.Context, id uuid.UUID, requeste
 	})
 
 	return nil
+}
+
+// TransferOwnership transfers server ownership to a new owner (owner only)
+func (s *ServerService) TransferOwnership(ctx context.Context, serverID, requesterID, newOwnerID uuid.UUID) (*models.Server, error) {
+	server, err := s.repo.GetByID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	if server == nil {
+		return nil, ErrServerNotFound
+	}
+
+	// Only owner can transfer
+	if server.OwnerID != requesterID {
+		return nil, ErrNotServerOwner
+	}
+
+	// Cannot transfer to self
+	if requesterID == newOwnerID {
+		return nil, ErrSelfAction
+	}
+
+	// New owner must be a member
+	member, err := s.repo.GetMember(ctx, serverID, newOwnerID)
+	if err != nil {
+		return nil, err
+	}
+	if member == nil {
+		return nil, ErrNotServerMember
+	}
+
+	// Transfer ownership
+	if err := s.repo.TransferOwnership(ctx, serverID, newOwnerID); err != nil {
+		return nil, err
+	}
+
+	// Update local server object
+	server.OwnerID = newOwnerID
+	server.UpdatedAt = time.Now()
+
+	s.eventBus.Publish("server.ownership_transferred", &OwnershipTransferredEvent{
+		ServerID:    serverID,
+		OldOwnerID:  requesterID,
+		NewOwnerID:  newOwnerID,
+	})
+
+	return server, nil
 }
 
 // JoinServer joins a server via invite
