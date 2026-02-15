@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -404,18 +405,35 @@ func TestGetRoles_NotMember(t *testing.T) {
 // GetRole Tests
 // =====================
 
-func TestGetRole_NotImplemented(t *testing.T) {
-	app, _, _ := setupRoleTest()
+func TestGetRole_Success(t *testing.T) {
+	app, mockService, _ := setupRoleTest()
 	serverID := uuid.New()
 	roleID := uuid.New()
 
+	expectedRole := &models.Role{
+		ID:          roleID,
+		ServerID:    serverID,
+		Name:        "Moderator",
+		Color:       0x3498db,
+		Position:    1,
+		Permissions: 123456,
+	}
+
+	mockService.On("GetByID", mock.Anything, roleID).Return(expectedRole, nil)
+
 	handler := func(c *fiber.Ctx) error {
-		_, err := uuid.Parse(c.Params("roleID"))
+		roleID, _ := uuid.Parse(c.Params("roleID"))
+
+		role, err := mockService.GetByID(c.Context(), roleID)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role ID"})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		// Currently not implemented
-		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"error": "Not implemented"})
+
+		if role == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Role not found"})
+		}
+
+		return c.JSON(role)
 	}
 
 	app.Get("/servers/:serverID/roles/:roleID", handler)
@@ -423,7 +441,78 @@ func TestGetRole_NotImplemented(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String()+"/roles/"+roleID.String(), nil)
 	resp, err := app.Test(req)
 	assert.NoError(t, err)
-	assert.Equal(t, http.StatusNotImplemented, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result models.Role
+	json.NewDecoder(resp.Body).Decode(&result)
+	assert.Equal(t, expectedRole.Name, result.Name)
+	assert.Equal(t, expectedRole.Color, result.Color)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestGetRole_NotFound(t *testing.T) {
+	app, mockService, _ := setupRoleTest()
+	serverID := uuid.New()
+	roleID := uuid.New()
+
+	mockService.On("GetByID", mock.Anything, roleID).Return(nil, nil)
+
+	handler := func(c *fiber.Ctx) error {
+		roleID, _ := uuid.Parse(c.Params("roleID"))
+
+		role, err := mockService.GetByID(c.Context(), roleID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		if role == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Role not found"})
+		}
+
+		return c.JSON(role)
+	}
+
+	app.Get("/servers/:serverID/roles/:roleID", handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String()+"/roles/"+roleID.String(), nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestGetRole_ServiceError(t *testing.T) {
+	app, mockService, _ := setupRoleTest()
+	serverID := uuid.New()
+	roleID := uuid.New()
+
+	mockService.On("GetByID", mock.Anything, roleID).Return(nil, errors.New("database error"))
+
+	handler := func(c *fiber.Ctx) error {
+		roleID, _ := uuid.Parse(c.Params("roleID"))
+
+		role, err := mockService.GetByID(c.Context(), roleID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		if role == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Role not found"})
+		}
+
+		return c.JSON(role)
+	}
+
+	app.Get("/servers/:serverID/roles/:roleID", handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String()+"/roles/"+roleID.String(), nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	mockService.AssertExpectations(t)
 }
 
 func TestGetRole_InvalidRoleID(t *testing.T) {

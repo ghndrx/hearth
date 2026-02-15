@@ -159,6 +159,11 @@ func (s *RoleService) DeleteRole(ctx context.Context, roleID, requesterID uuid.U
 	return nil
 }
 
+// GetRole gets a specific role by ID
+func (s *RoleService) GetRole(ctx context.Context, roleID uuid.UUID) (*models.Role, error) {
+	return s.roleRepo.GetByID(ctx, roleID)
+}
+
 // GetServerRoles gets all roles in a server
 func (s *RoleService) GetServerRoles(ctx context.Context, serverID, requesterID uuid.UUID) ([]*models.Role, error) {
 	// Verify requester is a member

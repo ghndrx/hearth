@@ -490,6 +490,66 @@ func TestGetServerRoles_GetMemberError(t *testing.T) {
 }
 
 // ============================================
+// GetRole Tests
+// ============================================
+
+func TestGetRole_Success(t *testing.T) {
+	service, roleRepo, _, _, _ := newTestRoleService()
+	ctx := context.Background()
+	roleID := uuid.New()
+	serverID := uuid.New()
+
+	expectedRole := &models.Role{
+		ID:          roleID,
+		ServerID:    serverID,
+		Name:        "Moderator",
+		Color:       0x3498db,
+		Position:    1,
+		Permissions: models.PermManageMessages,
+	}
+
+	roleRepo.On("GetByID", ctx, roleID).Return(expectedRole, nil)
+
+	result, err := service.GetRole(ctx, roleID)
+
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, expectedRole.ID, result.ID)
+	assert.Equal(t, expectedRole.Name, result.Name)
+	assert.Equal(t, expectedRole.Color, result.Color)
+	roleRepo.AssertExpectations(t)
+}
+
+func TestGetRole_NotFound(t *testing.T) {
+	service, roleRepo, _, _, _ := newTestRoleService()
+	ctx := context.Background()
+	roleID := uuid.New()
+
+	roleRepo.On("GetByID", ctx, roleID).Return(nil, nil)
+
+	result, err := service.GetRole(ctx, roleID)
+
+	require.NoError(t, err)
+	assert.Nil(t, result)
+	roleRepo.AssertExpectations(t)
+}
+
+func TestGetRole_RepositoryError(t *testing.T) {
+	service, roleRepo, _, _, _ := newTestRoleService()
+	ctx := context.Background()
+	roleID := uuid.New()
+
+	roleRepo.On("GetByID", ctx, roleID).Return(nil, errors.New("database connection failed"))
+
+	result, err := service.GetRole(ctx, roleID)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "database connection failed", err.Error())
+	roleRepo.AssertExpectations(t)
+}
+
+// ============================================
 // UpdateRolePositions Tests
 // ============================================
 

@@ -72,19 +72,28 @@ func (h *RoleHandlers) GetRoles(c *fiber.Ctx) error {
 }
 
 // GetRole returns a specific role
-// Note: Individual role retrieval not implemented in service
 func (h *RoleHandlers) GetRole(c *fiber.Ctx) error {
-	_, err := uuid.Parse(c.Params("roleID"))
+	roleID, err := uuid.Parse(c.Params("roleID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid role ID",
 		})
 	}
 
-	// TODO: Implement GetRole in service
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "Not implemented",
-	})
+	role, err := h.roleService.GetRole(c.Context(), roleID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if role == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Role not found",
+		})
+	}
+
+	return c.JSON(role)
 }
 
 // UpdateRole updates a role
