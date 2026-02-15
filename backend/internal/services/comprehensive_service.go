@@ -128,16 +128,13 @@ func (s *ComprehensiveService) CreateServer(ctx context.Context, name string, ow
 	// Create default "general" text channel
 	generalChannel := &models.Channel{
 		ID:        uuid.New(),
-		ServerID:  server.ID,
+		ServerID:  &server.ID,
 		Name:      "general",
-		Type:      "text",
+		Type:      models.ChannelTypeText,
 		Position:  0,
 		CreatedAt: time.Now(),
 	}
-	if err := s.repo.CreateChannel(ctx, generalChannel); err != nil {
-		// Non-fatal: server is created, just log and continue
-		// In production, use proper logging
-	}
+	_ = s.repo.CreateChannel(ctx, generalChannel) // Non-fatal if fails
 
 	return server, nil
 }
