@@ -182,7 +182,10 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, searchService, wsGateway)
+	// Thread service - TODO: Initialize with proper repository when available
+	var threadService *services.ThreadService = nil
+	
+	h := handlers.NewHandlers(authService, userService, serverService, channelService, messageService, roleService, searchService, threadService, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes

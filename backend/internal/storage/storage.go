@@ -143,3 +143,8 @@ func (s *Service) GetURL(path string) string {
 func (s *Service) GetSignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
 	return s.backend.GetSignedURL(ctx, path, expiry)
 }
+
+// Download retrieves a file from storage
+func (s *Service) Download(ctx context.Context, path string) (io.ReadCloser, error) {
+	return s.backend.Download(ctx, path)
+}

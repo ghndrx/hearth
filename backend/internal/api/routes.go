@@ -45,6 +45,12 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	users.Post("/@me/relationships", h.Users.CreateRelationship)
 	users.Delete("/@me/relationships/:id", h.Users.DeleteRelationship)
 	
+	// Friends
+	users.Get("/@me/friends", h.Users.GetFriends)
+	users.Get("/@me/friends/pending", h.Users.GetPendingFriendRequests)
+	users.Put("/@me/friends/:id", h.Users.AcceptFriendRequest)
+	users.Delete("/@me/friends/:id/request", h.Users.DeclineFriendRequest)
+	
 	// Servers
 	servers := api.Group("/servers")
 	servers.Post("/", h.Servers.Create)
@@ -99,6 +105,21 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	// Typing indicator
 	channels.Post("/:id/typing", h.Channels.TriggerTyping)
 	
+	// Channel threads
+	channels.Get("/:id/threads", h.Threads.GetChannelThreads)
+	channels.Post("/:id/threads", h.Threads.CreateThread)
+	
+	// Threads
+	threads := api.Group("/threads")
+	threads.Get("/:id", h.Threads.GetThread)
+	threads.Delete("/:id", h.Threads.DeleteThread)
+	threads.Get("/:id/messages", h.Threads.GetThreadMessages)
+	threads.Post("/:id/messages", h.Threads.SendThreadMessage)
+	threads.Post("/:id/archive", h.Threads.ArchiveThread)
+	threads.Post("/:id/unarchive", h.Threads.UnarchiveThread)
+	threads.Post("/:id/join", h.Threads.JoinThread)
+	threads.Delete("/:id/members/@me", h.Threads.LeaveThread)
+	
 	// Server channels
 	servers.Get("/:id/channels", h.Servers.GetChannels)
 	servers.Post("/:id/channels", h.Servers.CreateChannel)
@@ -111,6 +132,20 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	
 	// Channel invites
 	channels.Post("/:id/invites", h.Channels.CreateInvite)
+	
+	// Attachments (if handler is configured)
+	if h.Attachments != nil {
+		// Channel attachments
+		channels.Post("/:id/attachments", h.Attachments.Upload)
+		channels.Get("/:id/attachments", h.Attachments.GetChannelAttachments)
+		
+		// Attachments
+		attachments := api.Group("/attachments")
+		attachments.Get("/:id", h.Attachments.Get)
+		attachments.Get("/:id/download", h.Attachments.Download)
+		attachments.Get("/:id/signed-url", h.Attachments.GetSignedURL)
+		attachments.Delete("/:id", h.Attachments.Delete)
+	}
 	
 	// Search
 	search := api.Group("/search")
