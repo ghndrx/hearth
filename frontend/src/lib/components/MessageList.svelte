@@ -1,11 +1,35 @@
 <script lang="ts">
 	import { onMount, afterUpdate } from 'svelte';
-	import { messages, loadMessages } from '$lib/stores/messages';
+	import { messages, loadMessages, sendMessage } from '$lib/stores/messages';
 	import { currentChannel } from '$lib/stores/channels';
 	import { user } from '$lib/stores/auth';
 	import { currentServer } from '$lib/stores/servers';
 	import Message from './Message.svelte';
 	import MessageInput from './MessageInput.svelte';
+
+	let replyTo: { id: string; content: string; author: { username: string } } | null = null;
+
+	async function handleSend(event: CustomEvent<{ content: string; attachments: File[]; replyTo?: string }>) {
+		if (!$currentChannel) return;
+		
+		const { content, attachments, replyTo: replyToId } = event.detail;
+		
+		try {
+			await sendMessage($currentChannel.id, content, attachments, replyToId);
+			replyTo = null;
+		} catch (error) {
+			console.error('Failed to send message:', error);
+		}
+	}
+
+	function handleReply(event: CustomEvent<{ message: { id: string; content: string; author?: { username: string } } }>) {
+		const message = event.detail.message;
+		replyTo = {
+			id: message.id,
+			content: message.content,
+			author: message.author || { username: 'Unknown' }
+		};
+	}
 
 	let messageContainer: HTMLElement;
 	let shouldScroll = true;
@@ -173,6 +197,9 @@
 
 	<!-- Message Input -->
 	{#if $currentChannel}
-		<MessageInput />
+		<MessageInput 
+			replyTo={replyTo}
+			on:send={handleSend}
+		/>
 	{/if}
 </div>
