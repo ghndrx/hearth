@@ -8,10 +8,12 @@
 	import { currentServer } from '$lib/stores/servers';
 	import { popoutStore } from '$lib/stores/popout';
 	import { threadStore } from '$lib/stores/thread';
+	import { pinnedMessagesStore, pinnedMessagesOpen } from '$lib/stores/pinnedMessages';
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import MemberList from '$lib/components/MemberList.svelte';
 	import ThreadView from '$lib/components/ThreadView.svelte';
+	import PinnedMessages from '$lib/components/PinnedMessages.svelte';
 	import UserSettings from '$lib/components/UserSettings.svelte';
 	import ServerSettings from '$lib/components/ServerSettings.svelte';
 	import UserPopout from '$lib/components/UserPopout.svelte';
@@ -53,6 +55,16 @@
 		goto(`/channels/${event.detail.serverId}`);
 		popoutStore.close();
 	}
+
+	function handleJumpToMessage(event: CustomEvent<{ channelId: string; messageId: string }>) {
+		// Close the pinned messages panel
+		pinnedMessagesStore.close();
+		
+		// TODO: Scroll to message in MessageList
+		// For now, we just close the panel - scrolling to message would require
+		// additional coordination with the MessageList component
+		console.log('Jump to message:', event.detail.messageId);
+	}
 </script>
 
 <div class="flex h-screen overflow-hidden bg-[#313338]">
@@ -75,6 +87,11 @@
 	<!-- Thread View - Right sidebar panel for viewing threads -->
 	{#if $threadStore.currentThread}
 		<ThreadView />
+	{/if}
+
+	<!-- Pinned Messages - Right sidebar panel for viewing pinned messages -->
+	{#if $pinnedMessagesOpen}
+		<PinnedMessages on:jumpToMessage={handleJumpToMessage} />
 	{/if}
 </div>
 

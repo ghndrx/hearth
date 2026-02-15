@@ -2,73 +2,195 @@ package services
 
 import (
 	"context"
-	"sync"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+
+	"hearth/internal/models"
 )
 
-type Notification struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	Type      string
-	Title     string
-	Body      string
-	Read      bool
-	CreatedAt time.Time
+var (
+	ErrNotificationNotFound = errors.New("notification not found")
+)
+
+// NotificationRepository defines the interface for notification data access
+type NotificationRepository interface {
+	Create(ctx context.Context, notification *models.Notification) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Notification, error)
+	GetByIDWithActor(ctx context.Context, id uuid.UUID) (*models.NotificationWithActor, error)
+	List(ctx context.Context, userID uuid.UUID, opts models.NotificationListOptions) ([]models.NotificationWithActor, error)
+	GetStats(ctx context.Context, userID uuid.UUID) (*models.NotificationStats, error)
+	MarkAsRead(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	MarkAllAsRead(ctx context.Context, userID uuid.UUID) (int64, error)
+	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	DeleteAllRead(ctx context.Context, userID uuid.UUID) (int64, error)
+	DeleteOlderThan(ctx context.Context, userID uuid.UUID, before time.Time) (int64, error)
 }
 
+// NotificationService handles notification business logic
 type NotificationService struct {
-	mu            sync.RWMutex
-	notifications map[uuid.UUID][]*Notification
+	repo     NotificationRepository
+	eventBus EventBus
 }
 
-func NewNotificationService() *NotificationService {
+// NewNotificationService creates a new notification service
+func NewNotificationService(repo NotificationRepository, eventBus EventBus) *NotificationService {
 	return &NotificationService{
-		notifications: make(map[uuid.UUID][]*Notification),
+		repo:     repo,
+		eventBus: eventBus,
 	}
 }
 
-func (s *NotificationService) Create(ctx context.Context, userID uuid.UUID, notifType, title, body string) (*Notification, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	n := &Notification{
-		ID:        uuid.New(),
-		UserID:    userID,
-		Type:      notifType,
-		Title:     title,
-		Body:      body,
-		CreatedAt: time.Now(),
+// CreateNotification creates a new notification
+func (s *NotificationService) CreateNotification(ctx context.Context, req *models.CreateNotificationRequest) (*models.Notification, error) {
+	notification := &models.Notification{
+		UserID:    req.UserID,
+		Type:      req.Type,
+		Title:     req.Title,
+		Body:      req.Body,
+		Data:      req.Data,
+		ActorID:   req.ActorID,
+		ServerID:  req.ServerID,
+		ChannelID: req.ChannelID,
+		MessageID: req.MessageID,
 	}
-	s.notifications[userID] = append(s.notifications[userID], n)
-	return n, nil
+
+	if err := s.repo.Create(ctx, notification); err != nil {
+		return nil, err
+	}
+
+	// Emit event
+	s.eventBus.Publish("notification.created", &NotificationCreatedEvent{
+		Notification: notification,
+	})
+
+	return notification, nil
 }
 
-func (s *NotificationService) GetUnread(ctx context.Context, userID uuid.UUID) ([]*Notification, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+// GetNotification retrieves a notification by ID
+func (s *NotificationService) GetNotification(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*models.NotificationWithActor, error) {
+	notification, err := s.repo.GetByIDWithActor(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if notification == nil || notification.UserID != userID {
+		return nil, ErrNotificationNotFound
+	}
+	return notification, nil
+}
 
-	var unread []*Notification
-	for _, n := range s.notifications[userID] {
-		if !n.Read {
-			unread = append(unread, n)
+// ListNotifications retrieves notifications for a user
+func (s *NotificationService) ListNotifications(ctx context.Context, userID uuid.UUID, opts models.NotificationListOptions) ([]models.NotificationWithActor, error) {
+	return s.repo.List(ctx, userID, opts)
+}
+
+// GetNotificationStats retrieves notification statistics for a user
+func (s *NotificationService) GetNotificationStats(ctx context.Context, userID uuid.UUID) (*models.NotificationStats, error) {
+	return s.repo.GetStats(ctx, userID)
+}
+
+// MarkAsRead marks a notification as read
+func (s *NotificationService) MarkAsRead(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	err := s.repo.MarkAsRead(ctx, id, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotificationNotFound
 		}
+		return err
 	}
-	return unread, nil
-}
 
-func (s *NotificationService) MarkRead(ctx context.Context, notifID uuid.UUID) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Emit event
+	s.eventBus.Publish("notification.read", &NotificationReadEvent{
+		NotificationID: id,
+		UserID:         userID,
+	})
 
-	for _, notifs := range s.notifications {
-		for _, n := range notifs {
-			if n.ID == notifID {
-				n.Read = true
-				return nil
-			}
-		}
-	}
 	return nil
+}
+
+// MarkAllAsRead marks all notifications as read for a user
+func (s *NotificationService) MarkAllAsRead(ctx context.Context, userID uuid.UUID) (int64, error) {
+	count, err := s.repo.MarkAllAsRead(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	if count > 0 {
+		// Emit event
+		s.eventBus.Publish("notification.all_read", &NotificationAllReadEvent{
+			UserID: userID,
+			Count:  count,
+		})
+	}
+
+	return count, nil
+}
+
+// DeleteNotification deletes a notification
+func (s *NotificationService) DeleteNotification(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	err := s.repo.Delete(ctx, id, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotificationNotFound
+		}
+		return err
+	}
+
+	// Emit event
+	s.eventBus.Publish("notification.deleted", &NotificationDeletedEvent{
+		NotificationID: id,
+		UserID:         userID,
+	})
+
+	return nil
+}
+
+// DeleteAllReadNotifications deletes all read notifications for a user
+func (s *NotificationService) DeleteAllReadNotifications(ctx context.Context, userID uuid.UUID) (int64, error) {
+	count, err := s.repo.DeleteAllRead(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	if count > 0 {
+		s.eventBus.Publish("notification.read_deleted", &NotificationReadDeletedEvent{
+			UserID: userID,
+			Count:  count,
+		})
+	}
+
+	return count, nil
+}
+
+// Events
+
+// NotificationCreatedEvent is emitted when a notification is created
+type NotificationCreatedEvent struct {
+	Notification *models.Notification
+}
+
+// NotificationReadEvent is emitted when a notification is marked as read
+type NotificationReadEvent struct {
+	NotificationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+// NotificationAllReadEvent is emitted when all notifications are marked as read
+type NotificationAllReadEvent struct {
+	UserID uuid.UUID
+	Count  int64
+}
+
+// NotificationDeletedEvent is emitted when a notification is deleted
+type NotificationDeletedEvent struct {
+	NotificationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+// NotificationReadDeletedEvent is emitted when all read notifications are deleted
+type NotificationReadDeletedEvent struct {
+	UserID uuid.UUID
+	Count  int64
 }
