@@ -16,6 +16,7 @@ type Handlers struct {
 	Gateway  *GatewayHandler
 	Messages *MessageHandlers
 	Roles    *RoleHandlers
+	Webhooks *WebhookHandlers
 }
 
 // NewHandlers creates all handlers with dependencies
@@ -39,5 +40,6 @@ func NewHandlers(
 		Gateway:  NewGatewayHandler(gateway),
 		Messages: NewMessageHandlers(messageService, channelService),
 		Roles:    NewRoleHandlers(roleService),
+		Webhooks: NewWebhookHandlers(),
 	}
 }
