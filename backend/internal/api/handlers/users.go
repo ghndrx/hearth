@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
 	"mime/multipart"
 	"strings"
 	"time"
@@ -335,8 +336,10 @@ func (h *UserHandler) GetMyServers(c *fiber.Ctx) error {
 
 	servers, err := h.serverService.GetUserServers(c.Context(), userID)
 	if err != nil {
+		log.Printf("GetMyServers error for user %s: %v", userID, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to get servers",
+			"detail": err.Error(),
 		})
 	}
 
