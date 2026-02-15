@@ -64,6 +64,14 @@
 		showCreateModal = false;
 	}
 
+	function handleServerCreated(event: CustomEvent<Server>) {
+		const server = event.detail;
+		showCreateModal = false;
+		currentServer.set(server);
+		// Navigate to the new server - use 'general' as default channel
+		goto(`/channels/${server.id}/general`);
+	}
+
 	function toggleFolder(folderId: string) {
 		folders = folders.map((f) =>
 			f.id === folderId ? { ...f, expanded: !f.expanded } : f
@@ -171,7 +179,7 @@
 	</div>
 </nav>
 
-<CreateServerModal open={showCreateModal} on:close={closeCreateServer} />
+<CreateServerModal open={showCreateModal} on:close={closeCreateServer} on:created={handleServerCreated} />
 
 <style>
 	.server-list {
