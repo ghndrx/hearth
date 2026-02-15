@@ -246,14 +246,21 @@ func TestServiceBusAdapter_IntegrationWithBus(t *testing.T) {
 	bus := NewBus()
 	adapter := NewServiceBusAdapter(bus)
 
-	messageCreated := false
-	messageUpdated := false
+	// Use channels to synchronize - avoids race conditions and sleeps
+	messageCreatedCh := make(chan struct{}, 1)
+	messageUpdatedCh := make(chan struct{}, 1)
 
 	adapter.Subscribe(MessageCreated, func(data interface{}) {
-		messageCreated = true
+		select {
+		case messageCreatedCh <- struct{}{}:
+		default:
+		}
 	})
 	adapter.Subscribe(MessageUpdated, func(data interface{}) {
-		messageUpdated = true
+		select {
+		case messageUpdatedCh <- struct{}{}:
+		default:
+		}
 	})
 
 	// Publish various events
@@ -261,10 +268,22 @@ func TestServiceBusAdapter_IntegrationWithBus(t *testing.T) {
 	adapter.Publish(MessageUpdated, map[string]string{"content": "updated"})
 	adapter.Publish(MessageDeleted, map[string]string{"id": "123"})
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for handlers with timeout
+	timeout := time.After(2 * time.Second)
 
-	assert.True(t, messageCreated, "MessageCreated handler should be called")
-	assert.True(t, messageUpdated, "MessageUpdated handler should be called")
+	select {
+	case <-messageCreatedCh:
+		// Success
+	case <-timeout:
+		t.Fatal("MessageCreated handler was not called within timeout")
+	}
+
+	select {
+	case <-messageUpdatedCh:
+		// Success
+	case <-timeout:
+		t.Fatal("MessageUpdated handler was not called within timeout")
+	}
 	// MessageDeleted has no handler, so nothing to assert there
 }
 
