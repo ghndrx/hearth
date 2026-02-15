@@ -38,7 +38,8 @@ export default [
 				parser: tsParser
 			},
 			globals: {
-				...globals.browser
+				...globals.browser,
+				NotificationPermission: 'readonly'
 			}
 		},
 		rules: {
@@ -59,6 +60,6 @@ export default [
 		}
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/']
+		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/', 'vitest.config.ts']
 	}
 ];
