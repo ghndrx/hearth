@@ -31,30 +31,71 @@ export interface Channel {
 }
 
 // Message types
+export type MessageType = 'default' | 'reply' | 'recipient_add' | 'recipient_remove' | 'call' | 'channel_name_change' | 'channel_icon_change' | 'pinned' | 'member_join' | 'thread_created';
+
 export interface Message {
 	id: string;
-	channelId: string;
-	authorId: string;
-	author?: User;
+	channel_id: string;
+	author_id: string;
+	server_id?: string;
 	content: string;
-	createdAt: string;
-	updatedAt?: string;
+	encrypted_content?: string;
+	type: MessageType;
+	reply_to_id?: string;
+	thread_id?: string;
+	pinned: boolean;
+	tts: boolean;
+	mention_everyone: boolean;
+	flags: number;
+	created_at: string;
+	edited_at?: string;
+	author?: User;
 	attachments?: Attachment[];
+	embeds?: Embed[];
 	reactions?: Reaction[];
+	mentions?: string[];
+	mention_roles?: string[];
+	referenced_message?: Message;
+}
+
+export interface Embed {
+	type?: string;
+	title?: string;
+	description?: string;
+	url?: string;
+	timestamp?: string;
+	color?: number;
+	footer?: { text: string; icon_url?: string };
+	image?: { url: string; proxy_url?: string; width?: number; height?: number };
+	thumbnail?: { url: string; proxy_url?: string; width?: number; height?: number };
+	video?: { url: string; proxy_url?: string; width?: number; height?: number };
+	provider?: { name?: string; url?: string };
+	author?: { name: string; url?: string; icon_url?: string };
+	fields?: { name: string; value: string; inline?: boolean }[];
 }
 
 export interface Attachment {
 	id: string;
-	url: string;
+	message_id: string;
 	filename: string;
-	contentType: string;
+	url: string;
+	proxy_url?: string;
 	size: number;
+	content_type?: string;
+	width?: number;
+	height?: number;
+	ephemeral: boolean;
+	encrypted: boolean;
+	encrypted_key?: string;
+	iv?: string;
+	created_at: string;
 }
 
 export interface Reaction {
+	message_id: string;
 	emoji: string;
 	count: number;
-	userIds: string[];
+	me: boolean;
 }
 
 // Member types

@@ -196,11 +196,4 @@ type TypingIndicator struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// ReadState tracks user read position per channel
-type ReadState struct {
-	UserID        uuid.UUID  `json:"user_id" db:"user_id"`
-	ChannelID     uuid.UUID  `json:"channel_id" db:"channel_id"`
-	LastMessageID *uuid.UUID `json:"last_message_id,omitempty" db:"last_message_id"`
-	MentionCount  int        `json:"mention_count" db:"mention_count"`
-	LastReadAt    time.Time  `json:"last_read_at" db:"last_read_at"`
-}
+// ReadState is defined in readstate.go
