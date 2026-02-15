@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hearth.fullname" . }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "hearth.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "hearth.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "hearth.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            {{- if .Values.voice.enabled }}
+            - name: turn
+              containerPort: {{ .Values.voice.turn.port }}
+              protocol: UDP
+            {{- end }}
+          env:
+            - name: PORT
+              value: "8080"
+            - name: PUBLIC_URL
+              value: {{ .Values.config.publicUrl | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret | default (printf "%s-secret" (include "hearth.fullname" .)) }}
+                  key: {{ .Values.secretKey }}
+            {{- if .Values.postgresql.enabled }}
+            - name: DATABASE_URL
+              value: "postgres://{{ .Values.postgresql.auth.username }}:$(POSTGRES_PASSWORD)@{{ include "hearth.fullname" . }}-postgresql:5432/{{ .Values.postgresql.auth.database }}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret | default (printf "%s-postgresql" (include "hearth.fullname" .)) }}
+                  key: password
+            {{- else if .Values.database.external.enabled }}
+            - name: DATABASE_URL
+              value: {{ .Values.database.external.url | quote }}
+            {{- else }}
+            - name: DATABASE_URL
+              value: "sqlite:///data/hearth.db"
+            {{- end }}
+            {{- if .Values.redis.enabled }}
+            - name: REDIS_URL
+              value: "redis://{{ include "hearth.fullname" . }}-redis-master:6379"
+            {{- end }}
+            {{- if .Values.storage.s3.enabled }}
+            - name: STORAGE_BACKEND
+              value: "s3"
+            - name: STORAGE_ENDPOINT
+              value: {{ .Values.storage.s3.endpoint | quote }}
+            - name: STORAGE_BUCKET
+              value: {{ .Values.storage.s3.bucket | quote }}
+            - name: STORAGE_REGION
+              value: {{ .Values.storage.s3.region | quote }}
+            - name: STORAGE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.s3.existingSecret }}
+                  key: {{ .Values.storage.s3.accessKeyKey }}
+            - name: STORAGE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.storage.s3.existingSecret }}
+                  key: {{ .Values.storage.s3.secretKeyKey }}
+            {{- else }}
+            - name: STORAGE_BACKEND
+              value: "local"
+            - name: STORAGE_PATH
+              value: "/data/uploads"
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.storage.local.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "hearth.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

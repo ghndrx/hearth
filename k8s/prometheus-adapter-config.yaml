@@ -1,0 +1,92 @@
+# Prometheus Adapter configuration for Hearth WebSocket metrics
+# Install prometheus-adapter with this custom config to enable HPA scaling on WebSocket connections
+#
+# Usage:
+# 1. Install prometheus-adapter:
+#    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#    helm install prometheus-adapter prometheus-community/prometheus-adapter \
+#      -n monitoring \
+#      -f prometheus-adapter-config.yaml
+#
+# 2. Verify custom metrics are available:
+#    kubectl get --raw /apis/custom.metrics.k8s.io/v1beta1 | jq .
+#    kubectl get --raw /apis/custom.metrics.k8s.io/v1beta1/namespaces/hearth/pods/*/hearth_websocket_connections | jq .
+#
+prometheus:
+  url: http://prometheus.monitoring.svc.cluster.local
+  port: 9090
+
+rules:
+  default: false
+  custom:
+    # Active WebSocket connections per pod
+    - seriesQuery: 'hearth_websocket_connections_active{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^hearth_websocket_connections_active$"
+        as: "hearth_websocket_connections"
+      metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+
+    # Active sessions per pod (alternative scaling metric)
+    - seriesQuery: 'hearth_websocket_sessions_active{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^hearth_websocket_sessions_active$"
+        as: "hearth_websocket_sessions"
+      metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+
+    # Message rate per pod (for throughput-based scaling)
+    - seriesQuery: 'hearth_websocket_messages_sent_total{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^hearth_websocket_messages_sent_total$"
+        as: "hearth_websocket_messages_rate"
+      metricsQuery: 'sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)'
+
+    # Channel subscriptions per pod
+    - seriesQuery: 'hearth_websocket_channel_subscriptions_active{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^hearth_websocket_channel_subscriptions_active$"
+        as: "hearth_websocket_channel_subscriptions"
+      metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+
+  # Enable resource metrics (CPU, memory)
+  resource:
+    cpu:
+      containerQuery: sum(rate(container_cpu_usage_seconds_total{<<.LabelMatchers>>}[3m])) by (<<.GroupBy>>)
+      nodeQuery: sum(rate(container_cpu_usage_seconds_total{<<.LabelMatchers>>, id='/'}[3m])) by (<<.GroupBy>>)
+      resources:
+        overrides:
+          instance:
+            resource: node
+          namespace:
+            resource: namespace
+          pod:
+            resource: pod
+      containerLabel: container
+    memory:
+      containerQuery: sum(container_memory_working_set_bytes{<<.LabelMatchers>>}) by (<<.GroupBy>>)
+      nodeQuery: sum(container_memory_working_set_bytes{<<.LabelMatchers>>,id='/'}) by (<<.GroupBy>>)
+      resources:
+        overrides:
+          instance:
+            resource: node
+          namespace:
+            resource: namespace
+          pod:
+            resource: pod
+      containerLabel: container
+    window: 3m

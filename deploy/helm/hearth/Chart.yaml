@@ -1,0 +1,28 @@
+apiVersion: v2
+name: hearth
+description: A self-hosted Discord alternative
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/ghndrx/hearth
+sources:
+  - https://github.com/ghndrx/hearth
+maintainers:
+  - name: Greg Hendrickson
+    url: https://github.com/ghndrx
+keywords:
+  - chat
+  - discord
+  - communication
+  - self-hosted
+  - voice
+  - video
+dependencies:
+  - name: postgresql
+    version: "14.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

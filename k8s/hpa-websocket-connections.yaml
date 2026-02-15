@@ -1,0 +1,100 @@
+# HPA for Hearth backend based on WebSocket connection count
+# Requires prometheus-adapter configured to expose custom metrics
+#
+# Prerequisites:
+# 1. Install prometheus-adapter: 
+#    helm install prometheus-adapter prometheus-community/prometheus-adapter -n monitoring
+# 2. Configure prometheus-adapter with rules for hearth_websocket_connections_active
+#
+# prometheus-adapter config example (add to ConfigMap):
+# rules:
+#   - seriesQuery: 'hearth_websocket_connections_active{namespace!="",pod!=""}'
+#     resources:
+#       overrides:
+#         namespace: {resource: "namespace"}
+#         pod: {resource: "pod"}
+#     name:
+#       matches: "^(.*)$"
+#       as: "hearth_websocket_connections"
+#     metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hearth-backend-hpa
+  namespace: hearth
+  labels:
+    app: hearth
+    component: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hearth-backend
+  minReplicas: 2
+  maxReplicas: 20
+  behavior:
+    scaleDown:
+      # Conservative scale-down to avoid connection churn
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      # Aggressive scale-up to handle traffic spikes
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+      selectPolicy: Max
+  metrics:
+    # Primary metric: WebSocket connections per pod
+    # Target 1000 connections per pod (adjust based on load testing)
+    - type: Pods
+      pods:
+        metric:
+          name: hearth_websocket_connections
+        target:
+          type: AverageValue
+          averageValue: "1000"
+    # Secondary metric: CPU (fallback)
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Tertiary metric: Memory (safety)
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+# Note: ServiceMonitor is defined in servicemonitor.yaml
+---
+# PodDisruptionBudget to ensure minimum availability during scaling
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hearth-backend-pdb
+  namespace: hearth
+  labels:
+    app: hearth
+    component: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: hearth
+      component: backend

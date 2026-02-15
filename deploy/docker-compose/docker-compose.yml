@@ -1,0 +1,112 @@
+version: '3.8'
+
+# Hearth - Full Stack Docker Compose
+# Copy .env.example to .env and configure before running
+
+services:
+  hearth:
+    image: ghcr.io/ghndrx/hearth:latest
+    container_name: hearth
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+      - "${TURN_PORT:-3478}:3478/udp"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8080}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///data/hearth.db}
+      - REDIS_URL=${REDIS_URL:-}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - STORAGE_PATH=/data/uploads
+      - STORAGE_ENDPOINT=${STORAGE_ENDPOINT:-}
+      - STORAGE_BUCKET=${STORAGE_BUCKET:-}
+      - STORAGE_ACCESS_KEY=${STORAGE_ACCESS_KEY:-}
+      - STORAGE_SECRET_KEY=${STORAGE_SECRET_KEY:-}
+      - REGISTRATION_ENABLED=${REGISTRATION_ENABLED:-true}
+      - INVITE_ONLY=${INVITE_ONLY:-false}
+    volumes:
+      - hearth-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_started
+        required: false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # PostgreSQL (optional - remove if using SQLite)
+  db:
+    image: postgres:16-alpine
+    container_name: hearth-db
+    profiles:
+      - postgres
+    environment:
+      - POSTGRES_USER=${DB_USER:-hearth}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME:-hearth}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hearth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis (optional - for caching and multi-instance)
+  redis:
+    image: redis:7-alpine
+    container_name: hearth-redis
+    profiles:
+      - redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  # MinIO (optional - S3-compatible storage)
+  minio:
+    image: minio/minio
+    container_name: hearth-minio
+    profiles:
+      - s3
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      - MINIO_ROOT_USER=${STORAGE_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${STORAGE_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  # Caddy reverse proxy (optional - auto SSL)
+  caddy:
+    image: caddy:2-alpine
+    container_name: hearth-caddy
+    profiles:
+      - proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  hearth-data:
+  postgres-data:
+  redis-data:
+  minio-data:
+  caddy-data:
+  caddy-config:

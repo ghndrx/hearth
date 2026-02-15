@@ -1,0 +1,32 @@
+# Hearth Caddyfile
+# Automatic HTTPS with Let's Encrypt
+
+{$PUBLIC_URL:chat.example.com} {
+    reverse_proxy hearth:8080
+    
+    # WebSocket support
+    @websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websocket hearth:8080
+    
+    # File upload size
+    request_body {
+        max_size 100MB
+    }
+    
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+    
+    # Logging
+    log {
+        output stdout
+        format json
+    }
+}

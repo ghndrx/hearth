@@ -1,0 +1,55 @@
+
+.agent-context/
+# Agent context files (local only)
+bin/
+build/
+# Build outputs
+*.cover
+coverage/
+data/
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+# Dependencies
+dist/
+.DS_Store
+.env
+# Environment
+.env.*.local
+.env.local
+*.exe
+# IDE
+.idea/
+*.log
+logs/
+# Logs
+node_modules/
+# OS files
+*.out
+# Performance test results (generated, can be large)
+PROJECT_STATUS.md
+*.secret
+.secret_key
+*.swo
+*.swp
+TASK_QUEUE.md
+temp/
+# Temporary
+# Test coverage
+tests/performance/*-results.json
+Thumbs.db
+*.tmp
+tmp/
+uploads/
+# Uploads (in dev)
+vendor/
+.vscode/
+specs/
+
+# Agent instruction files
+AGENTS.md
+TASKS.json
+orchestration/
+*.spec.md
