@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	import type { Server } from '$lib/stores/servers';
 
 	export let server: Server | null = null;
@@ -7,6 +8,14 @@
 	export let isSelected: boolean = false;
 	export let hasUnread: boolean = false;
 	export let mentionCount: number = 0;
+
+	const dispatch = createEventDispatcher<{
+		click: { server: Server | null };
+	}>();
+
+	function handleClick() {
+		dispatch('click', { server });
+	}
 
 	function getInitials(name: string): string {
 		return name
@@ -37,7 +46,7 @@
 		class:selected={isSelected}
 		class:home={isHome}
 		class:add={isAdd}
-		on:click
+		on:click={handleClick}
 	>
 		{#if isHome}
 			<!-- Discord logo for home -->

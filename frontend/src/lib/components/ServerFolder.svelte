@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	import type { Server } from '$lib/stores/servers';
 	import ServerIcon from './ServerIcon.svelte';
 
@@ -7,6 +8,10 @@
 	export let selectedServerId: string | null = null;
 	export let expanded: boolean = false;
 	export let color: string = '#5865f2';
+
+	const dispatch = createEventDispatcher<{
+		select: { server: Server };
+	}>();
 
 	// Calculate folder state
 	$: hasUnread = servers.some((s) => (s as any).hasUnread);
@@ -19,6 +24,10 @@
 
 	function getPreviewIcons(servers: Server[]): Server[] {
 		return servers.slice(0, 4);
+	}
+
+	function handleServerClick(event: CustomEvent<{ server: Server }>) {
+		dispatch('select', { server: event.detail.server });
 	}
 </script>
 
@@ -39,7 +48,7 @@
 						isSelected={selectedServerId === server.id}
 						hasUnread={(server as any).hasUnread || false}
 						mentionCount={(server as any).mentionCount || 0}
-						on:click
+						on:click={handleServerClick}
 					/>
 				{/each}
 			</div>

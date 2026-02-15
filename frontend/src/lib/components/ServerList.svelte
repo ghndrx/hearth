@@ -93,12 +93,7 @@
 			selectedServerId={$currentServer?.id || null}
 			expanded={folder.expanded}
 			color={folder.color}
-			on:click={(e) => {
-				const detail = (e as unknown as CustomEvent<{server: any}>).detail;
-				if (detail?.server) {
-					selectServer(detail.server);
-				}
-			}}
+			on:select={(e) => selectServer(e.detail.server)}
 		/>
 	{/each}
 
