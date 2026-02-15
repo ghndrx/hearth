@@ -35,6 +35,7 @@ type MessageService struct {
 	repo         MessageRepository
 	channelRepo  ChannelRepository
 	serverRepo   ServerRepository
+	roleRepo     RoleRepository
 	quotaService *QuotaService
 	rateLimiter  RateLimiter
 	e2eeService  E2EEService
@@ -47,6 +48,7 @@ func NewMessageService(
 	repo MessageRepository,
 	channelRepo ChannelRepository,
 	serverRepo ServerRepository,
+	roleRepo RoleRepository,
 	quotaService *QuotaService,
 	rateLimiter RateLimiter,
 	e2eeService E2EEService,
@@ -57,6 +59,7 @@ func NewMessageService(
 		repo:         repo,
 		channelRepo:  channelRepo,
 		serverRepo:   serverRepo,
+		roleRepo:     roleRepo,
 		quotaService: quotaService,
 		rateLimiter:  rateLimiter,
 		e2eeService:  e2eeService,
@@ -78,11 +81,9 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 
 	// Check permissions for server channels
 	if channel.ServerID != nil {
-		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, authorID)
-		if err != nil || member == nil {
-			return nil, ErrNotServerMember
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, channelID, authorID, models.PermSendMessages); err != nil {
+			return nil, err
 		}
-		// TODO: Check SEND_MESSAGES permission
 	}
 
 	// Get quota limits
@@ -237,9 +238,14 @@ func (s *MessageService) DeleteMessage(ctx context.Context, messageID uuid.UUID,
 	// Author can always delete their own messages
 	if message.AuthorID != requesterID {
 		// Check if requester has MANAGE_MESSAGES permission
-		channel, _ := s.channelRepo.GetByID(ctx, message.ChannelID)
+		channel, err := s.channelRepo.GetByID(ctx, message.ChannelID)
+		if err != nil {
+			return err
+		}
 		if channel != nil && channel.ServerID != nil {
-			// TODO: Check MANAGE_MESSAGES permission
+			if err := s.checkChannelPermission(ctx, *channel.ServerID, message.ChannelID, requesterID, models.PermManageMessages); err != nil {
+				return ErrNotMessageAuthor
+			}
 		} else {
 			return ErrNotMessageAuthor
 		}
@@ -270,11 +276,13 @@ func (s *MessageService) GetMessages(ctx context.Context, channelID uuid.UUID, r
 
 	// Check access
 	if channel.ServerID != nil {
-		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
-		if err != nil || member == nil {
-			return nil, ErrNotServerMember
+		// Check VIEW_CHANNELS and READ_MESSAGE_HISTORY permissions
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, channelID, requesterID, models.PermViewChannels); err != nil {
+			return nil, err
 		}
-		// TODO: Check READ_MESSAGES permission
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, channelID, requesterID, models.PermReadMessageHistory); err != nil {
+			return nil, err
+		}
 	} else {
 		// DM channel - check if requester is participant
 		if !isChannelParticipant(channel, requesterID) {
@@ -309,11 +317,13 @@ func (s *MessageService) GetMessage(ctx context.Context, messageID uuid.UUID, re
 	}
 
 	if channel.ServerID != nil {
-		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
-		if err != nil || member == nil {
-			return nil, ErrNotServerMember
+		// Check VIEW_CHANNELS and READ_MESSAGE_HISTORY permissions
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, message.ChannelID, requesterID, models.PermViewChannels); err != nil {
+			return nil, err
 		}
-		// TODO: Check READ_MESSAGES permission
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, message.ChannelID, requesterID, models.PermReadMessageHistory); err != nil {
+			return nil, err
+		}
 	} else {
 		// DM channel - check if requester is participant
 		if !isChannelParticipant(channel, requesterID) {
@@ -415,6 +425,54 @@ func (s *MessageService) RemoveReaction(ctx context.Context, messageID, userID u
 		UserID:    userID,
 		Emoji:     emoji,
 	})
+
+	return nil
+}
+
+// checkChannelPermission checks if a member has the required permission in a channel
+func (s *MessageService) checkChannelPermission(ctx context.Context, serverID, channelID, userID uuid.UUID, requiredPerm int64) error {
+	// Get the server
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	if server == nil {
+		return ErrServerNotFound
+	}
+
+	// Server owner has all permissions
+	if server.OwnerID == userID {
+		return nil
+	}
+
+	// Get member
+	member, err := s.serverRepo.GetMember(ctx, serverID, userID)
+	if err != nil {
+		return err
+	}
+	if member == nil {
+		return ErrNotServerMember
+	}
+
+	// Get all roles for the server
+	roles, err := s.roleRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return err
+	}
+
+	// Get channel for overrides
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return err
+	}
+
+	// Calculate effective permissions
+	perms := models.CalculatePermissions(member, roles, server, channel, channel.PermissionOverrides)
+
+	// Check the required permission
+	if !models.HasPermission(perms, requiredPerm) {
+		return ErrNoPermission
+	}
 
 	return nil
 }

@@ -108,6 +108,7 @@ func main() {
 		repos.Messages,
 		repos.Channels,
 		repos.Servers,
+		repos.Roles,
 		quotaService,
 		nil, // rate limiter
 		nil, // e2ee service

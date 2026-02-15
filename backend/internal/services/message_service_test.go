@@ -219,10 +219,11 @@ func (m *MockChannelRepositoryForMessages) UpdateLastMessage(ctx context.Context
 	return args.Error(0)
 }
 
-func setupMessageService() (*MessageService, *MockMessageRepository, *MockChannelRepositoryForMessages, *MockServerRepository, *MockQuotaService, *MockRateLimiter, *MockE2EEService, *MockCacheService, *MockEventBus) {
+func setupMessageService() (*MessageService, *MockMessageRepository, *MockChannelRepositoryForMessages, *MockServerRepository, *MockRoleRepository, *MockQuotaService, *MockRateLimiter, *MockE2EEService, *MockCacheService, *MockEventBus) {
 	msgRepo := new(MockMessageRepository)
 	channelRepo := new(MockChannelRepositoryForMessages)
 	serverRepo := new(MockServerRepository)
+	roleRepo := new(MockRoleRepository)
 	rateLimiter := new(MockRateLimiter)
 	e2eeService := new(MockE2EEService)
 	cache := new(MockCacheService)
@@ -249,6 +250,7 @@ func setupMessageService() (*MessageService, *MockMessageRepository, *MockChanne
 		repo:         msgRepo,
 		channelRepo:  channelRepo,
 		serverRepo:   serverRepo,
+		roleRepo:     roleRepo,
 		quotaService: quotaService,
 		rateLimiter:  rateLimiter,
 		e2eeService:  e2eeService,
@@ -256,7 +258,7 @@ func setupMessageService() (*MessageService, *MockMessageRepository, *MockChanne
 		eventBus:     eventBus,
 	}
 
-	return service, msgRepo, channelRepo, serverRepo, mockQuotaService, rateLimiter, e2eeService, cache, eventBus
+	return service, msgRepo, channelRepo, serverRepo, roleRepo, mockQuotaService, rateLimiter, e2eeService, cache, eventBus
 }
 
 func TestSendMessage_Success(t *testing.T) {
@@ -264,7 +266,7 @@ func TestSendMessage_Success(t *testing.T) {
 }
 
 func TestSendMessage_ChannelNotFound(t *testing.T) {
-	service, _, channelRepo, _, _, _, _, _, _ := setupMessageService()
+	service, _, channelRepo, _, _, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	channelID := uuid.New()
@@ -279,11 +281,12 @@ func TestSendMessage_ChannelNotFound(t *testing.T) {
 }
 
 func TestSendMessage_NotServerMember(t *testing.T) {
-	service, _, channelRepo, serverRepo, _, _, _, _, _ := setupMessageService()
+	service, _, channelRepo, serverRepo, _, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	channelID := uuid.New()
 	serverID := uuid.New()
+	ownerID := uuid.New() // Different from authorID
 
 	channel := &models.Channel{
 		ID:       channelID,
@@ -291,7 +294,13 @@ func TestSendMessage_NotServerMember(t *testing.T) {
 		Type:     models.ChannelTypeText,
 	}
 
+	server := &models.Server{
+		ID:      serverID,
+		OwnerID: ownerID,
+	}
+
 	channelRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
 	serverRepo.On("GetMember", ctx, serverID, authorID).Return(nil, nil)
 
 	message, err := service.SendMessage(ctx, authorID, channelID, "Hello!", nil, nil)
@@ -302,7 +311,7 @@ func TestSendMessage_NotServerMember(t *testing.T) {
 }
 
 func TestSendMessage_EmptyMessage(t *testing.T) {
-	service, _, channelRepo, serverRepo, _, _, _, _, _ := setupMessageService()
+	service, _, channelRepo, serverRepo, roleRepo, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	channelID := uuid.New()
@@ -314,13 +323,20 @@ func TestSendMessage_EmptyMessage(t *testing.T) {
 		Type:     models.ChannelTypeText,
 	}
 
+	server := &models.Server{
+		ID:      serverID,
+		OwnerID: authorID, // Owner has all permissions
+	}
+
 	member := &models.Member{
 		UserID:   authorID,
 		ServerID: serverID,
 	}
 
 	channelRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
 	serverRepo.On("GetMember", ctx, serverID, authorID).Return(member, nil)
+	roleRepo.On("GetByServerID", ctx, serverID).Return([]*models.Role{}, nil)
 
 	message, err := service.SendMessage(ctx, authorID, channelID, "", nil, nil)
 
@@ -330,7 +346,7 @@ func TestSendMessage_EmptyMessage(t *testing.T) {
 }
 
 func TestEditMessage_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, _, _, _, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	messageID := uuid.New()
@@ -355,7 +371,7 @@ func TestEditMessage_Success(t *testing.T) {
 }
 
 func TestEditMessage_NotAuthor(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, _ := setupMessageService()
+	service, msgRepo, _, _, _, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	otherUserID := uuid.New()
@@ -377,7 +393,7 @@ func TestEditMessage_NotAuthor(t *testing.T) {
 }
 
 func TestDeleteMessage_ByAuthor(t *testing.T) {
-	service, msgRepo, channelRepo, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, channelRepo, _, _, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	messageID := uuid.New()
@@ -401,7 +417,7 @@ func TestDeleteMessage_ByAuthor(t *testing.T) {
 }
 
 func TestDeleteMessage_NotAuthor(t *testing.T) {
-	service, msgRepo, channelRepo, _, _, _, _, _, _ := setupMessageService()
+	service, msgRepo, channelRepo, _, _, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	authorID := uuid.New()
 	otherUserID := uuid.New()
@@ -430,7 +446,7 @@ func TestDeleteMessage_NotAuthor(t *testing.T) {
 }
 
 func TestGetMessages_Success(t *testing.T) {
-	service, msgRepo, channelRepo, serverRepo, _, _, _, _, _ := setupMessageService()
+	service, msgRepo, channelRepo, serverRepo, roleRepo, _, _, _, _, _ := setupMessageService()
 	ctx := context.Background()
 	requesterID := uuid.New()
 	channelID := uuid.New()
@@ -440,6 +456,11 @@ func TestGetMessages_Success(t *testing.T) {
 		ID:       channelID,
 		ServerID: &serverID,
 		Type:     models.ChannelTypeText,
+	}
+
+	server := &models.Server{
+		ID:      serverID,
+		OwnerID: requesterID, // Owner has all permissions
 	}
 
 	member := &models.Member{
@@ -452,8 +473,11 @@ func TestGetMessages_Success(t *testing.T) {
 		{ID: uuid.New(), Content: "Message 2"},
 	}
 
+	// For both VIEW_CHANNELS and READ_MESSAGE_HISTORY permission checks
 	channelRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
 	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(member, nil)
+	roleRepo.On("GetByServerID", ctx, serverID).Return([]*models.Role{}, nil)
 	msgRepo.On("GetChannelMessages", ctx, channelID, (*uuid.UUID)(nil), (*uuid.UUID)(nil), 50).Return(expectedMessages, nil)
 
 	messages, err := service.GetMessages(ctx, channelID, requesterID, nil, nil, 0)
@@ -463,7 +487,7 @@ func TestGetMessages_Success(t *testing.T) {
 }
 
 func TestAddReaction_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, _, _, _, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	userID := uuid.New()
 	messageID := uuid.New()
@@ -485,7 +509,7 @@ func TestAddReaction_Success(t *testing.T) {
 }
 
 func TestRemoveReaction_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, _, _, _, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	userID := uuid.New()
 	messageID := uuid.New()
@@ -499,7 +523,7 @@ func TestRemoveReaction_Success(t *testing.T) {
 }
 
 func TestPinMessage_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, _, _, _, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	requesterID := uuid.New()
 	messageID := uuid.New()
