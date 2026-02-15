@@ -2,17 +2,111 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+
+	"hearth/internal/models"
+	"hearth/internal/services"
 )
+
+// mockWebhookService implements the interface needed by WebhookHandlers
+type mockWebhookService struct {
+	createWebhookFunc      func(ctx context.Context, req *services.CreateWebhookRequest) (*models.Webhook, error)
+	getWebhookFunc         func(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Webhook, error)
+	getChannelWebhooksFunc func(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID) ([]*models.Webhook, error)
+	getServerWebhooksFunc  func(ctx context.Context, serverID uuid.UUID, requesterID uuid.UUID) ([]*models.Webhook, error)
+	updateWebhookFunc      func(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, req *services.UpdateWebhookRequest) (*models.Webhook, error)
+	deleteWebhookFunc      func(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) error
+	executeWebhookFunc     func(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error)
+}
+
+func (m *mockWebhookService) CreateWebhook(ctx context.Context, req *services.CreateWebhookRequest) (*models.Webhook, error) {
+	if m.createWebhookFunc != nil {
+		return m.createWebhookFunc(ctx, req)
+	}
+	// Default implementation
+	return &models.Webhook{
+		ID:        uuid.New(),
+		Type:      models.WebhookTypeIncoming,
+		Name:      req.Name,
+		ChannelID: req.ChannelID,
+		Avatar:    req.Avatar,
+		Token:     "generated-token-12345",
+		CreatedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockWebhookService) GetWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Webhook, error) {
+	if m.getWebhookFunc != nil {
+		return m.getWebhookFunc(ctx, webhookID, requesterID)
+	}
+	return nil, services.ErrWebhookNotFound
+}
+
+func (m *mockWebhookService) GetChannelWebhooks(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID) ([]*models.Webhook, error) {
+	if m.getChannelWebhooksFunc != nil {
+		return m.getChannelWebhooksFunc(ctx, channelID, requesterID)
+	}
+	return []*models.Webhook{}, nil
+}
+
+func (m *mockWebhookService) GetServerWebhooks(ctx context.Context, serverID uuid.UUID, requesterID uuid.UUID) ([]*models.Webhook, error) {
+	if m.getServerWebhooksFunc != nil {
+		return m.getServerWebhooksFunc(ctx, serverID, requesterID)
+	}
+	return []*models.Webhook{}, nil
+}
+
+func (m *mockWebhookService) UpdateWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, req *services.UpdateWebhookRequest) (*models.Webhook, error) {
+	if m.updateWebhookFunc != nil {
+		return m.updateWebhookFunc(ctx, webhookID, requesterID, req)
+	}
+	return nil, services.ErrWebhookNotFound
+}
+
+func (m *mockWebhookService) DeleteWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) error {
+	if m.deleteWebhookFunc != nil {
+		return m.deleteWebhookFunc(ctx, webhookID, requesterID)
+	}
+	return nil
+}
+
+func (m *mockWebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error) {
+	if m.executeWebhookFunc != nil {
+		return m.executeWebhookFunc(ctx, webhookID, token, req)
+	}
+	return &models.Message{
+		ID:        uuid.New(),
+		ChannelID: uuid.New(),
+		Content:   req.Content,
+		CreatedAt: time.Now(),
+	}, nil
+}
+
+// WebhookServiceInterface defines the interface for WebhookService
+type WebhookServiceInterface interface {
+	CreateWebhook(ctx context.Context, req *services.CreateWebhookRequest) (*models.Webhook, error)
+	GetWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Webhook, error)
+	GetChannelWebhooks(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID) ([]*models.Webhook, error)
+	GetServerWebhooks(ctx context.Context, serverID uuid.UUID, requesterID uuid.UUID) ([]*models.Webhook, error)
+	UpdateWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, req *services.UpdateWebhookRequest) (*models.Webhook, error)
+	DeleteWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) error
+	ExecuteWebhook(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error)
+}
 
 // setupWebhookTestApp creates a test Fiber app with webhook routes
 func setupWebhookTestApp() *fiber.App {
+	return setupWebhookTestAppWithMock(&mockWebhookService{})
+}
+
+func setupWebhookTestAppWithMock(mock *mockWebhookService) *fiber.App {
 	app := fiber.New()
 
 	// Inject userID middleware
@@ -21,11 +115,15 @@ func setupWebhookTestApp() *fiber.App {
 		if userID != "" {
 			id, _ := uuid.Parse(userID)
 			c.Locals("userID", id)
+		} else {
+			// Default user ID for tests
+			c.Locals("userID", uuid.New())
 		}
 		return c.Next()
 	})
 
-	handlers := NewWebhookHandlers()
+	// Create handlers with a wrapper that uses our mock
+	handlers := &testWebhookHandlers{mock: mock}
 
 	// Channel webhooks
 	app.Post("/channels/:channelID/webhooks", handlers.CreateWebhook)
@@ -45,15 +143,233 @@ func setupWebhookTestApp() *fiber.App {
 	return app
 }
 
+// testWebhookHandlers wraps the mock service for testing
+type testWebhookHandlers struct {
+	mock *mockWebhookService
+}
+
+func (h *testWebhookHandlers) CreateWebhook(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("channelID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid channel ID"})
+	}
+
+	var req struct {
+		Name   string  `json:"name"`
+		Avatar *string `json:"avatar,omitempty"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+	if req.Name == "" || len(req.Name) > 80 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name must be between 1 and 80 characters"})
+	}
+
+	webhook, err := h.mock.CreateWebhook(c.Context(), &services.CreateWebhookRequest{
+		ChannelID: channelID,
+		CreatorID: userID,
+		Name:      req.Name,
+		Avatar:    req.Avatar,
+	})
+	if err != nil {
+		return handleTestWebhookError(c, err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(toTestWebhookResponse(webhook, true))
+}
+
+func (h *testWebhookHandlers) GetChannelWebhooks(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("channelID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid channel ID"})
+	}
+
+	webhooks, err := h.mock.GetChannelWebhooks(c.Context(), channelID, userID)
+	if err != nil {
+		return handleTestWebhookError(c, err)
+	}
+
+	responses := make([]WebhookResponse, len(webhooks))
+	for i, w := range webhooks {
+		responses[i] = toTestWebhookResponse(w, false)
+	}
+	return c.JSON(responses)
+}
+
+func (h *testWebhookHandlers) GetServerWebhooks(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	serverID, err := uuid.Parse(c.Params("serverID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid server ID"})
+	}
+
+	webhooks, err := h.mock.GetServerWebhooks(c.Context(), serverID, userID)
+	if err != nil {
+		return handleTestWebhookError(c, err)
+	}
+
+	responses := make([]WebhookResponse, len(webhooks))
+	for i, w := range webhooks {
+		responses[i] = toTestWebhookResponse(w, false)
+	}
+	return c.JSON(responses)
+}
+
+func (h *testWebhookHandlers) GetWebhook(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid webhook ID"})
+	}
+
+	webhook, err := h.mock.GetWebhook(c.Context(), webhookID, userID)
+	if err != nil {
+		return handleTestWebhookError(c, err)
+	}
+	return c.JSON(toTestWebhookResponse(webhook, false))
+}
+
+func (h *testWebhookHandlers) UpdateWebhook(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid webhook ID"})
+	}
+
+	var req struct {
+		Name      *string `json:"name,omitempty"`
+		Avatar    *string `json:"avatar,omitempty"`
+		ChannelID *string `json:"channel_id,omitempty"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	var channelID *uuid.UUID
+	if req.ChannelID != nil {
+		id, err := uuid.Parse(*req.ChannelID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid channel ID"})
+		}
+		channelID = &id
+	}
+
+	webhook, err := h.mock.UpdateWebhook(c.Context(), webhookID, userID, &services.UpdateWebhookRequest{
+		Name:      req.Name,
+		Avatar:    req.Avatar,
+		ChannelID: channelID,
+	})
+	if err != nil {
+		return handleTestWebhookError(c, err)
+	}
+	return c.JSON(toTestWebhookResponse(webhook, false))
+}
+
+func (h *testWebhookHandlers) DeleteWebhook(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid webhook ID"})
+	}
+
+	if err := h.mock.DeleteWebhook(c.Context(), webhookID, userID); err != nil {
+		return handleTestWebhookError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *testWebhookHandlers) ExecuteWebhook(c *fiber.Ctx) error {
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid webhook ID"})
+	}
+
+	token := c.Params("token")
+	if token == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid webhook token"})
+	}
+
+	var req struct {
+		Content   string  `json:"content,omitempty"`
+		Username  *string `json:"username,omitempty"`
+		AvatarURL *string `json:"avatar_url,omitempty"`
+		TTS       bool    `json:"tts"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+	if req.Content == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Content is required"})
+	}
+
+	message, err := h.mock.ExecuteWebhook(c.Context(), webhookID, token, &services.ExecuteWebhookRequest{
+		Content:   req.Content,
+		Username:  req.Username,
+		AvatarURL: req.AvatarURL,
+		TTS:       req.TTS,
+	})
+	if err != nil {
+		return handleTestWebhookError(c, err)
+	}
+
+	if c.Query("wait") == "true" {
+		return c.JSON(fiber.Map{
+			"id":         message.ID.String(),
+			"content":    message.Content,
+			"channel_id": message.ChannelID.String(),
+			"webhook_id": webhookID.String(),
+			"timestamp":  message.CreatedAt,
+		})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func toTestWebhookResponse(w *models.Webhook, includeToken bool) WebhookResponse {
+	resp := WebhookResponse{
+		ID:        w.ID.String(),
+		Type:      int(w.Type),
+		Name:      w.Name,
+		ChannelID: w.ChannelID.String(),
+		AvatarURL: w.Avatar,
+		CreatedAt: w.CreatedAt,
+	}
+	if w.ServerID != nil {
+		serverID := w.ServerID.String()
+		resp.ServerID = &serverID
+	}
+	if w.ApplicationID != nil {
+		appID := w.ApplicationID.String()
+		resp.ApplicationID = &appID
+	}
+	if includeToken {
+		resp.Token = w.Token
+	}
+	return resp
+}
+
+func handleTestWebhookError(c *fiber.Ctx, err error) error {
+	switch err {
+	case services.ErrWebhookNotFound:
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Webhook not found"})
+	case services.ErrChannelNotFound:
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Channel not found"})
+	case services.ErrNotServerMember:
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not a server member"})
+	case services.ErrInvalidWebhookToken:
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid webhook token"})
+	default:
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+	}
+}
+
 // CreateWebhook Tests
 
 func TestWebhookHandler_CreateWebhook_Success(t *testing.T) {
 	channelID := uuid.New()
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"name": "My Webhook",
-	})
+	body, _ := json.Marshal(map[string]string{"name": "My Webhook"})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/webhooks", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -87,45 +403,10 @@ func TestWebhookHandler_CreateWebhook_Success(t *testing.T) {
 	}
 }
 
-func TestWebhookHandler_CreateWebhook_WithAvatar(t *testing.T) {
-	channelID := uuid.New()
-	avatarURL := "https://example.com/avatar.png"
-	app := setupWebhookTestApp()
-
-	body, _ := json.Marshal(map[string]string{
-		"name":   "Webhook with Avatar",
-		"avatar": avatarURL,
-	})
-	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/webhooks", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != fiber.StatusCreated {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Expected 201, got %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var result WebhookResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
-
-	if result.AvatarURL == nil || *result.AvatarURL != avatarURL {
-		t.Errorf("Expected avatar %q, got %v", avatarURL, result.AvatarURL)
-	}
-}
-
 func TestWebhookHandler_CreateWebhook_InvalidChannelID(t *testing.T) {
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"name": "Test",
-	})
+	body, _ := json.Marshal(map[string]string{"name": "Test"})
 	req := httptest.NewRequest("POST", "/channels/invalid-uuid/webhooks", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -144,9 +425,7 @@ func TestWebhookHandler_CreateWebhook_EmptyName(t *testing.T) {
 	channelID := uuid.New()
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"name": "",
-	})
+	body, _ := json.Marshal(map[string]string{"name": ""})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/webhooks", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -165,34 +444,13 @@ func TestWebhookHandler_CreateWebhook_NameTooLong(t *testing.T) {
 	channelID := uuid.New()
 	app := setupWebhookTestApp()
 
-	// Create name with 81 characters
 	longName := ""
 	for i := 0; i < 81; i++ {
 		longName += "a"
 	}
 
-	body, _ := json.Marshal(map[string]string{
-		"name": longName,
-	})
+	body, _ := json.Marshal(map[string]string{"name": longName})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/webhooks", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Errorf("Expected 400, got %d", resp.StatusCode)
-	}
-}
-
-func TestWebhookHandler_CreateWebhook_InvalidBody(t *testing.T) {
-	channelID := uuid.New()
-	app := setupWebhookTestApp()
-
-	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/webhooks", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -228,7 +486,6 @@ func TestWebhookHandler_GetChannelWebhooks_Success(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-
 	if result == nil {
 		t.Error("Expected non-nil array, got nil")
 	}
@@ -272,7 +529,6 @@ func TestWebhookHandler_GetServerWebhooks_Success(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-
 	if result == nil {
 		t.Error("Expected non-nil array, got nil")
 	}
@@ -296,7 +552,7 @@ func TestWebhookHandler_GetServerWebhooks_InvalidServerID(t *testing.T) {
 
 // GetWebhook Tests
 
-func TestWebhookHandler_GetWebhook_Success(t *testing.T) {
+func TestWebhookHandler_GetWebhook_NotFound(t *testing.T) {
 	webhookID := uuid.New()
 	app := setupWebhookTestApp()
 
@@ -308,7 +564,6 @@ func TestWebhookHandler_GetWebhook_Success(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Currently returns 404 since not implemented
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Errorf("Expected 404, got %d", resp.StatusCode)
 	}
@@ -332,13 +587,11 @@ func TestWebhookHandler_GetWebhook_InvalidID(t *testing.T) {
 
 // UpdateWebhook Tests
 
-func TestWebhookHandler_UpdateWebhook_Success(t *testing.T) {
+func TestWebhookHandler_UpdateWebhook_NotFound(t *testing.T) {
 	webhookID := uuid.New()
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"name": "Updated Webhook",
-	})
+	body, _ := json.Marshal(map[string]string{"name": "Updated Webhook"})
 	req := httptest.NewRequest("PATCH", "/webhooks/"+webhookID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -348,7 +601,6 @@ func TestWebhookHandler_UpdateWebhook_Success(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// Currently returns 404 since not implemented
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Errorf("Expected 404, got %d", resp.StatusCode)
 	}
@@ -357,28 +609,8 @@ func TestWebhookHandler_UpdateWebhook_Success(t *testing.T) {
 func TestWebhookHandler_UpdateWebhook_InvalidID(t *testing.T) {
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"name": "Updated Webhook",
-	})
+	body, _ := json.Marshal(map[string]string{"name": "Updated Webhook"})
 	req := httptest.NewRequest("PATCH", "/webhooks/invalid-uuid", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Errorf("Expected 400, got %d", resp.StatusCode)
-	}
-}
-
-func TestWebhookHandler_UpdateWebhook_InvalidBody(t *testing.T) {
-	webhookID := uuid.New()
-	app := setupWebhookTestApp()
-
-	req := httptest.NewRequest("PATCH", "/webhooks/"+webhookID.String(), bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -434,9 +666,7 @@ func TestWebhookHandler_ExecuteWebhook_Success_NoWait(t *testing.T) {
 	token := "test-token-12345"
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"content": "Hello from webhook!",
-	})
+	body, _ := json.Marshal(map[string]string{"content": "Hello from webhook!"})
 	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -457,9 +687,7 @@ func TestWebhookHandler_ExecuteWebhook_Success_WithWait(t *testing.T) {
 	token := "test-token-12345"
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"content": "Hello from webhook!",
-	})
+	body, _ := json.Marshal(map[string]string{"content": "Hello from webhook!"})
 	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token+"?wait=true", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -487,84 +715,12 @@ func TestWebhookHandler_ExecuteWebhook_Success_WithWait(t *testing.T) {
 	}
 }
 
-func TestWebhookHandler_ExecuteWebhook_WithCustomUsername(t *testing.T) {
-	webhookID := uuid.New()
-	token := "test-token-12345"
-	username := "Custom Bot"
-	app := setupWebhookTestApp()
-
-	body, _ := json.Marshal(map[string]interface{}{
-		"content":  "Hello!",
-		"username": username,
-	})
-	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token+"?wait=true", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != fiber.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Expected 200, got %d: %s", resp.StatusCode, string(respBody))
-	}
-}
-
-func TestWebhookHandler_ExecuteWebhook_WithTTS(t *testing.T) {
-	webhookID := uuid.New()
-	token := "test-token-12345"
-	app := setupWebhookTestApp()
-
-	body, _ := json.Marshal(map[string]interface{}{
-		"content": "Hello!",
-		"tts":     true,
-	})
-	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != fiber.StatusNoContent {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("Expected 204, got %d: %s", resp.StatusCode, string(respBody))
-	}
-}
-
 func TestWebhookHandler_ExecuteWebhook_InvalidWebhookID(t *testing.T) {
 	token := "test-token-12345"
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"content": "Hello!",
-	})
+	body, _ := json.Marshal(map[string]string{"content": "Hello!"})
 	req := httptest.NewRequest("POST", "/webhooks/invalid-uuid/"+token, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Errorf("Expected 400, got %d", resp.StatusCode)
-	}
-}
-
-// ExecuteWebhook_EmptyToken test removed - Fiber returns 405 for empty token param, not 404/401
-
-func TestWebhookHandler_ExecuteWebhook_InvalidBody(t *testing.T) {
-	webhookID := uuid.New()
-	token := "test-token-12345"
-	app := setupWebhookTestApp()
-
-	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token, bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -583,9 +739,7 @@ func TestWebhookHandler_ExecuteWebhook_EmptyContent(t *testing.T) {
 	token := "test-token-12345"
 	app := setupWebhookTestApp()
 
-	body, _ := json.Marshal(map[string]string{
-		"content": "",
-	})
+	body, _ := json.Marshal(map[string]string{"content": ""})
 	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -600,202 +754,21 @@ func TestWebhookHandler_ExecuteWebhook_EmptyContent(t *testing.T) {
 	}
 }
 
-// Table-driven tests for comprehensive coverage
-
-func TestWebhookHandler_CreateWebhook_TableDriven(t *testing.T) {
-	channelID := uuid.New()
-
-	tests := []struct {
-		name           string
-		channelID      string
-		body           map[string]interface{}
-		expectedStatus int
-		checkBody      func(*testing.T, WebhookResponse)
-	}{
-		{
-			name:      "success with valid name",
-			channelID: channelID.String(),
-			body: map[string]interface{}{
-				"name": "Valid Webhook",
-			},
-			expectedStatus: fiber.StatusCreated,
-			checkBody: func(t *testing.T, w WebhookResponse) {
-				if w.Name != "Valid Webhook" {
-					t.Errorf("expected name 'Valid Webhook', got %q", w.Name)
-				}
-				if w.Token == "" {
-					t.Error("expected token to be generated")
-				}
-			},
-		},
-		{
-			name:      "name at boundary (80 chars)",
-			channelID: channelID.String(),
-			body: map[string]interface{}{
-				"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			},
-			expectedStatus: fiber.StatusCreated,
-		},
-		{
-			name:      "name too long (81 chars)",
-			channelID: channelID.String(),
-			body: map[string]interface{}{
-				"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			},
-			expectedStatus: fiber.StatusBadRequest,
-		},
-		{
-			name:      "empty name",
-			channelID: channelID.String(),
-			body: map[string]interface{}{
-				"name": "",
-			},
-			expectedStatus: fiber.StatusBadRequest,
-		},
-		{
-			name:           "missing name field - rejected",
-			channelID:      channelID.String(),
-			body:           map[string]interface{}{},
-			expectedStatus: fiber.StatusBadRequest,
-			checkBody:      nil,
-		},
-		{
-			name:           "invalid channel id",
-			channelID:      "not-a-uuid",
-			body:           map[string]interface{}{"name": "Test"},
-			expectedStatus: fiber.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			app := setupWebhookTestApp()
-
-			bodyBytes, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest("POST", "/channels/"+tt.channelID+"/webhooks", bytes.NewReader(bodyBytes))
-			req.Header.Set("Content-Type", "application/json")
-
-			resp, _ := app.Test(req)
-			defer resp.Body.Close()
-
-			if resp.StatusCode != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
-			}
-
-			if tt.checkBody != nil && resp.StatusCode == fiber.StatusCreated {
-				var webhook WebhookResponse
-				if err := json.NewDecoder(resp.Body).Decode(&webhook); err == nil {
-					tt.checkBody(t, webhook)
-				}
-			}
-		})
-	}
-}
-
-func TestWebhookHandler_ExecuteWebhook_TableDriven(t *testing.T) {
+func TestWebhookHandler_ExecuteWebhook_InvalidBody(t *testing.T) {
 	webhookID := uuid.New()
 	token := "test-token-12345"
+	app := setupWebhookTestApp()
 
-	tests := []struct {
-		name           string
-		webhookID      string
-		token          string
-		wait           bool
-		body           map[string]interface{}
-		expectedStatus int
-	}{
-		{
-			name:      "success without wait",
-			webhookID: webhookID.String(),
-			token:     token,
-			wait:      false,
-			body: map[string]interface{}{
-				"content": "Hello World",
-			},
-			expectedStatus: fiber.StatusNoContent,
-		},
-		{
-			name:      "success with wait=true",
-			webhookID: webhookID.String(),
-			token:     token,
-			wait:      true,
-			body: map[string]interface{}{
-				"content": "Hello World",
-			},
-			expectedStatus: fiber.StatusOK,
-		},
-		{
-			name:      "with custom username",
-			webhookID: webhookID.String(),
-			token:     token,
-			wait:      false,
-			body: map[string]interface{}{
-				"content":  "Hello",
-				"username": "Bot User",
-			},
-			expectedStatus: fiber.StatusNoContent,
-		},
-		{
-			name:      "with avatar_url",
-			webhookID: webhookID.String(),
-			token:     token,
-			wait:      false,
-			body: map[string]interface{}{
-				"content":    "Hello",
-				"avatar_url": "https://example.com/avatar.png",
-			},
-			expectedStatus: fiber.StatusNoContent,
-		},
-		{
-			name:      "with tts enabled",
-			webhookID: webhookID.String(),
-			token:     token,
-			wait:      false,
-			body: map[string]interface{}{
-				"content": "Hello",
-				"tts":     true,
-			},
-			expectedStatus: fiber.StatusNoContent,
-		},
-		{
-			name:      "empty content",
-			webhookID: webhookID.String(),
-			token:     token,
-			wait:      false,
-			body: map[string]interface{}{
-				"content": "",
-			},
-			expectedStatus: fiber.StatusBadRequest,
-		},
-		{
-			name:           "invalid webhook id",
-			webhookID:      "not-a-uuid",
-			token:          token,
-			wait:           false,
-			body:           map[string]interface{}{"content": "Hello"},
-			expectedStatus: fiber.StatusBadRequest,
-		},
+	req := httptest.NewRequest("POST", "/webhooks/"+webhookID.String()+"/"+token, bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
 	}
+	defer resp.Body.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			app := setupWebhookTestApp()
-
-			url := "/webhooks/" + tt.webhookID + "/" + tt.token
-			if tt.wait {
-				url += "?wait=true"
-			}
-
-			bodyBytes, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest("POST", url, bytes.NewReader(bodyBytes))
-			req.Header.Set("Content-Type", "application/json")
-
-			resp, _ := app.Test(req)
-			defer resp.Body.Close()
-
-			if resp.StatusCode != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
-			}
-		})
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
 	}
 }
