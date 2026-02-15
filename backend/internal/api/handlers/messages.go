@@ -307,17 +307,38 @@ func (h *MessageHandlers) RemoveReaction(c *fiber.Ctx) error {
 }
 
 // GetPinnedMessages returns all pinned messages in a channel
-// Note: Pinned messages retrieval not implemented in service yet
 func (h *MessageHandlers) GetPinnedMessages(c *fiber.Ctx) error {
-	_, err := uuid.Parse(c.Params("channelID"))
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid channel ID",
 		})
 	}
 
-	// TODO: Implement GetPinnedMessages in service
-	return c.JSON([]interface{}{})
+	messages, err := h.messageService.GetPinnedMessages(c.Context(), channelID, userID)
+	if err != nil {
+		if errors.Is(err, services.ErrChannelNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Channel not found",
+			})
+		}
+		if errors.Is(err, services.ErrNotServerMember) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Not a member of this server",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to access this channel",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(messages)
 }
 
 // PinMessage pins a message
@@ -332,6 +353,26 @@ func (h *MessageHandlers) PinMessage(c *fiber.Ctx) error {
 
 	err = h.messageService.PinMessage(c.Context(), messageID, userID)
 	if err != nil {
+		if errors.Is(err, services.ErrMessageNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrChannelNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Channel not found",
+			})
+		}
+		if errors.Is(err, services.ErrNotServerMember) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Not a member of this server",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to access this channel",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -341,17 +382,41 @@ func (h *MessageHandlers) PinMessage(c *fiber.Ctx) error {
 }
 
 // UnpinMessage unpins a message
-// Note: Unpin not implemented in service yet - uses direct update
 func (h *MessageHandlers) UnpinMessage(c *fiber.Ctx) error {
-	_, err := uuid.Parse(c.Params("messageID"))
+	userID := c.Locals("userID").(uuid.UUID)
+	messageID, err := uuid.Parse(c.Params("messageID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid message ID",
 		})
 	}
 
-	// TODO: Implement UnpinMessage in service
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "Not implemented",
-	})
+	err = h.messageService.UnpinMessage(c.Context(), messageID, userID)
+	if err != nil {
+		if errors.Is(err, services.ErrMessageNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Message not found",
+			})
+		}
+		if errors.Is(err, services.ErrChannelNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Channel not found",
+			})
+		}
+		if errors.Is(err, services.ErrNotServerMember) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Not a member of this server",
+			})
+		}
+		if errors.Is(err, services.ErrNoPermission) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "No permission to access this channel",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
 }

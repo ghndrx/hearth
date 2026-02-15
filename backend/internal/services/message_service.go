@@ -334,7 +334,27 @@ func (s *MessageService) PinMessage(ctx context.Context, messageID uuid.UUID, re
 		return ErrMessageNotFound
 	}
 
-	// TODO: Check MANAGE_MESSAGES permission
+	// Check access to the channel
+	channel, err := s.channelRepo.GetByID(ctx, message.ChannelID)
+	if err != nil {
+		return err
+	}
+	if channel == nil {
+		return ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return ErrNotServerMember
+		}
+		// TODO: Check MANAGE_MESSAGES permission
+	} else {
+		// DM channel - check if requester is participant
+		if !isChannelParticipant(channel, requesterID) {
+			return ErrNoPermission
+		}
+	}
 
 	message.Pinned = true
 
@@ -349,6 +369,84 @@ func (s *MessageService) PinMessage(ctx context.Context, messageID uuid.UUID, re
 	})
 
 	return nil
+}
+
+// UnpinMessage unpins a message
+func (s *MessageService) UnpinMessage(ctx context.Context, messageID uuid.UUID, requesterID uuid.UUID) error {
+	message, err := s.repo.GetByID(ctx, messageID)
+	if err != nil {
+		return err
+	}
+	if message == nil {
+		return ErrMessageNotFound
+	}
+
+	// Check access to the channel
+	channel, err := s.channelRepo.GetByID(ctx, message.ChannelID)
+	if err != nil {
+		return err
+	}
+	if channel == nil {
+		return ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return ErrNotServerMember
+		}
+		// TODO: Check MANAGE_MESSAGES permission
+	} else {
+		// DM channel - check if requester is participant
+		if !isChannelParticipant(channel, requesterID) {
+			return ErrNoPermission
+		}
+	}
+
+	if !message.Pinned {
+		return nil // Already unpinned, no-op
+	}
+
+	message.Pinned = false
+
+	if err := s.repo.Update(ctx, message); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("message.unpinned", &MessageUnpinnedEvent{
+		MessageID:  messageID,
+		ChannelID:  message.ChannelID,
+		UnpinnedBy: requesterID,
+	})
+
+	return nil
+}
+
+// GetPinnedMessages retrieves all pinned messages in a channel
+func (s *MessageService) GetPinnedMessages(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID) ([]*models.Message, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Check access
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+		// TODO: Check READ_MESSAGES permission
+	} else {
+		// DM channel - check if requester is participant
+		if !isChannelParticipant(channel, requesterID) {
+			return nil, ErrNoPermission
+		}
+	}
+
+	return s.repo.GetPinnedMessages(ctx, channelID)
 }
 
 // AddReaction adds a reaction to a message
@@ -435,6 +533,12 @@ type MessagePinnedEvent struct {
 	MessageID uuid.UUID
 	ChannelID uuid.UUID
 	PinnedBy  uuid.UUID
+}
+
+type MessageUnpinnedEvent struct {
+	MessageID  uuid.UUID
+	ChannelID  uuid.UUID
+	UnpinnedBy uuid.UUID
 }
 
 type ReactionAddedEvent struct {

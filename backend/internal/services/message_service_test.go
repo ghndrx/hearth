@@ -499,11 +499,12 @@ func TestRemoveReaction_Success(t *testing.T) {
 }
 
 func TestPinMessage_Success(t *testing.T) {
-	service, msgRepo, _, _, _, _, _, _, eventBus := setupMessageService()
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, eventBus := setupMessageService()
 	ctx := context.Background()
 	requesterID := uuid.New()
 	messageID := uuid.New()
 	channelID := uuid.New()
+	serverID := uuid.New()
 
 	existingMessage := &models.Message{
 		ID:        messageID,
@@ -511,11 +512,153 @@ func TestPinMessage_Success(t *testing.T) {
 		Pinned:    false,
 	}
 
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
 	msgRepo.On("GetByID", ctx, messageID).Return(existingMessage, nil)
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
 	msgRepo.On("Update", ctx, mock.AnythingOfType("*models.Message")).Return(nil)
 	eventBus.On("Publish", "message.pinned", mock.AnythingOfType("*services.MessagePinnedEvent")).Return()
 
 	err := service.PinMessage(ctx, messageID, requesterID)
 
 	assert.NoError(t, err)
+}
+
+func TestUnpinMessage_Success(t *testing.T) {
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, eventBus := setupMessageService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	messageID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	existingMessage := &models.Message{
+		ID:        messageID,
+		ChannelID: channelID,
+		Pinned:    true,
+	}
+
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
+	msgRepo.On("GetByID", ctx, messageID).Return(existingMessage, nil)
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
+	msgRepo.On("Update", ctx, mock.AnythingOfType("*models.Message")).Return(nil)
+	eventBus.On("Publish", "message.unpinned", mock.AnythingOfType("*services.MessageUnpinnedEvent")).Return()
+
+	err := service.UnpinMessage(ctx, messageID, requesterID)
+
+	assert.NoError(t, err)
+	assert.False(t, existingMessage.Pinned)
+}
+
+func TestUnpinMessage_NotFound(t *testing.T) {
+	service, msgRepo, _, _, _, _, _, _, _ := setupMessageService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	messageID := uuid.New()
+
+	msgRepo.On("GetByID", ctx, messageID).Return(nil, nil)
+
+	err := service.UnpinMessage(ctx, messageID, requesterID)
+
+	assert.Equal(t, ErrMessageNotFound, err)
+}
+
+func TestUnpinMessage_AlreadyUnpinned(t *testing.T) {
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, _ := setupMessageService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	messageID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	existingMessage := &models.Message{
+		ID:        messageID,
+		ChannelID: channelID,
+		Pinned:    false, // Already unpinned
+	}
+
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
+	msgRepo.On("GetByID", ctx, messageID).Return(existingMessage, nil)
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
+	// No Update or Publish calls expected - it's a no-op
+
+	err := service.UnpinMessage(ctx, messageID, requesterID)
+
+	assert.NoError(t, err)
+}
+
+func TestGetPinnedMessages_Success(t *testing.T) {
+	service, msgRepo, chanRepo, serverRepo, _, _, _, _, _ := setupMessageService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
+	pinnedMessages := []*models.Message{
+		{ID: uuid.New(), ChannelID: channelID, Pinned: true, Content: "Pinned 1"},
+		{ID: uuid.New(), ChannelID: channelID, Pinned: true, Content: "Pinned 2"},
+	}
+
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(&models.Member{}, nil)
+	msgRepo.On("GetPinnedMessages", ctx, channelID).Return(pinnedMessages, nil)
+
+	result, err := service.GetPinnedMessages(ctx, channelID, requesterID)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+}
+
+func TestGetPinnedMessages_ChannelNotFound(t *testing.T) {
+	service, _, chanRepo, _, _, _, _, _, _ := setupMessageService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	channelID := uuid.New()
+
+	chanRepo.On("GetByID", ctx, channelID).Return(nil, nil)
+
+	result, err := service.GetPinnedMessages(ctx, channelID, requesterID)
+
+	assert.Equal(t, ErrChannelNotFound, err)
+	assert.Nil(t, result)
+}
+
+func TestGetPinnedMessages_NotServerMember(t *testing.T) {
+	service, _, chanRepo, serverRepo, _, _, _, _, _ := setupMessageService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	channel := &models.Channel{
+		ID:       channelID,
+		ServerID: &serverID,
+	}
+
+	chanRepo.On("GetByID", ctx, channelID).Return(channel, nil)
+	serverRepo.On("GetMember", ctx, serverID, requesterID).Return(nil, nil)
+
+	result, err := service.GetPinnedMessages(ctx, channelID, requesterID)
+
+	assert.Equal(t, ErrNotServerMember, err)
+	assert.Nil(t, result)
 }
