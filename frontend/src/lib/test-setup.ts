@@ -1,6 +1,41 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Mock Web Animations API for jsdom (used by Svelte transitions)
+// Always override as jsdom's implementation may be incomplete
+Element.prototype.animate = function() {
+	const animation = {
+		finished: Promise.resolve(),
+		cancel: () => {},
+		play: () => {},
+		pause: () => {},
+		reverse: () => {},
+		finish: () => {},
+		onfinish: null as (() => void) | null,
+		oncancel: null as (() => void) | null,
+		playState: 'finished',
+		currentTime: 0,
+		effect: null,
+		timeline: null,
+		startTime: null,
+		playbackRate: 1,
+		pending: false,
+		id: '',
+		addEventListener: () => {},
+		removeEventListener: () => {},
+		dispatchEvent: () => true,
+		commitStyles: () => {},
+		persist: () => {},
+		updatePlaybackRate: () => {},
+		replaceState: () => {}
+	};
+	// Immediately call onfinish callback if set (for Svelte transitions)
+	setTimeout(() => {
+		if (animation.onfinish) animation.onfinish();
+	}, 0);
+	return animation as unknown as Animation;
+};
+
 // Mock SvelteKit's $app modules
 vi.mock('$app/navigation', () => ({
   goto: vi.fn(),

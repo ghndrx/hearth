@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import InviteModal from './InviteModal.svelte';
 
-type InviteModalComponent = { onInviteGenerated: (code: string) => void; $on: (event: string, handler: () => void) => void };
+type InviteModalComponent = { onInviteGenerated: (code: string) => void };
 
 describe('InviteModal', () => {
   const mockClipboard = {
@@ -363,7 +363,7 @@ describe('InviteModal', () => {
   });
 
   it('clears state on close', async () => {
-    const { container, component } = render(InviteModal, {
+    const { container, component, rerender } = render(InviteModal, {
       props: {
         open: true,
         serverName: 'Test Server'
@@ -378,19 +378,20 @@ describe('InviteModal', () => {
       return input?.value !== '';
     });
 
-    // Close modal by dispatching close event (simulating prop change)
-    (component as InviteModalComponent).$on('close', () => {});
+    // Close modal by setting open to false
+    await rerender({
+      open: false,
+      serverName: 'Test Server'
+    });
     
-    // Simulate reopening
-    const { container: newContainer } = render(InviteModal, {
-      props: {
-        open: true,
-        serverName: 'Test Server'
-      }
+    // Reopen - should start fresh
+    await rerender({
+      open: true,
+      serverName: 'Test Server'
     });
 
     // Should generate new invite (input should be empty until onInviteGenerated is called)
-    const newInput = newContainer.querySelector('.invite-input') as HTMLInputElement;
+    const newInput = container.querySelector('.invite-input') as HTMLInputElement;
     expect(newInput?.value).toBe('');
   });
 });

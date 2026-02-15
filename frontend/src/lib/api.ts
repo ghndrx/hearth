@@ -4,14 +4,41 @@ const BASE_URL = browser
 	? (import.meta.env.VITE_API_URL || '/api/v1')
 	: 'http://localhost:8080/api/v1';
 
-let authToken: string | null = null;
+const TOKEN_KEY = 'hearth_token';
+
+// Module-level cache for performance - localStorage is the source of truth
+let authTokenCache: string | null = null;
 
 export function setAuthToken(token: string) {
-	authToken = token;
+	authTokenCache = token;
+	// Also ensure localStorage is in sync (defensive)
+	if (browser && token) {
+		localStorage.setItem(TOKEN_KEY, token);
+	}
 }
 
 export function clearAuthToken() {
-	authToken = null;
+	authTokenCache = null;
+	if (browser) {
+		localStorage.removeItem(TOKEN_KEY);
+	}
+}
+
+// Get the current auth token, preferring cache but falling back to localStorage
+function getAuthToken(): string | null {
+	// Return cache if available
+	if (authTokenCache) {
+		return authTokenCache;
+	}
+	// Fall back to localStorage (handles module re-initialization, HMR, etc.)
+	if (browser) {
+		const stored = localStorage.getItem(TOKEN_KEY);
+		if (stored) {
+			authTokenCache = stored; // Populate cache
+			return stored;
+		}
+	}
+	return null;
 }
 
 interface ApiErrorData {
@@ -45,8 +72,9 @@ async function request<T, B = unknown>(
 		...(options.headers as Record<string, string> || {})
 	};
 	
-	if (authToken) {
-		headers['Authorization'] = `Bearer ${authToken}`;
+	const token = getAuthToken();
+	if (token) {
+		headers['Authorization'] = `Bearer ${token}`;
 	}
 	
 	let requestBody: BodyInit | undefined;
