@@ -110,7 +110,7 @@
   const RECENT_EMOJIS_KEY = 'hearth_recent_emojis';
   const MAX_RECENT_EMOJIS = 36;
 
-  let selectedCategory = 0;
+  let selectedCategory = 1; // Default to Smileys & Emotion (index 1), not Recently Used
   let searchQuery = '';
   let selectedSkinTone = 0;
   let showSkinTonePicker = false;
@@ -125,6 +125,10 @@
       if (stored) {
         recentEmojis = JSON.parse(stored);
         categories[0].emojis = recentEmojis;
+        // If we have recent emojis, switch to that category
+        if (recentEmojis.length > 0) {
+          selectedCategory = 0;
+        }
       }
     } catch {
       recentEmojis = [];
