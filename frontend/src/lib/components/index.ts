@@ -32,6 +32,7 @@ export { default as Avatar } from './Avatar.svelte';
 export { default as UserPopout } from './UserPopout.svelte';
 export { default as UserPanel } from './UserPanel.svelte';
 export { default as PresenceIndicator } from './PresenceIndicator.svelte';
+export { default as UserStatusPicker } from './UserStatusPicker.svelte';
 
 // Settings components
 export { default as SettingsLayout } from './SettingsLayout.svelte';
