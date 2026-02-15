@@ -47,6 +47,11 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		users.Delete("/@me/settings", h.Settings.ResetSettings)
 	}
 	
+	// Read State / Unread
+	if h.ReadState != nil {
+		users.Get("/@me/unread", h.ReadState.GetUnreadSummary)
+	}
+	
 	// Notifications
 	if h.Notifications != nil {
 		notifications := api.Group("/notifications")
@@ -119,6 +124,12 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		servers.Get("/:id/audit-logs/:entryId", h.AuditLog.GetAuditLogEntry)
 	}
 	
+	// Server read state / Ack
+	if h.ReadState != nil {
+		servers.Get("/:id/unread", h.ReadState.GetServerUnread)
+		servers.Post("/:id/ack", h.ReadState.MarkServerAsRead)
+	}
+	
 	// Channels
 	channels := api.Group("/channels")
 	channels.Get("/:id", h.Channels.Get)
@@ -146,6 +157,12 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	// Typing indicator
 	channels.Post("/:id/typing", h.Channels.TriggerTyping)
 	channels.Get("/:id/typing", h.Channels.GetTypingUsers)
+	
+	// Read state / Ack
+	if h.ReadState != nil {
+		channels.Post("/:id/ack", h.ReadState.MarkChannelAsRead)
+		channels.Get("/:id/unread", h.ReadState.GetChannelUnread)
+	}
 	
 	// Channel threads
 	channels.Get("/:id/threads", h.Threads.GetChannelThreads)

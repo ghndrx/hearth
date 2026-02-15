@@ -22,6 +22,7 @@ type Handlers struct {
 	Attachments   *AttachmentHandler
 	Polls         *PollHandler
 	AuditLog      *AuditLogHandler
+	ReadState     *ReadStateHandler
 }
 
 // NewHandlers creates all handlers with dependencies
