@@ -32,7 +32,7 @@ func (r *MessageRepository) Create(ctx context.Context, message *models.Message)
 	if err != nil {
 		return err
 	}
-	
+
 	// Insert mentions
 	if len(message.Mentions) > 0 {
 		for _, userID := range message.Mentions {
@@ -42,7 +42,7 @@ func (r *MessageRepository) Create(ctx context.Context, message *models.Message)
 			)
 		}
 	}
-	
+
 	// Insert attachments
 	if len(message.Attachments) > 0 {
 		for _, att := range message.Attachments {
@@ -52,7 +52,7 @@ func (r *MessageRepository) Create(ctx context.Context, message *models.Message)
 			)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -66,12 +66,12 @@ func (r *MessageRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Load attachments
 	var attachments []models.Attachment
 	_ = r.db.SelectContext(ctx, &attachments, `SELECT * FROM attachments WHERE message_id = $1`, id)
 	message.Attachments = attachments
-	
+
 	return &message, nil
 }
 
@@ -95,7 +95,7 @@ func (r *MessageRepository) GetChannelMessages(ctx context.Context, channelID uu
 	var messages []*models.Message
 	var query string
 	var args []interface{}
-	
+
 	if before != nil {
 		query = `
 			SELECT * FROM messages 
@@ -121,24 +121,24 @@ func (r *MessageRepository) GetChannelMessages(ctx context.Context, channelID uu
 		`
 		args = []interface{}{channelID, limit}
 	}
-	
+
 	err := r.db.SelectContext(ctx, &messages, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Load attachments for all messages
 	if len(messages) > 0 {
 		messageIDs := make([]uuid.UUID, len(messages))
 		for i, m := range messages {
 			messageIDs[i] = m.ID
 		}
-		
+
 		var attachments []models.Attachment
 		query, args, _ := sqlx.In(`SELECT * FROM attachments WHERE message_id IN (?)`, messageIDs)
 		query = r.db.Rebind(query)
 		_ = r.db.SelectContext(ctx, &attachments, query, args...)
-		
+
 		// Map attachments to messages
 		attMap := make(map[uuid.UUID][]models.Attachment)
 		for _, att := range attachments {
@@ -148,7 +148,7 @@ func (r *MessageRepository) GetChannelMessages(ctx context.Context, channelID uu
 			m.Attachments = attMap[m.ID]
 		}
 	}
-	
+
 	return messages, nil
 }
 
@@ -161,29 +161,29 @@ func (r *MessageRepository) GetPinnedMessages(ctx context.Context, channelID uui
 
 func (r *MessageRepository) SearchMessages(ctx context.Context, query string, channelID *uuid.UUID, authorID *uuid.UUID, limit int) ([]*models.Message, error) {
 	var messages []*models.Message
-	
+
 	sqlQuery := `
 		SELECT * FROM messages 
 		WHERE content ILIKE $1
 	`
 	args := []interface{}{"%" + query + "%"}
 	argNum := 2
-	
+
 	if channelID != nil {
 		sqlQuery += ` AND channel_id = $` + string(rune('0'+argNum))
 		args = append(args, *channelID)
 		argNum++
 	}
-	
+
 	if authorID != nil {
 		sqlQuery += ` AND author_id = $` + string(rune('0'+argNum))
 		args = append(args, *authorID)
 		argNum++
 	}
-	
+
 	sqlQuery += ` ORDER BY created_at DESC LIMIT $` + string(rune('0'+argNum))
 	args = append(args, limit)
-	
+
 	err := r.db.SelectContext(ctx, &messages, sqlQuery, args...)
 	return messages, err
 }

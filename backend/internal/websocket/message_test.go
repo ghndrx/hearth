@@ -180,23 +180,23 @@ func TestReadyDataSerialization(t *testing.T) {
 func TestMessageCreateDataSerialization(t *testing.T) {
 	edited := "2024-01-15T10:30:00Z"
 	msg := MessageCreateData{
-		ID:              "msg-123",
-		ChannelID:       "channel-456",
-		GuildID:         "guild-789",
-		Author:          map[string]string{"id": "user-1", "username": "test"},
-		Content:         "Hello, World!",
-		Timestamp:       "2024-01-15T10:00:00Z",
-		EditedTimestamp: &edited,
-		TTS:             false,
-		MentionEveryone: true,
-		Mentions:        []interface{}{},
-		MentionRoles:    []string{"role-1"},
-		Attachments:     []interface{}{},
-		Embeds:          []interface{}{},
-		Reactions:       []interface{}{map[string]interface{}{"emoji": "👍", "count": 5}},
-		Pinned:          true,
-		Type:            0,
-		Flags:           4,
+		ID:                "msg-123",
+		ChannelID:         "channel-456",
+		GuildID:           "guild-789",
+		Author:            map[string]string{"id": "user-1", "username": "test"},
+		Content:           "Hello, World!",
+		Timestamp:         "2024-01-15T10:00:00Z",
+		EditedTimestamp:   &edited,
+		TTS:               false,
+		MentionEveryone:   true,
+		Mentions:          []interface{}{},
+		MentionRoles:      []string{"role-1"},
+		Attachments:       []interface{}{},
+		Embeds:            []interface{}{},
+		Reactions:         []interface{}{map[string]interface{}{"emoji": "👍", "count": 5}},
+		Pinned:            true,
+		Type:              0,
+		Flags:             4,
 		ReferencedMessage: map[string]string{"id": "ref-msg"},
 	}
 
@@ -319,7 +319,7 @@ func TestDispatchEventMarshalError(t *testing.T) {
 
 func TestCompleteMessageFlow(t *testing.T) {
 	// Simulate a complete message flow
-	
+
 	// 1. Server sends HELLO
 	hello := HelloData{HeartbeatInterval: 45000}
 	helloMsg, err := DispatchEvent("", hello, 0)

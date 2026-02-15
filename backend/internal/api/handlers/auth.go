@@ -173,7 +173,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	// Get tokens from request
 	accessToken := extractBearerToken(c)
-	
+
 	var req RefreshRequest
 	_ = c.BodyParser(&req) // Optional body with refresh token
 

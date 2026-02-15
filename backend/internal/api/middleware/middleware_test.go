@@ -175,10 +175,10 @@ func TestRequestID(t *testing.T) {
 	m := NewMiddleware("test-secret")
 
 	tests := []struct {
-		name             string
-		incomingID       string
-		expectSameID     bool
-		expectGenerated  bool
+		name            string
+		incomingID      string
+		expectSameID    bool
+		expectGenerated bool
 	}{
 		{
 			name:            "generates new ID when none provided",

@@ -25,7 +25,7 @@ func TestClient_HandlePresenceUpdate(t *testing.T) {
 	}
 
 	msg := &Message{Op: OpPresenceUpdate}
-	
+
 	// Should not panic even without presence service integration
 	client.handlePresenceUpdate(msg)
 }
@@ -46,13 +46,13 @@ func TestClient_HandleMessagePresenceUpdate(t *testing.T) {
 	}
 
 	msg := Message{
-		Op: OpPresenceUpdate,
+		Op:   OpPresenceUpdate,
 		Data: json.RawMessage(`{"status": "online"}`),
 	}
 	data, _ := json.Marshal(msg)
-	
+
 	client.handleMessage(data)
-	
+
 	assert.Equal(t, int64(1), client.sequence)
 }
 
@@ -112,21 +112,21 @@ func TestClient_ConcurrentSubscriptions(t *testing.T) {
 
 	// Subscribe to multiple servers/channels concurrently
 	done := make(chan bool)
-	
+
 	for i := 0; i < 10; i++ {
 		go func(i int) {
 			serverID := uuid.New()
 			channelID := uuid.New()
-			
+
 			client.SubscribeServer(serverID)
 			client.SubscribeChannel(channelID)
-			
+
 			assert.True(t, client.IsSubscribedToServer(serverID))
 			assert.True(t, client.IsSubscribedToChannel(channelID))
-			
+
 			client.UnsubscribeServer(serverID)
 			client.UnsubscribeChannel(channelID)
-			
+
 			done <- true
 		}(i)
 	}
@@ -153,7 +153,7 @@ func TestClient_SendNilMessage(t *testing.T) {
 
 	// Sending nil should not panic
 	client.Send(nil)
-	
+
 	// Channel should still be empty (nil marshal returns null)
 	select {
 	case msg := <-client.send:
@@ -311,7 +311,7 @@ func TestClient_SubscriptionCleanup(t *testing.T) {
 	// Subscribe to multiple resources
 	servers := make([]uuid.UUID, 5)
 	channels := make([]uuid.UUID, 5)
-	
+
 	for i := 0; i < 5; i++ {
 		servers[i] = uuid.New()
 		channels[i] = uuid.New()
@@ -393,9 +393,9 @@ func TestClient_SequenceIncrement(t *testing.T) {
 		msg := Message{Op: OpHeartbeat}
 		data, _ := json.Marshal(msg)
 		client.handleMessage(data)
-		
+
 		assert.Equal(t, int64(i), client.sequence)
-		
+
 		// Drain the send channel
 		<-client.send
 	}

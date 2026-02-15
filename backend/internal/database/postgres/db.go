@@ -32,12 +32,12 @@ func NewDB(cfg Config) (*sqlx.DB, error) {
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.SSLMode,
 	)
-	
+
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	
+
 	// Configure connection pool
 	if cfg.MaxOpenConns > 0 {
 		db.SetMaxOpenConns(cfg.MaxOpenConns)
@@ -48,7 +48,7 @@ func NewDB(cfg Config) (*sqlx.DB, error) {
 	if cfg.MaxLifetime > 0 {
 		db.SetConnMaxLifetime(cfg.MaxLifetime)
 	}
-	
+
 	return db, nil
 }
 
@@ -58,11 +58,11 @@ func NewDBFromURL(databaseURL string) (*sqlx.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	
+
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
-	
+
 	return db, nil
 }
 
@@ -78,7 +78,7 @@ func Migrate(ctx context.Context, db *sqlx.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
-	
+
 	// Get applied migrations
 	var applied []string
 	err = db.SelectContext(ctx, &applied, `SELECT version FROM schema_migrations ORDER BY version`)
@@ -89,52 +89,52 @@ func Migrate(ctx context.Context, db *sqlx.DB) error {
 	for _, v := range applied {
 		appliedMap[v] = true
 	}
-	
+
 	// Read migration files
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("failed to read migrations directory: %w", err)
 	}
-	
+
 	// Apply pending migrations
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		
+
 		version := entry.Name()
 		if appliedMap[version] {
 			continue
 		}
-		
+
 		content, err := migrationsFS.ReadFile("migrations/" + version)
 		if err != nil {
 			return fmt.Errorf("failed to read migration %s: %w", version, err)
 		}
-		
+
 		// Run migration in transaction
 		tx, err := db.BeginTxx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("failed to begin transaction for %s: %w", version, err)
 		}
-		
+
 		if _, err := tx.ExecContext(ctx, string(content)); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to apply migration %s: %w", version, err)
 		}
-		
+
 		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, version); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to record migration %s: %w", version, err)
 		}
-		
+
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("failed to commit migration %s: %w", version, err)
 		}
-		
+
 		fmt.Printf("Applied migration: %s\n", version)
 	}
-	
+
 	return nil
 }
 

@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	
+
 	"hearth/internal/services"
 )
 
@@ -42,7 +42,7 @@ func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
 			"error": "invalid channel id",
 		})
 	}
-	
+
 	var before, after *uuid.UUID
 	if b := c.Query("before"); b != "" {
 		if id, err := uuid.Parse(b); err == nil {
@@ -54,16 +54,16 @@ func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
 			after = &id
 		}
 	}
-	
+
 	limit := c.QueryInt("limit", 50)
-	
+
 	messages, err := h.messageService.GetMessages(c.Context(), channelID, userID, before, after, limit)
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(messages)
 }
 
@@ -76,26 +76,26 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 			"error": "invalid channel id",
 		})
 	}
-	
+
 	var req struct {
-		Content  string     `json:"content"`
-		ReplyTo  *uuid.UUID `json:"reply_to"`
+		Content string     `json:"content"`
+		ReplyTo *uuid.UUID `json:"reply_to"`
 		// Attachments handled separately via multipart
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
 	}
-	
+
 	message, err := h.messageService.SendMessage(c.Context(), userID, channelID, req.Content, nil, req.ReplyTo)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.Status(fiber.StatusCreated).JSON(message)
 }
 
@@ -114,24 +114,24 @@ func (h *ChannelHandler) EditMessage(c *fiber.Ctx) error {
 			"error": "invalid message id",
 		})
 	}
-	
+
 	var req struct {
 		Content string `json:"content"`
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
 	}
-	
+
 	message, err := h.messageService.EditMessage(c.Context(), messageID, userID, req.Content)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.JSON(message)
 }
 
@@ -144,13 +144,13 @@ func (h *ChannelHandler) DeleteMessage(c *fiber.Ctx) error {
 			"error": "invalid message id",
 		})
 	}
-	
+
 	if err := h.messageService.DeleteMessage(c.Context(), messageID, userID); err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -164,13 +164,13 @@ func (h *ChannelHandler) AddReaction(c *fiber.Ctx) error {
 		})
 	}
 	emoji := c.Params("emoji")
-	
+
 	if err := h.messageService.AddReaction(c.Context(), messageID, userID, emoji); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -184,13 +184,13 @@ func (h *ChannelHandler) RemoveReaction(c *fiber.Ctx) error {
 		})
 	}
 	emoji := c.Params("emoji")
-	
+
 	if err := h.messageService.RemoveReaction(c.Context(), messageID, userID, emoji); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -208,13 +208,13 @@ func (h *ChannelHandler) PinMessage(c *fiber.Ctx) error {
 			"error": "invalid message id",
 		})
 	}
-	
+
 	if err := h.messageService.PinMessage(c.Context(), messageID, userID); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

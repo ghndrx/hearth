@@ -42,11 +42,11 @@ type Webhook struct {
 
 // WebhookMessage represents a message sent via webhook
 type WebhookMessage struct {
-	Content         string   `json:"content,omitempty"`
-	Username        string   `json:"username,omitempty"`
-	AvatarURL       string   `json:"avatar_url,omitempty"`
-	TTS             bool     `json:"tts,omitempty"`
-	Embeds          []Embed  `json:"embeds,omitempty"`
+	Content         string  `json:"content,omitempty"`
+	Username        string  `json:"username,omitempty"`
+	AvatarURL       string  `json:"avatar_url,omitempty"`
+	TTS             bool    `json:"tts,omitempty"`
+	Embeds          []Embed `json:"embeds,omitempty"`
 	AllowedMentions *struct {
 		Parse       []string `json:"parse,omitempty"`
 		Roles       []string `json:"roles,omitempty"`
@@ -75,9 +75,9 @@ func (m *WebhookMessage) Validate() error {
 
 // Common errors
 var (
-	ErrEmptyMessage    = NewValidationError("message must have content, embeds, or files")
-	ErrContentTooLong  = NewValidationError("content must be 2000 characters or less")
-	ErrTooManyEmbeds   = NewValidationError("maximum 10 embeds allowed")
+	ErrEmptyMessage   = NewValidationError("message must have content, embeds, or files")
+	ErrContentTooLong = NewValidationError("content must be 2000 characters or less")
+	ErrTooManyEmbeds  = NewValidationError("maximum 10 embeds allowed")
 )
 
 // ValidationError represents a validation error

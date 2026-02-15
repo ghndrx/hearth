@@ -146,14 +146,14 @@ func (h *UserHandler) UpdateMe(c *fiber.Ctx) error {
 
 // ServerResponse represents a server in API responses
 type ServerResponse struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	IconURL     *string    `json:"icon_url,omitempty"`
-	BannerURL   *string    `json:"banner_url,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	OwnerID     uuid.UUID  `json:"owner_id"`
-	Features    []string   `json:"features"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	IconURL     *string   `json:"icon_url,omitempty"`
+	BannerURL   *string   `json:"banner_url,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	OwnerID     uuid.UUID `json:"owner_id"`
+	Features    []string  `json:"features"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // GetMyServers returns servers the user is a member of
@@ -190,11 +190,11 @@ func (h *UserHandler) GetMyServers(c *fiber.Ctx) error {
 
 // DMChannelResponse represents a DM channel in API responses
 type DMChannelResponse struct {
-	ID            uuid.UUID             `json:"id"`
-	Type          models.ChannelType    `json:"type"`
-	Recipients    []UserResponse        `json:"recipients"`
-	LastMessageID *uuid.UUID            `json:"last_message_id,omitempty"`
-	CreatedAt     time.Time             `json:"created_at"`
+	ID            uuid.UUID          `json:"id"`
+	Type          models.ChannelType `json:"type"`
+	Recipients    []UserResponse     `json:"recipients"`
+	LastMessageID *uuid.UUID         `json:"last_message_id,omitempty"`
+	CreatedAt     time.Time          `json:"created_at"`
 }
 
 // GetMyDMs returns the user's DM channels
@@ -257,10 +257,10 @@ func (h *UserHandler) GetUser(c *fiber.Ctx) error {
 type RelationshipType int
 
 const (
-	RelationshipTypeFriend       RelationshipType = 1
-	RelationshipTypeBlocked      RelationshipType = 2
-	RelationshipTypePendingIn    RelationshipType = 3
-	RelationshipTypePendingOut   RelationshipType = 4
+	RelationshipTypeFriend     RelationshipType = 1
+	RelationshipTypeBlocked    RelationshipType = 2
+	RelationshipTypePendingIn  RelationshipType = 3
+	RelationshipTypePendingOut RelationshipType = 4
 )
 
 // RelationshipResponse represents a relationship in API responses
@@ -283,7 +283,7 @@ func (h *UserHandler) GetRelationships(c *fiber.Ctx) error {
 	}
 
 	relationships := make([]RelationshipResponse, 0, len(friends))
-	
+
 	for _, friend := range friends {
 		relationships = append(relationships, RelationshipResponse{
 			ID:   friend.ID,
@@ -370,7 +370,7 @@ func (h *UserHandler) CreateRelationship(c *fiber.Ctx) error {
 // DeleteRelationship removes a relationship
 func (h *UserHandler) DeleteRelationship(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
-	
+
 	targetParam := c.Params("id")
 	targetID, err := uuid.Parse(targetParam)
 	if err != nil {

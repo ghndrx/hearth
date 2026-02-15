@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	
+
 	"hearth/internal/models"
 )
 
@@ -32,7 +32,7 @@ func (r *ChannelRepository) Create(ctx context.Context, channel *models.Channel)
 	if err != nil {
 		return err
 	}
-	
+
 	// For DM channels, add recipients
 	if len(channel.Recipients) > 0 {
 		for _, userID := range channel.Recipients {
@@ -42,7 +42,7 @@ func (r *ChannelRepository) Create(ctx context.Context, channel *models.Channel)
 			)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -56,7 +56,7 @@ func (r *ChannelRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Load recipients for DM channels
 	if channel.Type == models.ChannelTypeDM || channel.Type == models.ChannelTypeGroupDM {
 		var recipients []uuid.UUID
@@ -64,7 +64,7 @@ func (r *ChannelRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 			`SELECT user_id FROM channel_recipients WHERE channel_id = $1`, id)
 		channel.Recipients = recipients
 	}
-	
+
 	return &channel, nil
 }
 
@@ -110,7 +110,7 @@ func (r *ChannelRepository) GetDMChannel(ctx context.Context, user1ID, user2ID u
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return r.GetByID(ctx, channelID)
 }
 
@@ -126,7 +126,7 @@ func (r *ChannelRepository) GetUserDMs(ctx context.Context, userID uuid.UUID) ([
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Load recipients for each channel
 	for _, ch := range channels {
 		var recipients []uuid.UUID
@@ -134,7 +134,7 @@ func (r *ChannelRepository) GetUserDMs(ctx context.Context, userID uuid.UUID) ([
 			`SELECT user_id FROM channel_recipients WHERE channel_id = $1`, ch.ID)
 		ch.Recipients = recipients
 	}
-	
+
 	return channels, nil
 }
 
@@ -154,7 +154,7 @@ func (r *ChannelRepository) CreateDMChannel(ctx context.Context, user1ID, user2I
 	if existing != nil {
 		return existing, nil
 	}
-	
+
 	// Create new DM channel
 	channel := &models.Channel{
 		ID:          uuid.New(),
@@ -163,11 +163,11 @@ func (r *ChannelRepository) CreateDMChannel(ctx context.Context, user1ID, user2I
 		Recipients:  []uuid.UUID{user1ID, user2ID},
 		CreatedAt:   time.Now(),
 	}
-	
+
 	if err := r.Create(ctx, channel); err != nil {
 		return nil, err
 	}
-	
+
 	return channel, nil
 }
 
@@ -182,10 +182,10 @@ func (r *ChannelRepository) CreateGroupDM(ctx context.Context, ownerID uuid.UUID
 		Recipients:  append([]uuid.UUID{ownerID}, recipients...),
 		CreatedAt:   time.Now(),
 	}
-	
+
 	if err := r.Create(ctx, channel); err != nil {
 		return nil, err
 	}
-	
+
 	return channel, nil
 }

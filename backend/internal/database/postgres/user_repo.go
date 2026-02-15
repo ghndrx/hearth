@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	
+
 	"hearth/internal/models"
 )
 
@@ -164,18 +164,18 @@ func (r *UserRepository) GetPresenceBulk(ctx context.Context, userIDs []uuid.UUI
 	if len(userIDs) == 0 {
 		return make(map[uuid.UUID]*models.Presence), nil
 	}
-	
+
 	query, args, err := sqlx.In(`SELECT * FROM presence WHERE user_id IN (?)`, userIDs)
 	if err != nil {
 		return nil, err
 	}
 	query = r.db.Rebind(query)
-	
+
 	var presences []*models.Presence
 	if err := r.db.SelectContext(ctx, &presences, query, args...); err != nil {
 		return nil, err
 	}
-	
+
 	result := make(map[uuid.UUID]*models.Presence)
 	for _, p := range presences {
 		result[p.UserID] = p

@@ -17,11 +17,11 @@ import (
 
 // MockBackend is a mock storage backend for testing
 type MockBackend struct {
-	files      map[string][]byte
-	publicURL  string
-	uploadErr  error
+	files       map[string][]byte
+	publicURL   string
+	uploadErr   error
 	downloadErr error
-	deleteErr  error
+	deleteErr   error
 }
 
 func NewMockBackend(publicURL string) *MockBackend {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"hearth/internal/models"
 	"github.com/google/uuid"
+	"hearth/internal/models"
 )
 
 // ProviderType identifies the authentication backend

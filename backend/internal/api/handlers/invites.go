@@ -22,8 +22,8 @@ func NewInviteHandlers(inviteService *services.InviteService) *InviteHandlers {
 
 // CreateInviteRequest represents an invite creation request
 type CreateInviteRequest struct {
-	MaxAge    int  `json:"max_age"`    // Seconds, 0 = never expires
-	MaxUses   int  `json:"max_uses"`   // 0 = unlimited
+	MaxAge    int  `json:"max_age"`  // Seconds, 0 = never expires
+	MaxUses   int  `json:"max_uses"` // 0 = unlimited
 	Temporary bool `json:"temporary"`
 }
 

@@ -216,7 +216,7 @@ func TestClient_HandleIdentify(t *testing.T) {
 
 	client := &Client{
 		ID:        uuid.New().String(),
-		UserID:   userID,
+		UserID:    userID,
 		Username:  "testuser",
 		SessionID: sessionID,
 		hub:       hub,
@@ -365,7 +365,7 @@ func TestClient_SendReady(t *testing.T) {
 
 	client := &Client{
 		ID:        uuid.New().String(),
-		UserID:   userID,
+		UserID:    userID,
 		Username:  "testuser",
 		SessionID: sessionID,
 		hub:       hub,

@@ -10,16 +10,16 @@ import (
 type MessageType string
 
 const (
-	MessageTypeDefault            MessageType = "default"
-	MessageTypeReply              MessageType = "reply"
-	MessageTypeRecipientAdd       MessageType = "recipient_add"
-	MessageTypeRecipientRemove    MessageType = "recipient_remove"
-	MessageTypeCall               MessageType = "call"
-	MessageTypeChannelNameChange  MessageType = "channel_name_change"
-	MessageTypeChannelIconChange  MessageType = "channel_icon_change"
-	MessageTypePinned             MessageType = "pinned"
-	MessageTypeMemberJoin         MessageType = "member_join"
-	MessageTypeThreadCreated      MessageType = "thread_created"
+	MessageTypeDefault           MessageType = "default"
+	MessageTypeReply             MessageType = "reply"
+	MessageTypeRecipientAdd      MessageType = "recipient_add"
+	MessageTypeRecipientRemove   MessageType = "recipient_remove"
+	MessageTypeCall              MessageType = "call"
+	MessageTypeChannelNameChange MessageType = "channel_name_change"
+	MessageTypeChannelIconChange MessageType = "channel_icon_change"
+	MessageTypePinned            MessageType = "pinned"
+	MessageTypeMemberJoin        MessageType = "member_join"
+	MessageTypeThreadCreated     MessageType = "thread_created"
 )
 
 // Message represents a chat message
@@ -52,15 +52,15 @@ type Message struct {
 
 // MessageFlags
 const (
-	MessageFlagCrossposted          = 1 << 0
-	MessageFlagIsCrosspost          = 1 << 1
-	MessageFlagSuppressEmbeds       = 1 << 2
-	MessageFlagSourceMsgDeleted     = 1 << 3
-	MessageFlagUrgent               = 1 << 4
-	MessageFlagHasThread            = 1 << 5
-	MessageFlagEphemeral            = 1 << 6
-	MessageFlagLoading              = 1 << 7
-	MessageFlagFailedToMention      = 1 << 8
+	MessageFlagCrossposted      = 1 << 0
+	MessageFlagIsCrosspost      = 1 << 1
+	MessageFlagSuppressEmbeds   = 1 << 2
+	MessageFlagSourceMsgDeleted = 1 << 3
+	MessageFlagUrgent           = 1 << 4
+	MessageFlagHasThread        = 1 << 5
+	MessageFlagEphemeral        = 1 << 6
+	MessageFlagLoading          = 1 << 7
+	MessageFlagFailedToMention  = 1 << 8
 )
 
 // Attachment represents a file attached to a message
@@ -83,19 +83,19 @@ type Attachment struct {
 
 // Embed represents a rich embed in a message
 type Embed struct {
-	Type        string        `json:"type,omitempty"`
-	Title       *string       `json:"title,omitempty"`
-	Description *string       `json:"description,omitempty"`
-	URL         *string       `json:"url,omitempty"`
-	Timestamp   *time.Time    `json:"timestamp,omitempty"`
-	Color       *int          `json:"color,omitempty"`
-	Footer      *EmbedFooter  `json:"footer,omitempty"`
-	Image       *EmbedMedia   `json:"image,omitempty"`
-	Thumbnail   *EmbedMedia   `json:"thumbnail,omitempty"`
-	Video       *EmbedMedia   `json:"video,omitempty"`
+	Type        string         `json:"type,omitempty"`
+	Title       *string        `json:"title,omitempty"`
+	Description *string        `json:"description,omitempty"`
+	URL         *string        `json:"url,omitempty"`
+	Timestamp   *time.Time     `json:"timestamp,omitempty"`
+	Color       *int           `json:"color,omitempty"`
+	Footer      *EmbedFooter   `json:"footer,omitempty"`
+	Image       *EmbedMedia    `json:"image,omitempty"`
+	Thumbnail   *EmbedMedia    `json:"thumbnail,omitempty"`
+	Video       *EmbedMedia    `json:"video,omitempty"`
 	Provider    *EmbedProvider `json:"provider,omitempty"`
-	Author      *EmbedAuthor  `json:"author,omitempty"`
-	Fields      []EmbedField  `json:"fields,omitempty"`
+	Author      *EmbedAuthor   `json:"author,omitempty"`
+	Fields      []EmbedField   `json:"fields,omitempty"`
 }
 
 type EmbedFooter struct {
@@ -104,10 +104,10 @@ type EmbedFooter struct {
 }
 
 type EmbedMedia struct {
-	URL      string `json:"url"`
+	URL      string  `json:"url"`
 	ProxyURL *string `json:"proxy_url,omitempty"`
-	Width    *int   `json:"width,omitempty"`
-	Height   *int   `json:"height,omitempty"`
+	Width    *int    `json:"width,omitempty"`
+	Height   *int    `json:"height,omitempty"`
 }
 
 type EmbedProvider struct {

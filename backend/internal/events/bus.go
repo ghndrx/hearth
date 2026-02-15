@@ -111,9 +111,9 @@ func (b *Bus) HasHandlers(eventType string) bool {
 // Event types
 const (
 	// User events
-	UserCreated   = "user.created"
-	UserUpdated   = "user.updated"
-	UserDeleted   = "user.deleted"
+	UserCreated    = "user.created"
+	UserUpdated    = "user.updated"
+	UserDeleted    = "user.deleted"
 	PresenceUpdate = "presence.updated"
 
 	// Server events

@@ -231,7 +231,7 @@ func TestPinMessage_MessageNotFound(t *testing.T) {
 func TestParseMentions(t *testing.T) {
 	// parseMentions returns nil currently (placeholder)
 	mentions := parseMentions("Hello <@123456> and <@789012>!")
-	
+
 	// Current implementation returns nil
 	assert.Nil(t, mentions)
 }
@@ -244,7 +244,7 @@ func TestIsChannelParticipant(t *testing.T) {
 		channel := &models.Channel{
 			Recipients: []uuid.UUID{userID, otherUserID},
 		}
-		
+
 		assert.True(t, isChannelParticipant(channel, userID))
 	})
 
@@ -252,7 +252,7 @@ func TestIsChannelParticipant(t *testing.T) {
 		channel := &models.Channel{
 			Recipients: []uuid.UUID{otherUserID},
 		}
-		
+
 		assert.False(t, isChannelParticipant(channel, userID))
 	})
 
@@ -260,7 +260,7 @@ func TestIsChannelParticipant(t *testing.T) {
 		channel := &models.Channel{
 			Recipients: []uuid.UUID{},
 		}
-		
+
 		assert.False(t, isChannelParticipant(channel, userID))
 	})
 }

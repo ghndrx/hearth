@@ -18,10 +18,10 @@ import (
 
 // mockAuthService implements the auth operations needed by AuthHandler
 type mockAuthService struct {
-	registerFunc      func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error)
-	loginFunc         func(ctx context.Context, email, password string) (*models.User, *services.TokenResponse, error)
-	refreshTokenFunc  func(ctx context.Context, refreshToken string) (*services.TokenResponse, error)
-	logoutFunc        func(ctx context.Context, accessToken, refreshToken string) error
+	registerFunc     func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error)
+	loginFunc        func(ctx context.Context, email, password string) (*models.User, *services.TokenResponse, error)
+	refreshTokenFunc func(ctx context.Context, refreshToken string) (*services.TokenResponse, error)
+	logoutFunc       func(ctx context.Context, accessToken, refreshToken string) error
 }
 
 // AuthServiceInterface defines what AuthHandler needs from the auth service

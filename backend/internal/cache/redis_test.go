@@ -331,13 +331,18 @@ func TestRedisCachePublishSubscribe(t *testing.T) {
 	pubsub := cache.Subscribe(ctx, "test-channel")
 	defer pubsub.Close()
 
+	// Wait for subscription to be ready (miniredis needs time)
+	time.Sleep(100 * time.Millisecond)
+
 	// Publish
 	testData := map[string]string{"message": "hello"}
 	err := cache.Publish(ctx, "test-channel", testData)
 	require.NoError(t, err)
 
-	// Receive (with timeout)
-	msg, err := pubsub.ReceiveMessage(ctx)
+	// Receive with timeout to avoid hanging
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	msg, err := pubsub.ReceiveMessage(ctxWithTimeout)
 	require.NoError(t, err)
 
 	var received map[string]string

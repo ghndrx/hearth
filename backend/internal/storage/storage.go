@@ -44,11 +44,11 @@ type FileInfo struct {
 
 // Service handles file storage operations
 type Service struct {
-	backend        StorageBackend
-	maxFileSize    int64
-	allowedTypes   map[string]bool
-	blockedTypes   map[string]bool
-	blockedExts    map[string]bool
+	backend      StorageBackend
+	maxFileSize  int64
+	allowedTypes map[string]bool
+	blockedTypes map[string]bool
+	blockedExts  map[string]bool
 }
 
 // NewService creates a new storage service
@@ -59,13 +59,13 @@ func NewService(backend StorageBackend, maxFileSizeMB int64, blockedExts []strin
 	}
 
 	return &Service{
-		backend:      backend,
-		maxFileSize:  maxFileSizeMB * 1024 * 1024,
-		blockedExts:  blocked,
+		backend:     backend,
+		maxFileSize: maxFileSizeMB * 1024 * 1024,
+		blockedExts: blocked,
 		blockedTypes: map[string]bool{
-			"application/x-msdownload": true,
+			"application/x-msdownload":    true,
 			"application/x-msdos-program": true,
-			"application/x-executable": true,
+			"application/x-executable":    true,
 		},
 	}
 }
