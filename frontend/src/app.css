@@ -30,12 +30,40 @@
 	h1, h2, h3, h4, h5, h6 {
 		@apply font-semibold;
 	}
+
+	/* A11Y: Global keyboard focus indicators */
+	/* Using focus-visible to only show on keyboard navigation, not mouse clicks */
+	a:focus-visible,
+	button:focus-visible,
+	[role="button"]:focus-visible,
+	[tabindex]:not([tabindex="-1"]):focus-visible {
+		@apply outline-none ring-2 ring-hearth-500 ring-offset-2 ring-offset-dark-950;
+	}
+
+	/* A11Y: Focus indicator for form inputs */
+	input:focus-visible,
+	textarea:focus-visible,
+	select:focus-visible {
+		@apply outline-none ring-2 ring-hearth-500 border-transparent;
+	}
+
+	/* A11Y: Skip link for keyboard users */
+	.skip-link {
+		@apply absolute -top-10 left-4 z-50 px-4 py-2 bg-hearth-500 text-white rounded-md
+		       transition-all duration-200;
+	}
+	
+	.skip-link:focus {
+		@apply top-4;
+	}
 }
 
 /* Component utilities */
 @layer components {
 	.btn {
-		@apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+		@apply px-4 py-2 rounded-md font-medium transition-colors duration-200
+		       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hearth-500 
+		       focus-visible:ring-offset-2 focus-visible:ring-offset-dark-950;
 	}
 	
 	.btn-primary {
@@ -49,12 +77,15 @@
 	.input {
 		@apply w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded-md 
 		       text-gray-100 placeholder-gray-500
-		       focus:outline-none focus:ring-2 focus:ring-hearth-500 focus:border-transparent;
+		       focus:outline-none focus:ring-2 focus:ring-hearth-500 focus:border-transparent
+		       focus-visible:ring-2 focus-visible:ring-hearth-500 focus-visible:border-transparent;
 	}
 	
 	.sidebar-item {
 		@apply flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer
-		       hover:bg-dark-700 transition-colors duration-150;
+		       hover:bg-dark-700 transition-colors duration-150
+		       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hearth-500 
+		       focus-visible:ring-inset;
 	}
 	
 	.sidebar-item-active {
@@ -64,10 +95,23 @@
 	.channel-item {
 		@apply flex items-center gap-2 px-2 py-1 mx-2 rounded cursor-pointer
 		       text-gray-400 hover:text-gray-200 hover:bg-dark-700
-		       transition-colors duration-150;
+		       transition-colors duration-150
+		       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hearth-500 
+		       focus-visible:ring-inset focus-visible:text-gray-100;
 	}
 	
 	.channel-item-active {
 		@apply bg-dark-600 text-white;
+	}
+
+	/* A11Y: Focus indicator utilities for custom components */
+	.focus-ring {
+		@apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hearth-500 
+		       focus-visible:ring-offset-2 focus-visible:ring-offset-dark-950;
+	}
+
+	.focus-ring-inset {
+		@apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hearth-500 
+		       focus-visible:ring-inset;
 	}
 }
