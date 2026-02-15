@@ -186,6 +186,7 @@
 					{message}
 					grouped={shouldGroupWithPrevious(i)}
 					isOwn={message.author_id === $user?.id}
+					on:reply={handleReply}
 				/>
 			{/each}
 		{:else}
