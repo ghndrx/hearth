@@ -1,9 +1,11 @@
 package events
 
 import (
+	"context"
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Event represents a domain event
@@ -74,9 +76,11 @@ func (b *Bus) unsubscribeByID(eventType string, id uint64) {
 // Publish dispatches an event to all registered handlers
 func (b *Bus) Publish(eventType string, data interface{}) {
 	b.mu.RLock()
-	entries := b.handlers[eventType]
-	// Also get wildcard handlers
-	wildcardEntries := b.handlers["*"]
+	// Copy both handler lists under single lock to avoid race condition
+	entries := make([]handlerEntry, len(b.handlers[eventType]))
+	copy(entries, b.handlers[eventType])
+	wildcardEntries := make([]handlerEntry, len(b.handlers["*"]))
+	copy(wildcardEntries, b.handlers["*"])
 	b.mu.RUnlock()
 
 	event := Event{
@@ -92,12 +96,25 @@ func (b *Bus) Publish(eventType string, data interface{}) {
 	for _, entry := range allEntries {
 		// Run handlers asynchronously to avoid blocking
 		go func(h Handler) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("Event handler panic recovered: %v", r)
-				}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Event handler panic recovered: %v", r)
+					}
+				}()
+				h(event)
 			}()
-			h(event)
+
+			select {
+			case <-done:
+			case <-ctx.Done():
+				log.Printf("Event handler timed out for event: %s", eventType)
+			}
 		}(entry.handler)
 	}
 }
@@ -105,9 +122,11 @@ func (b *Bus) Publish(eventType string, data interface{}) {
 // PublishSync dispatches an event synchronously (blocks until all handlers complete)
 func (b *Bus) PublishSync(eventType string, data interface{}) {
 	b.mu.RLock()
-	entries := b.handlers[eventType]
-	// Also get wildcard handlers
-	wildcardEntries := b.handlers["*"]
+	// Copy both handler lists under single lock to avoid race condition
+	entries := make([]handlerEntry, len(b.handlers[eventType]))
+	copy(entries, b.handlers[eventType])
+	wildcardEntries := make([]handlerEntry, len(b.handlers["*"]))
+	copy(wildcardEntries, b.handlers["*"])
 	b.mu.RUnlock()
 
 	event := Event{
@@ -125,12 +144,25 @@ func (b *Bus) PublishSync(eventType string, data interface{}) {
 		wg.Add(1)
 		go func(h Handler) {
 			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("Event handler panic recovered: %v", r)
-				}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Event handler panic recovered: %v", r)
+					}
+				}()
+				h(event)
 			}()
-			h(event)
+
+			select {
+			case <-done:
+			case <-ctx.Done():
+				log.Printf("Event handler timed out for event: %s", eventType)
+			}
 		}(entry.handler)
 	}
 	wg.Wait()

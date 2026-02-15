@@ -13,6 +13,7 @@
 	const dispatch = createEventDispatcher<{
 		close: void;
 		invite: { code: string; maxUses: number; expiresIn: number };
+		generateInvite: { maxUses: number; expiresIn: number };
 	}>();
 
 	// Invite settings
@@ -23,6 +24,8 @@
 	let isGenerating = false;
 	let isCopied = false;
 	let copyTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	let inviteGenerationError: string | null = null;
+	let copyError: string | null = null;
 
 	const expirationOptions = [
 		{ label: '30 minutes', value: 1800 },
@@ -47,22 +50,30 @@
 	async function generateInvite() {
 		if (isGenerating) return;
 		isGenerating = true;
+		inviteGenerationError = null;
 		try {
-			// Generate a random invite code (in production, this would be an API call)
-			const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-			inviteCode = Array.from({ length: 8 }, () =>
-				characters.charAt(Math.floor(Math.random() * characters.length))
-			).join('');
-			inviteLink = `${baseUrl}/invite/${inviteCode}`;
-
-			dispatch('invite', { code: inviteCode, maxUses, expiresIn });
+			// Dispatch event to parent to generate invite via API
+			// Parent should call API and then call onInviteGenerated with the result
+			dispatch('generateInvite', { maxUses, expiresIn });
+		} catch (err) {
+			inviteGenerationError = 'Failed to generate invite. Please try again.';
+			console.error('Failed to generate invite:', err);
 		} finally {
 			isGenerating = false;
 		}
 	}
 
+	// Called by parent component when invite is generated via API
+	export function onInviteGenerated(code: string) {
+		inviteCode = code;
+		inviteLink = `${baseUrl}/invite/${code}`;
+		isGenerating = false;
+		inviteGenerationError = null;
+	}
+
 	async function copyInviteLink() {
 		if (!inviteLink) return;
+		copyError = null;
 		try {
 			await navigator.clipboard.writeText(inviteLink);
 			isCopied = true;
@@ -75,6 +86,7 @@
 				copyTimeoutId = null;
 			}, 2000);
 		} catch (err) {
+			copyError = 'Failed to copy to clipboard. Please copy manually.';
 			console.error('Failed to copy invite link:', err);
 		}
 	}
@@ -85,6 +97,12 @@
 			clearTimeout(copyTimeoutId);
 		}
 	});
+
+	// Clear errors when modal opens/closes
+	$: if (open !== lastOpenState) {
+		inviteGenerationError = null;
+		copyError = null;
+	}
 
 	function handleClose() {
 		inviteCode = '';
@@ -113,22 +131,35 @@
 		{/if}
 
 		<div class="invite-link-section">
-			<label class="label">Send a server invite link to a friend</label>
+			<label class="label" for="invite-link-input">Send a server invite link to a friend</label>
 			<div class="link-container">
 				<input
+					id="invite-link-input"
 					type="text"
 					class="invite-input"
 					value={inviteLink}
 					readonly
 					placeholder={isGenerating ? 'Generating...' : ''}
+					aria-label="Invite link"
+					aria-describedby={inviteGenerationError ? 'invite-error' : copyError ? 'copy-error' : undefined}
 				/>
 				<Button
 					variant={isCopied ? 'secondary' : 'primary'}
 					on:click={copyInviteLink}
 					disabled={!inviteLink}
+					aria-label={isCopied ? 'Link copied to clipboard' : 'Copy invite link to clipboard'}
 				>
 					{isCopied ? 'Copied' : 'Copy'}
 				</Button>
+			</div>
+			{#if inviteGenerationError}
+				<div id="invite-error" class="error-message" role="alert">{inviteGenerationError}</div>
+			{/if}
+			{#if copyError}
+				<div id="copy-error" class="error-message" role="alert">{copyError}</div>
+			{/if}
+			<div aria-live="polite" class="sr-only">
+				{#if isCopied}Link copied to clipboard{/if}
 			</div>
 		</div>
 
@@ -314,5 +345,23 @@
 	.expiry-note {
 		font-size: var(--font-size-xs, 12px);
 		color: var(--text-faint, #6d6f78);
+	}
+
+	.error-message {
+		font-size: var(--font-size-xs, 12px);
+		color: var(--text-danger, #f23f43);
+		margin-top: var(--spacing-xs, 4px);
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
 	}
 </style>

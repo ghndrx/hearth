@@ -4,6 +4,7 @@
   export let disabled = false;
   export let type: 'button' | 'submit' | 'reset' = 'button';
   export let fullWidth = false;
+  export let ariaLabel: string | undefined = undefined;
 </script>
 
 <button
@@ -18,6 +19,7 @@
   class:md={size === 'md'}
   class:lg={size === 'lg'}
   class:full-width={fullWidth}
+  aria-label={ariaLabel}
   on:click
 >
   <slot />
