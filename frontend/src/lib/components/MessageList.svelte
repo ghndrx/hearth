@@ -5,7 +5,6 @@
 	import { user } from '$lib/stores/auth';
 	import { currentServer } from '$lib/stores/servers';
 	import Message from './Message.svelte';
-	import MessageInput from './MessageInput.svelte';
 
 	let messageContainer: HTMLElement;
 	let shouldScroll = true;
@@ -178,9 +177,4 @@
 			</div>
 		{/if}
 	</div>
-
-	<!-- Message Input -->
-	{#if $currentChannel}
-		<MessageInput />
-	{/if}
 </div>
