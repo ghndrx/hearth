@@ -1124,3 +1124,525 @@ func channelTimePtr(t time.Time) *time.Time {
 	return &t
 }
 
+// mockChannelCRUDService mocks ChannelService for channel CRUD tests
+type mockChannelCRUDService struct {
+	getChannelFunc    func(ctx context.Context, id uuid.UUID) (*models.Channel, error)
+	updateChannelFunc func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ChannelUpdate) (*models.Channel, error)
+	deleteChannelFunc func(ctx context.Context, id, requesterID uuid.UUID) error
+}
+
+func (m *mockChannelCRUDService) GetChannel(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+	if m.getChannelFunc != nil {
+		return m.getChannelFunc(ctx, id)
+	}
+	return nil, nil
+}
+
+func (m *mockChannelCRUDService) UpdateChannel(ctx context.Context, id, requesterID uuid.UUID, updates *models.ChannelUpdate) (*models.Channel, error) {
+	if m.updateChannelFunc != nil {
+		return m.updateChannelFunc(ctx, id, requesterID, updates)
+	}
+	return nil, nil
+}
+
+func (m *mockChannelCRUDService) DeleteChannel(ctx context.Context, id, requesterID uuid.UUID) error {
+	if m.deleteChannelFunc != nil {
+		return m.deleteChannelFunc(ctx, id, requesterID)
+	}
+	return nil
+}
+
+// setupChannelCRUDTestApp creates a test Fiber app with channel CRUD routes
+func setupChannelCRUDTestApp(channelSvc *mockChannelCRUDService) *fiber.App {
+	app := fiber.New()
+
+	// Inject userID middleware
+	app.Use(func(c *fiber.Ctx) error {
+		userID := c.Get("X-User-ID")
+		if userID != "" {
+			id, _ := uuid.Parse(userID)
+			c.Locals("userID", id)
+		}
+		return c.Next()
+	})
+
+	// Get Channel
+	app.Get("/channels/:id", func(c *fiber.Ctx) error {
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		channel, err := channelSvc.GetChannel(c.Context(), channelID)
+		if err != nil {
+			if err == services.ErrChannelNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get channel",
+			})
+		}
+
+		return c.JSON(channel)
+	})
+
+	// Update Channel
+	app.Patch("/channels/:id", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		var req struct {
+			Name        *string `json:"name"`
+			Topic       *string `json:"topic"`
+			Position    *int    `json:"position"`
+			Slowmode    *int    `json:"slowmode"`
+			NSFW        *bool   `json:"nsfw"`
+			E2EEEnabled *bool   `json:"e2ee_enabled"`
+		}
+
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid request body",
+			})
+		}
+
+		updates := &models.ChannelUpdate{
+			Name:        req.Name,
+			Topic:       req.Topic,
+			Position:    req.Position,
+			Slowmode:    req.Slowmode,
+			NSFW:        req.NSFW,
+			E2EEEnabled: req.E2EEEnabled,
+		}
+
+		channel, err := channelSvc.UpdateChannel(c.Context(), channelID, userID, updates)
+		if err != nil {
+			switch err {
+			case services.ErrChannelNotFound:
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			case services.ErrNotServerMember:
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "not a server member",
+				})
+			default:
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "failed to update channel",
+				})
+			}
+		}
+
+		return c.JSON(channel)
+	})
+
+	// Delete Channel
+	app.Delete("/channels/:id", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		if err := channelSvc.DeleteChannel(c.Context(), channelID, userID); err != nil {
+			switch err {
+			case services.ErrChannelNotFound:
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			case services.ErrNotServerMember:
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "not a server member",
+				})
+			case services.ErrCannotDeleteDM:
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "cannot delete DM channels",
+				})
+			default:
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "failed to delete channel",
+				})
+			}
+		}
+
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	return app
+}
+
+// Get Channel Tests
+
+func TestChannelHandler_Get_Success(t *testing.T) {
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	expectedChannel := &models.Channel{
+		ID:        channelID,
+		ServerID:  &serverID,
+		Name:      "general",
+		Type:      models.ChannelTypeText,
+		Position:  0,
+		CreatedAt: time.Now(),
+	}
+
+	svc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			if id == channelID {
+				return expectedChannel, nil
+			}
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String(), nil)
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	var channel models.Channel
+	if err := json.NewDecoder(resp.Body).Decode(&channel); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if channel.ID != channelID {
+		t.Errorf("Expected channel ID %s, got %s", channelID, channel.ID)
+	}
+	if channel.Name != "general" {
+		t.Errorf("Expected channel name 'general', got '%s'", channel.Name)
+	}
+}
+
+func TestChannelHandler_Get_NotFound(t *testing.T) {
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		getChannelFunc: func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String(), nil)
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Get_InvalidID(t *testing.T) {
+	svc := &mockChannelCRUDService{}
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/invalid-uuid", nil)
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// Update Channel Tests
+
+func TestChannelHandler_Update_Success(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+	newName := "updated-channel"
+	newTopic := "Updated topic"
+
+	svc := &mockChannelCRUDService{
+		updateChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ChannelUpdate) (*models.Channel, error) {
+			return &models.Channel{
+				ID:        channelID,
+				ServerID:  &serverID,
+				Name:      *updates.Name,
+				Topic:     *updates.Topic,
+				Type:      models.ChannelTypeText,
+				CreatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	body := map[string]interface{}{
+		"name":  newName,
+		"topic": newTopic,
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected 200, got %d: %s", resp.StatusCode, string(body))
+	}
+
+	var channel models.Channel
+	if err := json.NewDecoder(resp.Body).Decode(&channel); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if channel.Name != newName {
+		t.Errorf("Expected name '%s', got '%s'", newName, channel.Name)
+	}
+	if channel.Topic != newTopic {
+		t.Errorf("Expected topic '%s', got '%s'", newTopic, channel.Topic)
+	}
+}
+
+func TestChannelHandler_Update_NotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		updateChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ChannelUpdate) (*models.Channel, error) {
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	body := map[string]interface{}{
+		"name": "new-name",
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Update_NotServerMember(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		updateChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ChannelUpdate) (*models.Channel, error) {
+			return nil, services.ErrNotServerMember
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	body := map[string]interface{}{
+		"name": "new-name",
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String(), bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("Expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Update_InvalidBody(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{}
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String(), bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// Delete Channel Tests
+
+func TestChannelHandler_Delete_Success(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		deleteChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID) error {
+			return nil
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Errorf("Expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Delete_NotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		deleteChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID) error {
+			return services.ErrChannelNotFound
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Delete_NotServerMember(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		deleteChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID) error {
+			return services.ErrNotServerMember
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("Expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Delete_CannotDeleteDM(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelCRUDService{
+		deleteChannelFunc: func(ctx context.Context, id, requesterID uuid.UUID) error {
+			return services.ErrCannotDeleteDM
+		},
+	}
+
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_Delete_InvalidID(t *testing.T) {
+	userID := uuid.New()
+
+	svc := &mockChannelCRUDService{}
+	app := setupChannelCRUDTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/invalid-uuid", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}

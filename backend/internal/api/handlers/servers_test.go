@@ -18,21 +18,22 @@ import (
 
 // Mock ServerService
 type mockServerService struct {
-	createServerFunc  func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error)
-	getServerFunc     func(ctx context.Context, id uuid.UUID) (*models.Server, error)
-	updateServerFunc  func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ServerUpdate) (*models.Server, error)
-	deleteServerFunc  func(ctx context.Context, id, requesterID uuid.UUID) error
-	getMembersFunc    func(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error)
-	getMemberFunc     func(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error)
-	updateMemberFunc  func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, nickname *string, roles []uuid.UUID) (*models.Member, error)
-	kickMemberFunc    func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string) error
-	leaveServerFunc   func(ctx context.Context, serverID, userID uuid.UUID) error
-	getBansFunc       func(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error)
-	banMemberFunc     func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string, deleteDays int) error
-	unbanMemberFunc   func(ctx context.Context, serverID, requesterID, targetID uuid.UUID) error
-	getInvitesFunc    func(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error)
-	getChannelsFunc   func(ctx context.Context, serverID uuid.UUID) ([]*models.Channel, error)
-	createInviteFunc  func(ctx context.Context, serverID, channelID, creatorID uuid.UUID, maxUses int, expiresIn *time.Duration) (*models.Invite, error)
+	createServerFunc       func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error)
+	getServerFunc          func(ctx context.Context, id uuid.UUID) (*models.Server, error)
+	updateServerFunc       func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ServerUpdate) (*models.Server, error)
+	deleteServerFunc       func(ctx context.Context, id, requesterID uuid.UUID) error
+	transferOwnershipFunc  func(ctx context.Context, serverID, requesterID, newOwnerID uuid.UUID) (*models.Server, error)
+	getMembersFunc         func(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error)
+	getMemberFunc          func(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error)
+	updateMemberFunc       func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, nickname *string, roles []uuid.UUID) (*models.Member, error)
+	kickMemberFunc         func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string) error
+	leaveServerFunc        func(ctx context.Context, serverID, userID uuid.UUID) error
+	getBansFunc            func(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error)
+	banMemberFunc          func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string, deleteDays int) error
+	unbanMemberFunc        func(ctx context.Context, serverID, requesterID, targetID uuid.UUID) error
+	getInvitesFunc         func(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error)
+	getChannelsFunc        func(ctx context.Context, serverID uuid.UUID) ([]*models.Channel, error)
+	createInviteFunc       func(ctx context.Context, serverID, channelID, creatorID uuid.UUID, maxUses int, expiresIn *time.Duration) (*models.Invite, error)
 }
 
 func (m *mockServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error) {
@@ -61,6 +62,13 @@ func (m *mockServerService) DeleteServer(ctx context.Context, id, requesterID uu
 		return m.deleteServerFunc(ctx, id, requesterID)
 	}
 	return nil
+}
+
+func (m *mockServerService) TransferOwnership(ctx context.Context, serverID, requesterID, newOwnerID uuid.UUID) (*models.Server, error) {
+	if m.transferOwnershipFunc != nil {
+		return m.transferOwnershipFunc(ctx, serverID, requesterID, newOwnerID)
+	}
+	return nil, nil
 }
 
 func (m *mockServerService) GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error) {
@@ -219,6 +227,7 @@ func setupServerTestApp(serverSvc *mockServerService, channelSvc *mockChannelSer
 	servers.Get("/:id", h.Get)
 	servers.Patch("/:id", h.Update)
 	servers.Delete("/:id", h.Delete)
+	servers.Post("/:id/transfer-ownership", h.TransferOwnership)
 	servers.Get("/:id/members", h.GetMembers)
 	// @me route must come before :userId to avoid being matched as a UUID
 	servers.Delete("/:id/members/@me", h.Leave)

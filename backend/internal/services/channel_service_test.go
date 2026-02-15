@@ -97,6 +97,11 @@ func (m *MockServerRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
+func (m *MockServerRepository) TransferOwnership(ctx context.Context, serverID, newOwnerID uuid.UUID) error {
+	args := m.Called(ctx, serverID, newOwnerID)
+	return args.Error(0)
+}
+
 func (m *MockServerRepository) GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error) {
 	args := m.Called(ctx, serverID, userID)
 	if args.Get(0) == nil {

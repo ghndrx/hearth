@@ -198,6 +198,67 @@ func (h *ServerHandler) Delete(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// TransferOwnership transfers server ownership to another member
+func (h *ServerHandler) TransferOwnership(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid server id",
+		})
+	}
+
+	var req struct {
+		NewOwnerID string `json:"new_owner_id"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	newOwnerID, err := uuid.Parse(req.NewOwnerID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid new_owner_id",
+		})
+	}
+
+	server, err := h.serverService.TransferOwnership(c.Context(), id, userID, newOwnerID)
+	if err != nil {
+		switch err {
+		case services.ErrServerNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "server not found",
+			})
+		case services.ErrNotServerOwner:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "only server owner can transfer ownership",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "new owner must be a server member",
+			})
+		case services.ErrSelfAction:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "cannot transfer ownership to yourself",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+	}
+
+	return c.JSON(server)
+}
+
 // GetMembers returns server members
 func (h *ServerHandler) GetMembers(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))

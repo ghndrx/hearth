@@ -375,6 +375,151 @@ func TestDeleteServer_NotFound(t *testing.T) {
 }
 
 // ============================================
+// TransferOwnership Tests
+// ============================================
+
+func TestTransferOwnership_Success(t *testing.T) {
+	service, serverRepo, _, _, _, eventBus := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+	newOwnerID := uuid.New()
+
+	existingServer := &models.Server{
+		ID:      serverID,
+		Name:    "Test Server",
+		OwnerID: ownerID,
+	}
+
+	newOwnerMember := &models.Member{
+		UserID:   newOwnerID,
+		ServerID: serverID,
+	}
+
+	serverRepo.On("GetByID", ctx, serverID).Return(existingServer, nil)
+	serverRepo.On("GetMember", ctx, serverID, newOwnerID).Return(newOwnerMember, nil)
+	serverRepo.On("TransferOwnership", ctx, serverID, newOwnerID).Return(nil)
+	eventBus.On("Publish", "server.ownership_transferred", mock.Anything).Return()
+
+	server, err := service.TransferOwnership(ctx, serverID, ownerID, newOwnerID)
+
+	require.NoError(t, err)
+	assert.Equal(t, newOwnerID, server.OwnerID)
+	serverRepo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestTransferOwnership_NotOwner(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+	requesterID := uuid.New() // Not the owner
+	newOwnerID := uuid.New()
+
+	existingServer := &models.Server{
+		ID:      serverID,
+		Name:    "Test Server",
+		OwnerID: ownerID,
+	}
+
+	serverRepo.On("GetByID", ctx, serverID).Return(existingServer, nil)
+
+	server, err := service.TransferOwnership(ctx, serverID, requesterID, newOwnerID)
+
+	assert.Nil(t, server)
+	assert.ErrorIs(t, err, ErrNotServerOwner)
+}
+
+func TestTransferOwnership_ServerNotFound(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	requesterID := uuid.New()
+	newOwnerID := uuid.New()
+
+	serverRepo.On("GetByID", ctx, serverID).Return(nil, nil)
+
+	server, err := service.TransferOwnership(ctx, serverID, requesterID, newOwnerID)
+
+	assert.Nil(t, server)
+	assert.ErrorIs(t, err, ErrServerNotFound)
+}
+
+func TestTransferOwnership_SelfAction(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	existingServer := &models.Server{
+		ID:      serverID,
+		Name:    "Test Server",
+		OwnerID: ownerID,
+	}
+
+	serverRepo.On("GetByID", ctx, serverID).Return(existingServer, nil)
+
+	// Try to transfer to self
+	server, err := service.TransferOwnership(ctx, serverID, ownerID, ownerID)
+
+	assert.Nil(t, server)
+	assert.ErrorIs(t, err, ErrSelfAction)
+}
+
+func TestTransferOwnership_NewOwnerNotMember(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+	newOwnerID := uuid.New()
+
+	existingServer := &models.Server{
+		ID:      serverID,
+		Name:    "Test Server",
+		OwnerID: ownerID,
+	}
+
+	serverRepo.On("GetByID", ctx, serverID).Return(existingServer, nil)
+	serverRepo.On("GetMember", ctx, serverID, newOwnerID).Return(nil, nil)
+
+	server, err := service.TransferOwnership(ctx, serverID, ownerID, newOwnerID)
+
+	assert.Nil(t, server)
+	assert.ErrorIs(t, err, ErrNotServerMember)
+}
+
+func TestTransferOwnership_DatabaseError(t *testing.T) {
+	service, serverRepo, _, _, _, _ := newTestServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+	newOwnerID := uuid.New()
+	dbErr := errors.New("database error")
+
+	existingServer := &models.Server{
+		ID:      serverID,
+		Name:    "Test Server",
+		OwnerID: ownerID,
+	}
+
+	newOwnerMember := &models.Member{
+		UserID:   newOwnerID,
+		ServerID: serverID,
+	}
+
+	serverRepo.On("GetByID", ctx, serverID).Return(existingServer, nil)
+	serverRepo.On("GetMember", ctx, serverID, newOwnerID).Return(newOwnerMember, nil)
+	serverRepo.On("TransferOwnership", ctx, serverID, newOwnerID).Return(dbErr)
+
+	server, err := service.TransferOwnership(ctx, serverID, ownerID, newOwnerID)
+
+	assert.Nil(t, server)
+	assert.Error(t, err)
+	assert.Equal(t, dbErr, err)
+}
+
+// ============================================
 // JoinServer Tests
 // ============================================
 

@@ -571,6 +571,12 @@ type MemberKickedEvent struct {
 	Reason   string
 }
 
+type OwnershipTransferredEvent struct {
+	ServerID   uuid.UUID
+	OldOwnerID uuid.UUID
+	NewOwnerID uuid.UUID
+}
+
 // MemberBannedEvent and MemberJoinedEvent are defined in invite_service.go
 
 // GetUserServers retrieves all servers a user is a member of

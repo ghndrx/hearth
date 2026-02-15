@@ -49,6 +49,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	servers.Get("/:id", h.Servers.Get)
 	servers.Patch("/:id", h.Servers.Update)
 	servers.Delete("/:id", h.Servers.Delete)
+	servers.Post("/:id/transfer-ownership", h.Servers.TransferOwnership)
 	
 	// Server members
 	servers.Get("/:id/members", h.Servers.GetMembers)
@@ -108,6 +109,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	
 	// Channel invites
 	channels.Post("/:id/invites", h.Channels.CreateInvite)
+	
+	// Search
+	search := api.Group("/search")
+	search.Get("/", h.Search.SearchAll)
+	search.Get("/messages", h.Search.SearchMessages)
+	search.Get("/users", h.Search.SearchUsers)
+	search.Get("/channels", h.Search.SearchChannels)
 	
 	// Voice
 	voice := api.Group("/voice")
