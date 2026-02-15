@@ -24,6 +24,7 @@ export { default as MessageList } from './MessageList.svelte';
 export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as Reactions } from './Reactions.svelte';
 export { default as EmojiPicker } from './EmojiPicker.svelte';
+export { default as GifPicker } from './GifPicker.svelte';
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte';
 export { default as ThreadView } from './ThreadView.svelte';
 
@@ -39,6 +40,7 @@ export { default as SettingsLayout } from './SettingsLayout.svelte';
 export { default as UserSettings } from './UserSettings.svelte';
 export { default as ServerSettings } from './ServerSettings.svelte';
 export { default as NotificationSettings } from './NotificationSettings.svelte';
+export { default as RoleEditor } from './RoleEditor.svelte';
 
 // Modal components
 export { default as Modal } from './Modal.svelte';

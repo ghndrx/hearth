@@ -3,6 +3,7 @@
 	import { currentChannel } from '$lib/stores/channels';
 	import { sendTypingIndicator } from '$lib/stores/messages';
 	import EmojiPicker from './EmojiPicker.svelte';
+	import GifPicker from './GifPicker.svelte';
 
 	const dispatch = createEventDispatcher<{
 		send: { content: string; attachments: File[]; replyTo?: string };
@@ -17,6 +18,7 @@
 	let textarea: HTMLTextAreaElement;
 	let lastTypingTime = 0;
 	let showEmojiPicker = false;
+	let showGifPicker = false;
 
 	$: actualPlaceholder = placeholder || getPlaceholder($currentChannel);
 
@@ -130,6 +132,32 @@
 
 	function clearReply() {
 		replyTo = null;
+	}
+
+	function handleGifSelect(event: CustomEvent<{ url: string; width: number; height: number }>) {
+		const gif = event.detail;
+		// Send the GIF URL as a message
+		dispatch('send', {
+			content: gif.url,
+			attachments: [],
+			replyTo: replyTo?.id
+		});
+		showGifPicker = false;
+		replyTo = null;
+	}
+
+	function toggleGifPicker() {
+		showGifPicker = !showGifPicker;
+		if (showGifPicker) {
+			showEmojiPicker = false;
+		}
+	}
+
+	function toggleEmojiPicker() {
+		showEmojiPicker = !showEmojiPicker;
+		if (showEmojiPicker) {
+			showGifPicker = false;
+		}
 	}
 </script>
 
@@ -245,6 +273,34 @@
 
 		<!-- Right Buttons -->
 		<div class="input-buttons-right">
+			<!-- GIF Button -->
+			<div class="gif-button-container">
+				<button
+					class="icon-button gif-button"
+					title="Select GIF"
+					on:click={toggleGifPicker}
+					disabled={!$currentChannel}
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<rect x="2" y="4" width="20" height="16" rx="2" />
+						<text x="6" y="15" font-size="8" font-weight="bold" fill="currentColor" stroke="none">GIF</text>
+					</svg>
+				</button>
+
+				<GifPicker
+					show={showGifPicker}
+					on:select={handleGifSelect}
+					on:close={() => (showGifPicker = false)}
+				/>
+			</div>
+
 			<!-- Gift Button (Placeholder) -->
 			<button
 				class="icon-button gift-button"
@@ -272,7 +328,7 @@
 				<button
 					class="icon-button emoji-button"
 					title="Select emoji"
-					on:click={() => (showEmojiPicker = !showEmojiPicker)}
+					on:click={toggleEmojiPicker}
 					disabled={!$currentChannel}
 				>
 					<svg
@@ -503,6 +559,15 @@
 	/* Gift Button */
 	.gift-button:hover:not(:disabled) {
 		color: var(--status-danger, #f23f43);
+	}
+
+	/* GIF Button Container */
+	.gif-button-container {
+		position: relative;
+	}
+
+	.gif-button:hover:not(:disabled) {
+		color: var(--blurple, #5865f2);
 	}
 
 	/* Emoji Button Container */
