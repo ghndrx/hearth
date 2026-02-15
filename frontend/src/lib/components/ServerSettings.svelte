@@ -6,6 +6,7 @@
 	import { user } from '$lib/stores/auth';
 	import Avatar from './Avatar.svelte';
 	import Modal from './Modal.svelte';
+	import RoleEditor from './RoleEditor.svelte';
 	
 	export let open = false;
 	
@@ -550,15 +551,9 @@
 						</section>
 					
 					{:else if activeSection === 'roles'}
-						<section>
+						<section class="roles-section">
 							<h1>Roles</h1>
-							
-							<div class="placeholder-section">
-								<div class="placeholder-icon">🛡️</div>
-								<h3>Role Management</h3>
-								<p>Create and manage roles for your server members.</p>
-								<p class="coming-soon">Coming soon</p>
-							</div>
+							<RoleEditor serverId={$currentServer.id} {isOwner} />
 						</section>
 					
 					{:else if activeSection === 'emoji'}
@@ -1431,6 +1426,25 @@
 		color: var(--text-muted);
 		padding: 16px;
 		text-align: center;
+	}
+	
+	/* Roles Section */
+	.roles-section {
+		height: calc(100vh - 200px);
+		min-height: 500px;
+		display: flex;
+		flex-direction: column;
+	}
+	
+	.roles-section h1 {
+		flex-shrink: 0;
+	}
+	
+	.roles-section :global(.role-editor) {
+		flex: 1;
+		background: var(--bg-secondary);
+		border-radius: 8px;
+		overflow: hidden;
 	}
 	
 	/* Placeholder Section */

@@ -10,3 +10,4 @@ export { threadStore, currentThread, threadMessages, threadLoading } from './thr
 export { voiceCallStore, isInVoiceCall, voiceCallParticipants, voiceCallChannel, formatCallDuration } from './voiceCall';
 export { pinnedMessagesStore, pinnedMessagesOpen, pinnedMessages, pinnedMessagesLoading } from './pinnedMessages';
 export { searchStore, isSearchOpen, searchResults, searchLoading, searchError, searchTotalCount, searchHasMore } from './search';
+export { getServerRoles, loadServerRoles, createRole, updateRole, deleteRole, reorderRoles, rolesLoading, rolesError, PERMISSIONS, hasPermission, getPermissionList } from './roles';
