@@ -18,17 +18,17 @@ import (
 
 // mockAuthService implements the auth operations needed by AuthHandler
 type mockAuthService struct {
-	registerFunc      func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error)
-	loginFunc         func(ctx context.Context, email, password string) (*models.User, *services.TokenResponse, error)
-	refreshTokenFunc  func(ctx context.Context, refreshToken string) (*services.TokenResponse, error)
+	registerFunc      func(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error)
+	loginFunc         func(ctx context.Context, email, password string) (*models.User, *TokenResponse, error)
+	refreshTokenFunc  func(ctx context.Context, refreshToken string) (*TokenResponse, error)
 	logoutFunc        func(ctx context.Context, accessToken, refreshToken string) error
 }
 
 // AuthServiceInterface defines what AuthHandler needs from the auth service
 type AuthServiceInterface interface {
-	Register(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error)
-	Login(ctx context.Context, email, password string) (*models.User, *services.TokenResponse, error)
-	RefreshToken(ctx context.Context, refreshToken string) (*services.TokenResponse, error)
+	Register(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error)
+	Login(ctx context.Context, email, password string) (*models.User, *TokenResponse, error)
+	RefreshToken(ctx context.Context, refreshToken string) (*TokenResponse, error)
 	Logout(ctx context.Context, accessToken, refreshToken string) error
 }
 
@@ -83,7 +83,7 @@ func (h *mockAuthHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	user, tokens, err := h.service.registerFunc(c.Context(), &services.RegisterRequest{
+	user, tokens, err := h.service.registerFunc(c.Context(), &RegisterRequest{
 		Email:      req.Email,
 		Username:   req.Username,
 		Password:   req.Password,
@@ -223,7 +223,7 @@ func makeRequest(app *fiber.App, method, path string, body interface{}) (*httpte
 func TestRegister_Success(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.registerFunc = func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error) {
+	service.registerFunc = func(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error) {
 		user := &models.User{
 			ID:            uuid.New(),
 			Username:      req.Username,
@@ -231,7 +231,7 @@ func TestRegister_Success(t *testing.T) {
 			Email:         req.Email,
 			CreatedAt:     time.Now(),
 		}
-		tokens := &services.TokenResponse{
+		tokens := &TokenResponse{
 			AccessToken:  "test-access-token",
 			RefreshToken: "test-refresh-token",
 			ExpiresIn:    900,
@@ -325,7 +325,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 func TestRegister_DuplicateEmail(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.registerFunc = func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error) {
+	service.registerFunc = func(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error) {
 		return nil, nil, services.ErrEmailTaken
 	}
 
@@ -349,7 +349,7 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 func TestRegister_DuplicateUsername(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.registerFunc = func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error) {
+	service.registerFunc = func(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error) {
 		return nil, nil, services.ErrUsernameTaken
 	}
 
@@ -373,7 +373,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 func TestRegister_RegistrationClosed(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.registerFunc = func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error) {
+	service.registerFunc = func(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error) {
 		return nil, nil, services.ErrRegistrationClosed
 	}
 
@@ -397,7 +397,7 @@ func TestRegister_RegistrationClosed(t *testing.T) {
 func TestRegister_InviteRequired(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.registerFunc = func(ctx context.Context, req *services.RegisterRequest) (*models.User, *services.TokenResponse, error) {
+	service.registerFunc = func(ctx context.Context, req *RegisterRequest) (*models.User, *TokenResponse, error) {
 		return nil, nil, services.ErrInviteRequired
 	}
 
@@ -421,7 +421,7 @@ func TestRegister_InviteRequired(t *testing.T) {
 func TestLogin_Success(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.loginFunc = func(ctx context.Context, email, password string) (*models.User, *services.TokenResponse, error) {
+	service.loginFunc = func(ctx context.Context, email, password string) (*models.User, *TokenResponse, error) {
 		user := &models.User{
 			ID:            uuid.New(),
 			Username:      "testuser",
@@ -429,7 +429,7 @@ func TestLogin_Success(t *testing.T) {
 			Email:         email,
 			CreatedAt:     time.Now(),
 		}
-		tokens := &services.TokenResponse{
+		tokens := &TokenResponse{
 			AccessToken:  "test-access-token",
 			RefreshToken: "test-refresh-token",
 			ExpiresIn:    900,
@@ -460,7 +460,7 @@ func TestLogin_Success(t *testing.T) {
 func TestLogin_InvalidCredentials(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.loginFunc = func(ctx context.Context, email, password string) (*models.User, *services.TokenResponse, error) {
+	service.loginFunc = func(ctx context.Context, email, password string) (*models.User, *TokenResponse, error) {
 		return nil, nil, services.ErrInvalidCredentials
 	}
 
@@ -504,8 +504,8 @@ func TestLogin_MissingFields(t *testing.T) {
 func TestRefresh_Success(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.refreshTokenFunc = func(ctx context.Context, refreshToken string) (*services.TokenResponse, error) {
-		return &services.TokenResponse{
+	service.refreshTokenFunc = func(ctx context.Context, refreshToken string) (*TokenResponse, error) {
+		return &TokenResponse{
 			AccessToken:  "new-access-token",
 			RefreshToken: "new-refresh-token",
 			ExpiresIn:    900,
@@ -534,7 +534,7 @@ func TestRefresh_Success(t *testing.T) {
 func TestRefresh_InvalidToken(t *testing.T) {
 	app, service := setupTestApp()
 
-	service.refreshTokenFunc = func(ctx context.Context, refreshToken string) (*services.TokenResponse, error) {
+	service.refreshTokenFunc = func(ctx context.Context, refreshToken string) (*TokenResponse, error) {
 		return nil, services.ErrInvalidCredentials
 	}
 

@@ -21,11 +21,13 @@ import (
 type mockChannelMessageService struct {
 	sendMessageFunc    func(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error)
 	getMessagesFunc    func(ctx context.Context, channelID, requesterID uuid.UUID, before, after *uuid.UUID, limit int) ([]*models.Message, error)
+	getMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) (*models.Message, error)
 	editMessageFunc    func(ctx context.Context, messageID, authorID uuid.UUID, newContent string) (*models.Message, error)
 	deleteMessageFunc  func(ctx context.Context, messageID, requesterID uuid.UUID) error
 	addReactionFunc    func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	removeReactionFunc func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	pinMessageFunc     func(ctx context.Context, messageID, requesterID uuid.UUID) error
+	unpinMessageFunc   func(ctx context.Context, messageID, requesterID uuid.UUID) error
 }
 
 func (m *mockChannelMessageService) SendMessage(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error) {
@@ -75,6 +77,20 @@ func (m *mockChannelMessageService) PinMessage(ctx context.Context, messageID, r
 		return m.pinMessageFunc(ctx, messageID, requesterID)
 	}
 	return nil
+}
+
+func (m *mockChannelMessageService) UnpinMessage(ctx context.Context, messageID, requesterID uuid.UUID) error {
+	if m.unpinMessageFunc != nil {
+		return m.unpinMessageFunc(ctx, messageID, requesterID)
+	}
+	return nil
+}
+
+func (m *mockChannelMessageService) GetMessage(ctx context.Context, messageID, requesterID uuid.UUID) (*models.Message, error) {
+	if m.getMessageFunc != nil {
+		return m.getMessageFunc(ctx, messageID, requesterID)
+	}
+	return nil, services.ErrMessageNotFound
 }
 
 // setupChannelTestApp creates a test Fiber app with channel routes
@@ -358,6 +374,60 @@ func setupChannelTestApp(messageService *mockChannelMessageService) *fiber.App {
 	// GetPins (stub)
 	app.Get("/channels/:id/pins", func(c *fiber.Ctx) error {
 		return c.JSON([]interface{}{})
+	})
+
+	// UnpinMessage
+	app.Delete("/channels/:id/pins/:messageId", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		messageID, err := uuid.Parse(c.Params("messageId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid message id",
+			})
+		}
+
+		if err := messageService.UnpinMessage(c.Context(), messageID, userID); err != nil {
+			if errors.Is(err, services.ErrMessageNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "message not found",
+				})
+			}
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// GetMessage
+	app.Get("/channels/:id/messages/:messageId", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		messageID, err := uuid.Parse(c.Params("messageId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid message id",
+			})
+		}
+
+		message, err := messageService.GetMessage(c.Context(), messageID, userID)
+		if err != nil {
+			if errors.Is(err, services.ErrMessageNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "message not found",
+				})
+			}
+			if errors.Is(err, services.ErrNoPermission) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"error": "no permission to view this message",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get message",
+			})
+		}
+
+		return c.JSON(message)
 	})
 
 	// TriggerTyping (stub)
@@ -1122,5 +1192,220 @@ func TestChannelHandler_TriggerTyping_Success(t *testing.T) {
 // Helper function
 func channelTimePtr(t time.Time) *time.Time {
 	return &t
+}
+
+// GetMessage Tests
+
+func TestChannelHandler_GetMessage_Success(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	expectedMessage := &models.Message{
+		ID:        messageID,
+		ChannelID: channelID,
+		AuthorID:  userID,
+		Content:   "Hello, world!",
+		Pinned:    false,
+		CreatedAt: time.Now(),
+	}
+
+	svc := &mockChannelMessageService{
+		getMessageFunc: func(ctx context.Context, mID, requesterID uuid.UUID) (*models.Message, error) {
+			if mID != messageID {
+				t.Errorf("Expected message ID %v, got %v", messageID, mID)
+			}
+			if requesterID != userID {
+				t.Errorf("Expected user ID %v, got %v", userID, requesterID)
+			}
+			return expectedMessage, nil
+		},
+	}
+
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+
+	var result models.Message
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if result.ID != messageID {
+		t.Errorf("Expected message ID %v, got %v", messageID, result.ID)
+	}
+	if result.Content != "Hello, world!" {
+		t.Errorf("Expected content 'Hello, world!', got %s", result.Content)
+	}
+}
+
+func TestChannelHandler_GetMessage_NotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		getMessageFunc: func(ctx context.Context, mID, requesterID uuid.UUID) (*models.Message, error) {
+			return nil, services.ErrMessageNotFound
+		},
+	}
+
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_GetMessage_NoPermission(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		getMessageFunc: func(ctx context.Context, mID, requesterID uuid.UUID) (*models.Message, error) {
+			return nil, services.ErrNoPermission
+		},
+	}
+
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("Expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_GetMessage_InvalidID(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelMessageService{}
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/invalid-uuid", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// UnpinMessage Tests
+
+func TestChannelHandler_UnpinMessage_Success(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		unpinMessageFunc: func(ctx context.Context, mID, requesterID uuid.UUID) error {
+			if mID != messageID {
+				t.Errorf("Expected message ID %v, got %v", messageID, mID)
+			}
+			if requesterID != userID {
+				t.Errorf("Expected user ID %v, got %v", userID, requesterID)
+			}
+			return nil
+		},
+	}
+
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Errorf("Expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_UnpinMessage_NotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+	messageID := uuid.New()
+
+	svc := &mockChannelMessageService{
+		unpinMessageFunc: func(ctx context.Context, mID, requesterID uuid.UUID) error {
+			return services.ErrMessageNotFound
+		},
+	}
+
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_UnpinMessage_InvalidID(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	svc := &mockChannelMessageService{}
+	app := setupChannelTestApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/invalid-uuid", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
 }
 

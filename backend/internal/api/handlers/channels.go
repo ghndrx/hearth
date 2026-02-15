@@ -194,8 +194,33 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 
 // GetMessage returns a specific message
 func (h *ChannelHandler) GetMessage(c *fiber.Ctx) error {
-	// TODO: Implement
-	return c.JSON(fiber.Map{})
+	userID := c.Locals("userID").(uuid.UUID)
+	messageID, err := uuid.Parse(c.Params("messageId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid message id",
+		})
+	}
+
+	message, err := h.messageService.GetMessage(c.Context(), messageID, userID)
+	if err != nil {
+		switch err {
+		case services.ErrMessageNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "message not found",
+			})
+		case services.ErrNoPermission:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "no permission to view this message",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get message",
+			})
+		}
+	}
+
+	return c.JSON(message)
 }
 
 // EditMessage edits a message
@@ -313,7 +338,27 @@ func (h *ChannelHandler) PinMessage(c *fiber.Ctx) error {
 
 // UnpinMessage unpins a message
 func (h *ChannelHandler) UnpinMessage(c *fiber.Ctx) error {
-	// TODO: Implement
+	userID := c.Locals("userID").(uuid.UUID)
+	messageID, err := uuid.Parse(c.Params("messageId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid message id",
+		})
+	}
+
+	if err := h.messageService.UnpinMessage(c.Context(), messageID, userID); err != nil {
+		switch err {
+		case services.ErrMessageNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "message not found",
+			})
+		default:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

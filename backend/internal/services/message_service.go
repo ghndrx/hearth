@@ -351,6 +351,33 @@ func (s *MessageService) PinMessage(ctx context.Context, messageID uuid.UUID, re
 	return nil
 }
 
+// UnpinMessage unpins a message
+func (s *MessageService) UnpinMessage(ctx context.Context, messageID uuid.UUID, requesterID uuid.UUID) error {
+	message, err := s.repo.GetByID(ctx, messageID)
+	if err != nil {
+		return err
+	}
+	if message == nil {
+		return ErrMessageNotFound
+	}
+
+	// TODO: Check MANAGE_MESSAGES permission
+
+	message.Pinned = false
+
+	if err := s.repo.Update(ctx, message); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("message.unpinned", &MessageUnpinnedEvent{
+		MessageID: messageID,
+		ChannelID: message.ChannelID,
+		UnpinnedBy: requesterID,
+	})
+
+	return nil
+}
+
 // AddReaction adds a reaction to a message
 func (s *MessageService) AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
 	message, err := s.repo.GetByID(ctx, messageID)
@@ -435,6 +462,12 @@ type MessagePinnedEvent struct {
 	MessageID uuid.UUID
 	ChannelID uuid.UUID
 	PinnedBy  uuid.UUID
+}
+
+type MessageUnpinnedEvent struct {
+	MessageID  uuid.UUID
+	ChannelID  uuid.UUID
+	UnpinnedBy uuid.UUID
 }
 
 type ReactionAddedEvent struct {
