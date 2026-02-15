@@ -35,6 +35,7 @@ func (b *EventBridge) sendToChannel(channelID uuid.UUID, eventType string, data 
 		return
 	}
 	b.hub.SendToChannel(channelID, &Event{
+		Op:   OpDispatch,
 		Type: eventType,
 		Data: json.RawMessage(jsonData),
 	})
@@ -48,6 +49,7 @@ func (b *EventBridge) sendToServer(serverID uuid.UUID, eventType string, data in
 		return
 	}
 	b.hub.SendToServer(serverID, &Event{
+		Op:   OpDispatch,
 		Type: eventType,
 		Data: json.RawMessage(jsonData),
 	})
@@ -61,6 +63,7 @@ func (b *EventBridge) sendToUser(userID uuid.UUID, eventType string, data interf
 		return
 	}
 	b.hub.SendToUser(userID, &Event{
+		Op:   OpDispatch,
 		Type: eventType,
 		Data: json.RawMessage(jsonData),
 	})
@@ -246,11 +249,11 @@ func (b *EventBridge) onServerDeleted(event events.Event) {
 // Member event handlers
 
 type MemberEventData struct {
-	ServerID uuid.UUID     `json:"server_id"`
-	UserID   uuid.UUID     `json:"user_id"`
-	User     *models.User  `json:"user,omitempty"`
+	ServerID uuid.UUID      `json:"server_id"`
+	UserID   uuid.UUID      `json:"user_id"`
+	User     *models.User   `json:"user,omitempty"`
 	Member   *models.Member `json:"member,omitempty"`
-	Reason   string        `json:"reason,omitempty"`
+	Reason   string         `json:"reason,omitempty"`
 }
 
 func (b *EventBridge) onMemberJoined(event events.Event) {
@@ -386,25 +389,25 @@ func (b *EventBridge) messageToWS(msg *models.Message) map[string]interface{} {
 	if msg == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
-		"id":         msg.ID.String(),
-		"channel_id": msg.ChannelID.String(),
-		"content":    msg.Content,
-		"timestamp":  msg.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
-		"pinned":     msg.Pinned,
-		"type":       0,
-		"tts":        msg.TTS,
-		"mentions":   []interface{}{},
+		"id":            msg.ID.String(),
+		"channel_id":    msg.ChannelID.String(),
+		"content":       msg.Content,
+		"timestamp":     msg.CreatedAt.Format("2006-01-02T15:04:05.000Z"),
+		"pinned":        msg.Pinned,
+		"type":          0,
+		"tts":           msg.TTS,
+		"mentions":      []interface{}{},
 		"mention_roles": []string{},
-		"attachments": []interface{}{},
-		"embeds":     []interface{}{},
+		"attachments":   []interface{}{},
+		"embeds":        []interface{}{},
 	}
-	
+
 	if msg.ServerID != nil {
 		result["guild_id"] = msg.ServerID.String()
 	}
-	
+
 	if msg.Author != nil {
 		result["author"] = b.publicUserToWS(msg.Author)
 	} else {
@@ -412,12 +415,12 @@ func (b *EventBridge) messageToWS(msg *models.Message) map[string]interface{} {
 			"id": msg.AuthorID.String(),
 		}
 	}
-	
+
 	if msg.EditedAt != nil && !msg.EditedAt.IsZero() {
 		ts := msg.EditedAt.Format("2006-01-02T15:04:05.000Z")
 		result["edited_timestamp"] = ts
 	}
-	
+
 	return result
 }
 
@@ -425,26 +428,26 @@ func (b *EventBridge) channelToWS(ch *models.Channel) map[string]interface{} {
 	if ch == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
 		"id":       ch.ID.String(),
 		"name":     ch.Name,
 		"type":     ch.Type,
 		"position": ch.Position,
 	}
-	
+
 	if ch.ServerID != nil {
 		result["guild_id"] = ch.ServerID.String()
 	}
-	
+
 	if ch.Topic != "" {
 		result["topic"] = ch.Topic
 	}
-	
+
 	if ch.ParentID != nil {
 		result["parent_id"] = ch.ParentID.String()
 	}
-	
+
 	return result
 }
 
@@ -452,13 +455,13 @@ func (b *EventBridge) serverToWS(srv *models.Server) map[string]interface{} {
 	if srv == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
 		"id":       srv.ID.String(),
 		"name":     srv.Name,
 		"owner_id": srv.OwnerID.String(),
 	}
-	
+
 	if srv.IconURL != nil {
 		result["icon"] = *srv.IconURL
 	}
@@ -468,7 +471,7 @@ func (b *EventBridge) serverToWS(srv *models.Server) map[string]interface{} {
 	if srv.Description != nil {
 		result["description"] = *srv.Description
 	}
-	
+
 	return result
 }
 
@@ -476,18 +479,18 @@ func (b *EventBridge) userToWS(user *models.User) map[string]interface{} {
 	if user == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
 		"id":            user.ID.String(),
 		"username":      user.Username,
 		"discriminator": user.Discriminator,
 		"bot":           false,
 	}
-	
+
 	if user.AvatarURL != nil {
 		result["avatar"] = *user.AvatarURL
 	}
-	
+
 	return result
 }
 
@@ -495,18 +498,18 @@ func (b *EventBridge) publicUserToWS(user *models.PublicUser) map[string]interfa
 	if user == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
 		"id":            user.ID.String(),
 		"username":      user.Username,
 		"discriminator": user.Discriminator,
 		"bot":           false,
 	}
-	
+
 	if user.AvatarURL != nil {
 		result["avatar"] = *user.AvatarURL
 	}
-	
+
 	return result
 }
 

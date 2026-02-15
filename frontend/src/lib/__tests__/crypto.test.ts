@@ -228,14 +228,15 @@ describe('Encryption', () => {
       expect(typeof result.iv).toBe('string');
       expect(result.tag).toBe('');
 
-      expect(mockCrypto.subtle.encrypt).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'AES-GCM',
-          tagLength: 128,
-        }),
-        mockKey,
-        expect.any(Uint8Array)
-      );
+      expect(mockCrypto.subtle.encrypt).toHaveBeenCalled();
+      const encryptCall = mockCrypto.subtle.encrypt.mock.calls[0];
+      expect(encryptCall[0]).toMatchObject({
+        name: 'AES-GCM',
+        tagLength: 128,
+      });
+      expect(encryptCall[1]).toBe(mockKey);
+      // Use duck-typing check for Uint8Array (cross-realm compatible)
+      expect(Object.prototype.toString.call(encryptCall[2])).toBe('[object Uint8Array]');
     });
   });
 

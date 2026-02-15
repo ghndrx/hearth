@@ -40,7 +40,7 @@ services:
     environment:
       DATABASE_URL: postgres://hearth:hearth_dev_password@postgres:5432/hearth?sslmode=disable
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: dev_jwt_secret_change_in_production
+      SECRET_KEY: dev_jwt_secret_change_in_production
       PORT: 8080
       ENV: development
     depends_on:

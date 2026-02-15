@@ -250,8 +250,9 @@ const (
 	EventTypeUnsubscribe    = "UNSUBSCRIBE"
 )
 
-// Event represents a WebSocket event
+// Event represents a WebSocket event (Discord-compatible format)
 type Event struct {
+	Op       int         `json:"op"` // 0 = DISPATCH
 	Type     string      `json:"t"`
 	Data     interface{} `json:"d"`
 	Sequence int64       `json:"s,omitempty"`
