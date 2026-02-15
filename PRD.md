@@ -354,6 +354,7 @@ box-shadow: 0 0 0 2px var(--blurple);
 - [ ] Search
 - [ ] DMs
 - [ ] Friend system
+- [ ] Advanced Invites (vanity URLs, splash screens, invite tracking, server discovery)
 
 ### 7.3 Phase 3
 - [ ] Bots API
