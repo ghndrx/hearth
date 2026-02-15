@@ -150,21 +150,26 @@ func main() {
 		PermissionPolicy:          "camera=(), microphone=(), geolocation=()",
 	}))
 
-	// Rate limiting
-	app.Use(limiter.New(limiter.Config{
-		Max:               100,
-		Expiration:        60 * time.Second,
-		LimiterMiddleware: limiter.SlidingWindow{},
-		KeyGenerator: func(c *fiber.Ctx) string {
-			return c.IP()
-		},
-		LimitReached: func(c *fiber.Ctx) error {
-			return c.Status(429).JSON(fiber.Map{
-				"error":   "rate_limited",
-				"message": "Too many requests",
-			})
-		},
-	}))
+	// Rate limiting (can be disabled for testing with RATE_LIMIT_ENABLED=false)
+	if cfg.RateLimitEnabled {
+		log.Printf("Rate limiting enabled: %d requests per %s", cfg.RateLimitMax, cfg.RateLimitWindow)
+		app.Use(limiter.New(limiter.Config{
+			Max:               cfg.RateLimitMax,
+			Expiration:        cfg.RateLimitWindow,
+			LimiterMiddleware: limiter.SlidingWindow{},
+			KeyGenerator: func(c *fiber.Ctx) string {
+				return c.IP()
+			},
+			LimitReached: func(c *fiber.Ctx) error {
+				return c.Status(429).JSON(fiber.Map{
+					"error":   "rate_limited",
+					"message": "Too many requests",
+				})
+			},
+		}))
+	} else {
+		log.Printf("⚠️  Rate limiting DISABLED (not recommended for production)")
+	}
 
 	// Logging
 	app.Use(logger.New(logger.Config{

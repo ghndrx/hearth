@@ -260,3 +260,57 @@ func TestLoadQuotaConfigUnlimited(t *testing.T) {
 		t.Errorf("expected unlimited RateLimitMessages (0), got %d", cfg.Messages.RateLimitMessages)
 	}
 }
+
+func TestRateLimitConfig_Defaults(t *testing.T) {
+	// Clear any existing env vars
+	os.Unsetenv("RATE_LIMIT_ENABLED")
+	os.Unsetenv("RATE_LIMIT_MAX")
+	os.Unsetenv("RATE_LIMIT_WINDOW")
+
+	cfg := Load()
+
+	// Rate limiting should be enabled by default
+	if !cfg.RateLimitEnabled {
+		t.Error("expected RateLimitEnabled true by default")
+	}
+	if cfg.RateLimitMax != 100 {
+		t.Errorf("expected default RateLimitMax 100, got %d", cfg.RateLimitMax)
+	}
+	if cfg.RateLimitWindow != 60*time.Second {
+		t.Errorf("expected default RateLimitWindow 60s, got %v", cfg.RateLimitWindow)
+	}
+}
+
+func TestRateLimitConfig_Disabled(t *testing.T) {
+	os.Setenv("RATE_LIMIT_ENABLED", "false")
+	defer os.Unsetenv("RATE_LIMIT_ENABLED")
+
+	cfg := Load()
+
+	if cfg.RateLimitEnabled {
+		t.Error("expected RateLimitEnabled false when RATE_LIMIT_ENABLED=false")
+	}
+}
+
+func TestRateLimitConfig_CustomValues(t *testing.T) {
+	os.Setenv("RATE_LIMIT_ENABLED", "true")
+	os.Setenv("RATE_LIMIT_MAX", "200")
+	os.Setenv("RATE_LIMIT_WINDOW", "30s")
+	defer func() {
+		os.Unsetenv("RATE_LIMIT_ENABLED")
+		os.Unsetenv("RATE_LIMIT_MAX")
+		os.Unsetenv("RATE_LIMIT_WINDOW")
+	}()
+
+	cfg := Load()
+
+	if !cfg.RateLimitEnabled {
+		t.Error("expected RateLimitEnabled true")
+	}
+	if cfg.RateLimitMax != 200 {
+		t.Errorf("expected RateLimitMax 200, got %d", cfg.RateLimitMax)
+	}
+	if cfg.RateLimitWindow != 30*time.Second {
+		t.Errorf("expected RateLimitWindow 30s, got %v", cfg.RateLimitWindow)
+	}
+}

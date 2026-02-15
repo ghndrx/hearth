@@ -2,6 +2,25 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
+/**
+ * Message Load Test for Hearth
+ * 
+ * Usage:
+ *   # Start backend with rate limiting disabled:
+ *   RATE_LIMIT_ENABLED=false go run ./cmd/hearth
+ * 
+ *   # Run this test:
+ *   k6 run message-load.js
+ * 
+ *   # Or run with custom base URL:
+ *   k6 run -e BASE_URL=http://localhost:8080 message-load.js
+ * 
+ * Environment Variables (for backend):
+ *   RATE_LIMIT_ENABLED=false  - Disable rate limiting for load tests
+ *   RATE_LIMIT_MAX=1000       - Or increase the limit
+ *   RATE_LIMIT_WINDOW=1s      - Or decrease the window
+ */
+
 // Custom metrics
 const errorRate = new Rate('errors');
 const messageLatency = new Trend('message_latency', true);

@@ -50,6 +50,11 @@ type Config struct {
 	RegistrationEnabled bool
 	InviteOnly          bool
 	
+	// Rate Limiting
+	RateLimitEnabled bool
+	RateLimitMax     int           // Maximum requests per window
+	RateLimitWindow  time.Duration // Time window for rate limiting
+	
 	// Quotas
 	Quotas *models.QuotaConfig
 	
@@ -98,6 +103,11 @@ func Load() *Config {
 		// Registration
 		RegistrationEnabled: getEnvBool("REGISTRATION_ENABLED", true),
 		InviteOnly:          getEnvBool("INVITE_ONLY", false),
+		
+		// Rate Limiting (enabled by default, disable for testing with RATE_LIMIT_ENABLED=false)
+		RateLimitEnabled: getEnvBool("RATE_LIMIT_ENABLED", true),
+		RateLimitMax:     getEnvInt("RATE_LIMIT_MAX", 100),
+		RateLimitWindow:  getEnvDuration("RATE_LIMIT_WINDOW", 60*time.Second),
 		
 		// Quotas
 		Quotas: loadQuotaConfig(),
