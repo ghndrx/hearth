@@ -334,6 +334,35 @@ func (s *MessageService) GetMessage(ctx context.Context, messageID uuid.UUID, re
 	return message, nil
 }
 
+// GetPinnedMessages retrieves all pinned messages in a channel
+func (s *MessageService) GetPinnedMessages(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID) ([]*models.Message, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Check access
+	if channel.ServerID != nil {
+		// Check VIEW_CHANNELS and READ_MESSAGE_HISTORY permissions
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, channelID, requesterID, models.PermViewChannels); err != nil {
+			return nil, err
+		}
+		if err := s.checkChannelPermission(ctx, *channel.ServerID, channelID, requesterID, models.PermReadMessageHistory); err != nil {
+			return nil, err
+		}
+	} else {
+		// DM channel - check if requester is participant
+		if !isChannelParticipant(channel, requesterID) {
+			return nil, ErrNoPermission
+		}
+	}
+
+	return s.repo.GetPinnedMessages(ctx, channelID)
+}
+
 // PinMessage pins a message
 func (s *MessageService) PinMessage(ctx context.Context, messageID uuid.UUID, requesterID uuid.UUID) error {
 	message, err := s.repo.GetByID(ctx, messageID)
@@ -380,8 +409,8 @@ func (s *MessageService) UnpinMessage(ctx context.Context, messageID uuid.UUID, 
 	}
 
 	s.eventBus.Publish("message.unpinned", &MessageUnpinnedEvent{
-		MessageID: messageID,
-		ChannelID: message.ChannelID,
+		MessageID:  messageID,
+		ChannelID:  message.ChannelID,
 		UnpinnedBy: requesterID,
 	})
 
