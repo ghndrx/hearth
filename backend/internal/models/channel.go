@@ -33,8 +33,8 @@ type Channel struct {
 	NSFW               bool        `json:"nsfw" db:"nsfw"`
 	Slowmode           int         `json:"slowmode" db:"slowmode"`
 	E2EEEnabled        bool        `json:"e2ee_enabled" db:"e2ee_enabled"`
-	Bitrate            int         `json:"bitrate" db:"bitrate"`
-	UserLimit          int         `json:"user_limit" db:"user_limit"`
+	Bitrate            *int        `json:"bitrate,omitempty" db:"bitrate"`
+	UserLimit          *int        `json:"user_limit,omitempty" db:"user_limit"`
 	RTCRegion          *string     `json:"rtc_region,omitempty" db:"rtc_region"`
 	DefaultAutoArchive int         `json:"default_auto_archive" db:"default_auto_archive"`
 	LastMessageID      *uuid.UUID  `json:"last_message_id,omitempty" db:"last_message_id"`
