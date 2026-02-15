@@ -45,7 +45,7 @@ export async function api<T>(endpoint: string, options: RequestOptions = {}): Pr
 
 	// Handle empty responses
 	const text = await response.text();
-	return text ? JSON.parse(text) : null;
+	return text ? JSON.parse(text) : (null as unknown as T);
 }
 
 export const api_get = <T>(endpoint: string) => api<T>(endpoint);

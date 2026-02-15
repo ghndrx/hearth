@@ -14,7 +14,7 @@
 		loadMessages($currentChannel.id);
 	}
 
-	$: channelMessages = $messages[$currentChannel?.id] || [];
+	$: channelMessages = ($currentChannel?.id ? $messages[$currentChannel.id] : undefined) || [];
 
 	function handleScroll() {
 		const { scrollTop, scrollHeight, clientHeight } = messageContainer;
