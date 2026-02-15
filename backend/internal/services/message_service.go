@@ -24,6 +24,8 @@ type MessageRepository interface {
 	AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	GetReactions(ctx context.Context, messageID uuid.UUID) ([]*models.Reaction, error)
+	GetReactionUsers(ctx context.Context, messageID uuid.UUID, emoji string, limit int) ([]*models.ReactionUser, error)
+	GetUserReactions(ctx context.Context, messageID, userID uuid.UUID) ([]string, error)
 
 	// Bulk operations
 	DeleteByChannel(ctx context.Context, channelID uuid.UUID) error
@@ -488,6 +490,95 @@ func (s *MessageService) RemoveReaction(ctx context.Context, messageID, userID u
 	})
 
 	return nil
+}
+
+// GetReactions returns aggregated reactions for a message
+func (s *MessageService) GetReactions(ctx context.Context, messageID uuid.UUID, requesterID uuid.UUID) ([]*models.Reaction, error) {
+	// First get the message to check access
+	message, err := s.repo.GetByID(ctx, messageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Check access to the channel
+	channel, err := s.channelRepo.GetByID(ctx, message.ChannelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+	} else {
+		if !isChannelParticipant(channel, requesterID) {
+			return nil, ErrNoPermission
+		}
+	}
+
+	reactions, err := s.repo.GetReactions(ctx, messageID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check which reactions the requester has made
+	userEmojis, _ := s.repo.GetUserReactions(ctx, messageID, requesterID)
+	userReacted := make(map[string]bool)
+	for _, emoji := range userEmojis {
+		userReacted[emoji] = true
+	}
+
+	// Set the Me flag
+	for _, r := range reactions {
+		r.Me = userReacted[r.Emoji]
+	}
+
+	return reactions, nil
+}
+
+// GetReactionUsers returns users who reacted with a specific emoji
+func (s *MessageService) GetReactionUsers(ctx context.Context, messageID uuid.UUID, emoji string, requesterID uuid.UUID, limit int) ([]*models.ReactionUser, error) {
+	// First get the message to check access
+	message, err := s.repo.GetByID(ctx, messageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Check access to the channel
+	channel, err := s.channelRepo.GetByID(ctx, message.ChannelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+	} else {
+		if !isChannelParticipant(channel, requesterID) {
+			return nil, ErrNoPermission
+		}
+	}
+
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+
+	return s.repo.GetReactionUsers(ctx, messageID, emoji, limit)
 }
 
 // Helpers

@@ -208,8 +208,35 @@ func (r *MessageRepository) RemoveReaction(ctx context.Context, messageID, userI
 
 func (r *MessageRepository) GetReactions(ctx context.Context, messageID uuid.UUID) ([]*models.Reaction, error) {
 	var reactions []*models.Reaction
-	err := r.db.SelectContext(ctx, &reactions, `SELECT * FROM reactions WHERE message_id = $1`, messageID)
+	query := `
+		SELECT message_id, emoji, COUNT(*) as count
+		FROM reactions
+		WHERE message_id = $1
+		GROUP BY message_id, emoji
+		ORDER BY MIN(created_at)
+	`
+	err := r.db.SelectContext(ctx, &reactions, query, messageID)
 	return reactions, err
+}
+
+func (r *MessageRepository) GetReactionUsers(ctx context.Context, messageID uuid.UUID, emoji string, limit int) ([]*models.ReactionUser, error) {
+	var users []*models.ReactionUser
+	query := `
+		SELECT message_id, user_id, emoji, created_at
+		FROM reactions
+		WHERE message_id = $1 AND emoji = $2
+		ORDER BY created_at ASC
+		LIMIT $3
+	`
+	err := r.db.SelectContext(ctx, &users, query, messageID, emoji, limit)
+	return users, err
+}
+
+func (r *MessageRepository) GetUserReactions(ctx context.Context, messageID, userID uuid.UUID) ([]string, error) {
+	var emojis []string
+	query := `SELECT emoji FROM reactions WHERE message_id = $1 AND user_id = $2`
+	err := r.db.SelectContext(ctx, &emojis, query, messageID, userID)
+	return emojis, err
 }
 
 // Bulk operations

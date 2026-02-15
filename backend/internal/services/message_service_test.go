@@ -81,6 +81,22 @@ func (m *MockMessageRepository) GetReactions(ctx context.Context, messageID uuid
 	return args.Get(0).([]*models.Reaction), args.Error(1)
 }
 
+func (m *MockMessageRepository) GetReactionUsers(ctx context.Context, messageID uuid.UUID, emoji string, limit int) ([]*models.ReactionUser, error) {
+	args := m.Called(ctx, messageID, emoji, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.ReactionUser), args.Error(1)
+}
+
+func (m *MockMessageRepository) GetUserReactions(ctx context.Context, messageID, userID uuid.UUID) ([]string, error) {
+	args := m.Called(ctx, messageID, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *MockMessageRepository) DeleteByChannel(ctx context.Context, channelID uuid.UUID) error {
 	args := m.Called(ctx, channelID)
 	return args.Error(0)
