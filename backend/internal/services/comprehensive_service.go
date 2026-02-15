@@ -61,7 +61,10 @@ func (s *ComprehensiveService) RegisterUser(ctx context.Context, username, email
 	}
 
 	// Check if username exists
-	existing, _ := s.repo.GetUserByUsername(ctx, username)
+	existing, err := s.repo.GetUserByUsername(ctx, username)
+	if err != nil && err != ErrUserNotFound {
+		return nil, err
+	}
 	if existing != nil {
 		return nil, ErrUsernameTaken
 	}

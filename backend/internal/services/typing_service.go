@@ -42,8 +42,8 @@ func (s *TypingService) StopTyping(ctx context.Context, channelID, userID string
 }
 
 func (s *TypingService) GetTypingUsers(ctx context.Context, channelID string) ([]string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	var users []string
 	now := time.Now()
@@ -52,7 +52,14 @@ func (s *TypingService) GetTypingUsers(ctx context.Context, channelID string) ([
 		for userID, ts := range channelUsers {
 			if now.Sub(ts) < s.ttl {
 				users = append(users, userID)
+			} else {
+				// Clean up expired typing indicator
+				delete(channelUsers, userID)
 			}
+		}
+		// Clean up empty channel map
+		if len(channelUsers) == 0 {
+			delete(s.typing, channelID)
 		}
 	}
 	return users, nil
