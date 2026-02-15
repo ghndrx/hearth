@@ -33,11 +33,36 @@ type UserServiceInterface interface {
 	AcceptFriendRequest(ctx context.Context, receiverID, senderID uuid.UUID) error
 	DeclineFriendRequest(ctx context.Context, userID, otherID uuid.UUID) error
 	GetRelationship(ctx context.Context, userID, targetID uuid.UUID) (int, error)
+	
+	// Profile enhancements (UX-003) - optional, check via type assertion
+	// GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error)
+	// GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*services.RecentActivityInfo, error)
 }
 
 // ServerServiceForUsersInterface defines the methods needed from ServerService
 type ServerServiceForUsersInterface interface {
 	GetUserServers(ctx context.Context, userID uuid.UUID) ([]*models.Server, error)
+	// GetMutualServersLimited is optional for profile enhancements (UX-003)
+}
+
+// MutualServersService is an optional interface for getting mutual servers
+type MutualServersService interface {
+	GetMutualServersLimited(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Server, int, error)
+}
+
+// MutualFriendsService is an optional interface for getting mutual friends
+type MutualFriendsService interface {
+	GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error)
+}
+
+// RecentActivityService is an optional interface for getting recent activity
+type RecentActivityService interface {
+	GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*services.RecentActivityInfo, error)
+}
+
+// SharedChannelsService is an optional interface for getting shared channels
+type SharedChannelsService interface {
+	GetSharedChannelsWithServerNames(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]services.SharedChannelInfo, int, error)
 }
 
 // ChannelServiceForUsersInterface defines the methods needed from ChannelService
@@ -600,33 +625,27 @@ func (h *UserHandler) GetUserProfile(c *fiber.Ctx) error {
 	}
 
 	// Get mutual servers (limit to 10 for popout)
-	if h.serverService != nil {
-		if svc, ok := h.serverService.(interface {
-			GetMutualServersLimited(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.Server, int, error)
-		}); ok {
-			servers, total, err := svc.GetMutualServersLimited(c.Context(), requesterID, targetID, 10)
-			if err == nil {
-				response.TotalMutual.Servers = total
-				for _, s := range servers {
-					response.MutualServers = append(response.MutualServers, MutualServerResponse{
-						ID:      s.ID,
-						Name:    s.Name,
-						IconURL: s.IconURL,
-					})
-				}
+	if svc, ok := h.serverService.(MutualServersService); ok {
+		servers, total, err := svc.GetMutualServersLimited(c.Context(), requesterID, targetID, 10)
+		if err == nil {
+			response.TotalMutual.Servers = total
+			for _, s := range servers {
+				response.MutualServers = append(response.MutualServers, MutualServerResponse{
+					ID:      s.ID,
+					Name:    s.Name,
+					IconURL: s.IconURL,
+				})
 			}
 		}
 	}
 
 	// Get shared channels (limit to 10 for popout)
-	if h.channelService != nil {
-		if svc, ok := h.channelService.(interface {
-			GetSharedChannelsWithServerNames(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]SharedChannelInfo, int, error)
-		}); ok {
-			channels, total, err := svc.GetSharedChannelsWithServerNames(c.Context(), requesterID, targetID, 10)
-			if err == nil {
-				response.TotalMutual.Channels = total
-				for _, ch := range channels {
+	if svc, ok := h.channelService.(SharedChannelsService); ok {
+		channels, total, err := svc.GetSharedChannelsWithServerNames(c.Context(), requesterID, targetID, 10)
+		if err == nil {
+			response.TotalMutual.Channels = total
+			for _, ch := range channels {
+				if ch.ServerID != nil {
 					response.SharedChannels = append(response.SharedChannels, SharedChannelResponse{
 						ID:         ch.ID,
 						Name:       ch.Name,
@@ -640,59 +659,34 @@ func (h *UserHandler) GetUserProfile(c *fiber.Ctx) error {
 	}
 
 	// Get mutual friends (limit to 10 for popout)
-	if h.userService != nil {
-		if svc, ok := h.userService.(interface {
-			GetMutualFriends(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]*models.User, int, error)
-		}); ok {
-			friends, total, err := svc.GetMutualFriends(c.Context(), requesterID, targetID, 10)
-			if err == nil {
-				response.TotalMutual.Friends = total
-				for _, f := range friends {
-					response.MutualFriends = append(response.MutualFriends, MutualFriendResponse{
-						ID:        f.ID,
-						Username:  f.Username,
-						AvatarURL: f.AvatarURL,
-					})
-				}
+	if svc, ok := h.userService.(MutualFriendsService); ok {
+		friends, total, err := svc.GetMutualFriends(c.Context(), requesterID, targetID, 10)
+		if err == nil {
+			response.TotalMutual.Friends = total
+			for _, f := range friends {
+				response.MutualFriends = append(response.MutualFriends, MutualFriendResponse{
+					ID:        f.ID,
+					Username:  f.Username,
+					AvatarURL: f.AvatarURL,
+				})
 			}
 		}
 	}
 
 	// Get recent activity
-	if h.userService != nil {
-		if svc, ok := h.userService.(interface {
-			GetRecentActivity(ctx context.Context, requesterID, targetID uuid.UUID) (*RecentActivityInfo, error)
-		}); ok {
-			activity, err := svc.GetRecentActivity(c.Context(), requesterID, targetID)
-			if err == nil && activity != nil {
-				response.RecentActivity = &RecentActivityResponse{
-					LastMessageAt:   activity.LastMessageAt,
-					ServerName:      activity.ServerName,
-					ChannelName:     activity.ChannelName,
-					MessageCount24h: activity.MessageCount24h,
-				}
+	if svc, ok := h.userService.(RecentActivityService); ok {
+		activity, err := svc.GetRecentActivity(c.Context(), requesterID, targetID)
+		if err == nil && activity != nil {
+			response.RecentActivity = &RecentActivityResponse{
+				LastMessageAt:   activity.LastMessageAt,
+				ServerName:      activity.ServerName,
+				ChannelName:     activity.ChannelName,
+				MessageCount24h: activity.MessageCount24h,
 			}
 		}
 	}
 
 	return c.JSON(response)
-}
-
-// SharedChannelInfo is used by the service layer
-type SharedChannelInfo struct {
-	ID         uuid.UUID  `json:"id"`
-	Name       string     `json:"name"`
-	ServerID   *uuid.UUID `json:"server_id"`
-	ServerName string     `json:"server_name"`
-	ServerIcon *string    `json:"server_icon"`
-}
-
-// RecentActivityInfo is used by the service layer
-type RecentActivityInfo struct {
-	LastMessageAt   *time.Time
-	ServerName      *string
-	ChannelName     *string
-	MessageCount24h int
 }
 
 // RelationshipType defines the type of relationship

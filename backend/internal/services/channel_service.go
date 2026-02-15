@@ -300,3 +300,49 @@ type ChannelDeletedEvent struct {
 	ChannelID uuid.UUID
 	ServerID  *uuid.UUID
 }
+
+// SharedChannelInfo represents a shared channel with server details
+type SharedChannelInfo struct {
+	ID         uuid.UUID
+	Name       string
+	ServerID   *uuid.UUID
+	ServerName string
+	ServerIcon *string
+}
+
+// GetSharedChannelsWithServerNames returns channels that both users have access to
+func (s *ChannelService) GetSharedChannelsWithServerNames(ctx context.Context, userID1, userID2 uuid.UUID, limit int) ([]SharedChannelInfo, int, error) {
+	// Check if repo has the method via type assertion
+	if repo, ok := s.channelRepo.(interface {
+		GetSharedChannelsWithServerNames(ctx context.Context, userID1, userID2 uuid.UUID, limit int) (interface{}, int, error)
+	}); ok {
+		channels, total, err := repo.GetSharedChannelsWithServerNames(ctx, userID1, userID2, limit)
+		if err != nil {
+			return nil, 0, err
+		}
+		
+		// Convert from repo type to service type
+		result := []SharedChannelInfo{}
+		if chSlice, ok := channels.([]*struct {
+			ID         uuid.UUID  `db:"id"`
+			Name       string     `db:"name"`
+			ServerID   *uuid.UUID `db:"server_id"`
+			ServerName string     `db:"server_name"`
+			ServerIcon *string    `db:"server_icon"`
+		}); ok {
+			for _, ch := range chSlice {
+				result = append(result, SharedChannelInfo{
+					ID:         ch.ID,
+					Name:       ch.Name,
+					ServerID:   ch.ServerID,
+					ServerName: ch.ServerName,
+					ServerIcon: ch.ServerIcon,
+				})
+			}
+		}
+		return result, total, nil
+	}
+	
+	// Fallback: return empty
+	return []SharedChannelInfo{}, 0, nil
+}

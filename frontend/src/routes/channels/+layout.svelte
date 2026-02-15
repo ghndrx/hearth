@@ -110,6 +110,10 @@
 		anchor={$popoutStore.anchor}
 		mutualServers={$popoutStore.mutualServers}
 		mutualFriends={$popoutStore.mutualFriends}
+		sharedChannels={$popoutStore.sharedChannels}
+		recentActivity={$popoutStore.recentActivity}
+		totalMutual={$popoutStore.totalMutual}
+		loading={$popoutStore.loading}
 		on:close={handlePopoutClose}
 		on:message={handlePopoutMessage}
 		on:call={handlePopoutCall}
