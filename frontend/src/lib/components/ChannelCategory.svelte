@@ -2,6 +2,7 @@
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { createEventDispatcher } from 'svelte';
+	import { browser } from '$app/environment';
 
 	export let name: string;
 	export let collapsed = false;
@@ -59,13 +60,22 @@
 </div>
 
 {#if !collapsed}
-	<div
-		id="category-channels-{name}"
-		class="category-channels"
-		transition:slide={{ duration: 150, easing: cubicOut }}
-	>
-		<slot />
-	</div>
+	{#if browser}
+		<div
+			id="category-channels-{name}"
+			class="category-channels"
+			transition:slide={{ duration: 150, easing: cubicOut }}
+		>
+			<slot />
+		</div>
+	{:else}
+		<div
+			id="category-channels-{name}"
+			class="category-channels"
+		>
+			<slot />
+		</div>
+	{/if}
 {/if}
 
 <style>
