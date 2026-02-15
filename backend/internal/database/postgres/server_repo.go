@@ -219,3 +219,16 @@ func (r *ServerRepository) IncrementInviteUses(ctx context.Context, code string)
 	_, err := r.db.ExecContext(ctx, `UPDATE invites SET uses = uses + 1 WHERE code = $1`, code)
 	return err
 }
+
+// GetMutualServers returns servers that both users are members of
+func (r *ServerRepository) GetMutualServers(ctx context.Context, userID1, userID2 uuid.UUID) ([]*models.Server, error) {
+	query := `
+		SELECT s.* FROM servers s
+		INNER JOIN members m1 ON m1.server_id = s.id AND m1.user_id = $1
+		INNER JOIN members m2 ON m2.server_id = s.id AND m2.user_id = $2
+		ORDER BY s.name
+	`
+	var servers []*models.Server
+	err := r.db.SelectContext(ctx, &servers, query, userID1, userID2)
+	return servers, err
+}

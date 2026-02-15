@@ -644,8 +644,8 @@
                 </div>
                 
                 <div class="flex justify-center gap-6 mb-8">
-                  <a href="https://github.com/yourusername/hearth" target="_blank" rel="noopener" class="text-[var(--text-link)]">GitHub Repository</a>
-                  <a href="/docs" target="_blank" rel="noopener" class="text-[var(--text-link)]">Documentation</a>
+                  <a href="https://github.com/ghndrx/hearth" target="_blank" rel="noopener" class="text-[var(--text-link)]">GitHub Repository</a>
+                  <a href="https://github.com/ghndrx/hearth/tree/master/docs" target="_blank" rel="noopener" class="text-[var(--text-link)]">Documentation</a>
                 </div>
                 
                 <div class="flex justify-between items-center py-4 text-left">
