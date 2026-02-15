@@ -19,8 +19,14 @@ type UserServiceInterface interface {
 	GetFriends(ctx context.Context, userID uuid.UUID) ([]*models.User, error)
 	AddFriend(ctx context.Context, userID, friendID uuid.UUID) error
 	RemoveFriend(ctx context.Context, userID, friendID uuid.UUID) error
+	GetBlockedUsers(ctx context.Context, userID uuid.UUID) ([]*models.User, error)
 	BlockUser(ctx context.Context, userID, blockedID uuid.UUID) error
 	UnblockUser(ctx context.Context, userID, blockedID uuid.UUID) error
+}
+
+// FriendServiceInterface defines the methods needed from FriendService
+type FriendServiceInterface interface {
+	GetPendingRequests(ctx context.Context, userID uuid.UUID) ([]models.Friendship, error)
 }
 
 // ServerServiceForUsersInterface defines the methods needed from ServerService
@@ -35,17 +41,20 @@ type ChannelServiceForUsersInterface interface {
 
 type UserHandler struct {
 	userService    UserServiceInterface
+	friendService  FriendServiceInterface
 	serverService  ServerServiceForUsersInterface
 	channelService ChannelServiceForUsersInterface
 }
 
 func NewUserHandler(
 	userService UserServiceInterface,
+	friendService FriendServiceInterface,
 	serverService ServerServiceForUsersInterface,
 	channelService ChannelServiceForUsersInterface,
 ) *UserHandler {
 	return &UserHandler{
 		userService:    userService,
+		friendService:  friendService,
 		serverService:  serverService,
 		channelService: channelService,
 	}
@@ -270,7 +279,7 @@ type RelationshipResponse struct {
 	User UserResponse     `json:"user"`
 }
 
-// GetRelationships returns user's friends/blocked list
+// GetRelationships returns user's friends/blocked/pending list
 func (h *UserHandler) GetRelationships(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
 
@@ -282,8 +291,28 @@ func (h *UserHandler) GetRelationships(c *fiber.Ctx) error {
 		})
 	}
 
-	relationships := make([]RelationshipResponse, 0, len(friends))
+	// Get blocked users
+	blocked, err := h.userService.GetBlockedUsers(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get blocked users",
+		})
+	}
 
+	// Get pending requests
+	pendingRequests, err := h.friendService.GetPendingRequests(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get pending requests",
+		})
+	}
+
+	// Calculate total capacity needed
+
+	totalCount := len(friends) + len(blocked) + len(pendingRequests)
+	relationships := make([]RelationshipResponse, 0, totalCount)
+
+	// Add friends
 	for _, friend := range friends {
 		relationships = append(relationships, RelationshipResponse{
 			ID:   friend.ID,
@@ -298,7 +327,51 @@ func (h *UserHandler) GetRelationships(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Add blocked users and pending requests
+	// Add blocked users
+	for _, blockedUser := range blocked {
+		relationships = append(relationships, RelationshipResponse{
+			ID:   blockedUser.ID,
+			Type: RelationshipTypeBlocked,
+			User: UserResponse{
+				ID:            blockedUser.ID,
+				Username:      blockedUser.Username,
+				Discriminator: blockedUser.Discriminator,
+				AvatarURL:     blockedUser.AvatarURL,
+				Flags:         blockedUser.Flags,
+			},
+		})
+	}
+
+	// Add pending requests
+	for _, request := range pendingRequests {
+		// Determine if it's an incoming or outgoing request
+		relType := RelationshipTypePendingIn
+		if request.UserID1 == userID {
+			relType = RelationshipTypePendingOut
+		}
+
+		// Get the other user's info
+		var otherUser *models.User
+		if request.UserID1 == userID {
+			otherUser, _ = h.userService.GetUser(c.Context(), request.UserID2)
+		} else {
+			otherUser, _ = h.userService.GetUser(c.Context(), request.UserID1)
+		}
+
+		if otherUser != nil {
+			relationships = append(relationships, RelationshipResponse{
+				ID:   request.ID,
+				Type: relType,
+				User: UserResponse{
+					ID:            otherUser.ID,
+					Username:      otherUser.Username,
+					Discriminator: otherUser.Discriminator,
+					AvatarURL:     otherUser.AvatarURL,
+					Flags:         otherUser.Flags,
+				},
+			})
+		}
+	}
 
 	return c.JSON(relationships)
 }

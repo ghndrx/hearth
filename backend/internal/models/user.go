@@ -39,12 +39,12 @@ type User struct {
 
 // UserFlags for system-level user attributes
 const (
-	UserFlagStaff         int64 = 1 << 0
-	UserFlagPartner       int64 = 1 << 1
-	UserFlagBugHunter     int64 = 1 << 2
-	UserFlagPremium       int64 = 1 << 3
-	UserFlagSystemBot     int64 = 1 << 4
-	UserFlagDeletedUser   int64 = 1 << 5
+	UserFlagStaff       int64 = 1 << 0
+	UserFlagPartner     int64 = 1 << 1
+	UserFlagBugHunter   int64 = 1 << 2
+	UserFlagPremium     int64 = 1 << 3
+	UserFlagSystemBot   int64 = 1 << 4
+	UserFlagDeletedUser int64 = 1 << 5
 )
 
 // PublicUser is a safe representation for API responses

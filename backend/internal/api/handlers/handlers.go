@@ -34,13 +34,14 @@ func NewHandlers(
 	webhookService WebhookService,
 	storageService *storage.Service,
 	attachmentService *services.AttachmentService,
+	typingService *services.TypingService,
 	gateway *websocket.Gateway,
 ) *Handlers {
 	return &Handlers{
 		Auth:        NewAuthHandler(authService),
 		Users:       NewUserHandler(userService, friendService, serverService, channelService),
 		Servers:     NewServerHandler(serverService, channelService, roleService),
-		Channels:    NewChannelHandler(channelService, messageService),
+		Channels:    NewChannelHandler(channelService, messageService, typingService),
 		Invites:     NewInviteHandler(serverService),
 		Voice:       NewVoiceHandler(),
 		Gateway:     NewGatewayHandler(gateway),

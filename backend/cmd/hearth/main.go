@@ -201,7 +201,7 @@ func main() {
 	}))
 
 	// Initialize handlers and middleware
-	h := handlers.NewHandlers(authService, userService, friendSvc, serverService, channelService, messageService, roleService, inviteSvc, webhookSvc, storageSvc, attachmentSvc, wsGateway)
+	h := handlers.NewHandlers(authService, userService, friendSvc, serverService, channelService, messageService, roleService, inviteSvc, webhookSvc, storageSvc, attachmentSvc, typingSvc, wsGateway)
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Setup routes

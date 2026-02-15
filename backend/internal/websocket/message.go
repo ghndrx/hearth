@@ -27,39 +27,39 @@ type Message struct {
 
 // Event types
 const (
-	EventReady                     = "READY"
-	EventResumed                   = "RESUMED"
-	EventMessageCreate             = "MESSAGE_CREATE"
-	EventMessageUpdate             = "MESSAGE_UPDATE"
-	EventMessageDelete             = "MESSAGE_DELETE"
-	EventMessageDeleteBulk         = "MESSAGE_DELETE_BULK"
-	EventMessageReactionAdd        = "MESSAGE_REACTION_ADD"
-	EventMessageReactionRemove     = "MESSAGE_REACTION_REMOVE"
-	EventMessageReactionRemoveAll  = "MESSAGE_REACTION_REMOVE_ALL"
-	EventTypingStart               = "TYPING_START"
-	EventChannelCreate             = "CHANNEL_CREATE"
-	EventChannelUpdate             = "CHANNEL_UPDATE"
-	EventChannelDelete             = "CHANNEL_DELETE"
-	EventChannelPinsUpdate         = "CHANNEL_PINS_UPDATE"
-	EventGuildCreate               = "GUILD_CREATE"
-	EventGuildUpdate               = "GUILD_UPDATE"
-	EventGuildDelete               = "GUILD_DELETE"
-	EventGuildMemberAdd            = "GUILD_MEMBER_ADD"
-	EventGuildMemberUpdate         = "GUILD_MEMBER_UPDATE"
-	EventGuildMemberRemove         = "GUILD_MEMBER_REMOVE"
-	EventGuildMembersChunk         = "GUILD_MEMBERS_CHUNK"
-	EventGuildRoleCreate           = "GUILD_ROLE_CREATE"
-	EventGuildRoleUpdate           = "GUILD_ROLE_UPDATE"
-	EventGuildRoleDelete           = "GUILD_ROLE_DELETE"
-	EventGuildBanAdd               = "GUILD_BAN_ADD"
-	EventGuildBanRemove            = "GUILD_BAN_REMOVE"
-	EventGuildEmojisUpdate         = "GUILD_EMOJIS_UPDATE"
-	EventPresenceUpdate            = "PRESENCE_UPDATE"
-	EventVoiceStateUpdate          = "VOICE_STATE_UPDATE"
-	EventVoiceServerUpdate         = "VOICE_SERVER_UPDATE"
-	EventUserUpdate                = "USER_UPDATE"
-	EventInviteCreate              = "INVITE_CREATE"
-	EventInviteDelete              = "INVITE_DELETE"
+	EventReady                    = "READY"
+	EventResumed                  = "RESUMED"
+	EventMessageCreate            = "MESSAGE_CREATE"
+	EventMessageUpdate            = "MESSAGE_UPDATE"
+	EventMessageDelete            = "MESSAGE_DELETE"
+	EventMessageDeleteBulk        = "MESSAGE_DELETE_BULK"
+	EventMessageReactionAdd       = "MESSAGE_REACTION_ADD"
+	EventMessageReactionRemove    = "MESSAGE_REACTION_REMOVE"
+	EventMessageReactionRemoveAll = "MESSAGE_REACTION_REMOVE_ALL"
+	EventTypingStart              = "TYPING_START"
+	EventChannelCreate            = "CHANNEL_CREATE"
+	EventChannelUpdate            = "CHANNEL_UPDATE"
+	EventChannelDelete            = "CHANNEL_DELETE"
+	EventChannelPinsUpdate        = "CHANNEL_PINS_UPDATE"
+	EventGuildCreate              = "GUILD_CREATE"
+	EventGuildUpdate              = "GUILD_UPDATE"
+	EventGuildDelete              = "GUILD_DELETE"
+	EventGuildMemberAdd           = "GUILD_MEMBER_ADD"
+	EventGuildMemberUpdate        = "GUILD_MEMBER_UPDATE"
+	EventGuildMemberRemove        = "GUILD_MEMBER_REMOVE"
+	EventGuildMembersChunk        = "GUILD_MEMBERS_CHUNK"
+	EventGuildRoleCreate          = "GUILD_ROLE_CREATE"
+	EventGuildRoleUpdate          = "GUILD_ROLE_UPDATE"
+	EventGuildRoleDelete          = "GUILD_ROLE_DELETE"
+	EventGuildBanAdd              = "GUILD_BAN_ADD"
+	EventGuildBanRemove           = "GUILD_BAN_REMOVE"
+	EventGuildEmojisUpdate        = "GUILD_EMOJIS_UPDATE"
+	EventPresenceUpdate           = "PRESENCE_UPDATE"
+	EventVoiceStateUpdate         = "VOICE_STATE_UPDATE"
+	EventVoiceServerUpdate        = "VOICE_SERVER_UPDATE"
+	EventUserUpdate               = "USER_UPDATE"
+	EventInviteCreate             = "INVITE_CREATE"
+	EventInviteDelete             = "INVITE_DELETE"
 )
 
 // DispatchEvent creates a dispatch message
@@ -94,32 +94,32 @@ type ReadyData struct {
 
 // MessageCreateData represents a new message event
 type MessageCreateData struct {
-	ID              string        `json:"id"`
-	ChannelID       string        `json:"channel_id"`
-	GuildID         string        `json:"guild_id,omitempty"`
-	Author          interface{}   `json:"author"`
-	Content         string        `json:"content"`
-	Timestamp       string        `json:"timestamp"`
-	EditedTimestamp *string       `json:"edited_timestamp,omitempty"`
-	TTS             bool          `json:"tts"`
-	MentionEveryone bool          `json:"mention_everyone"`
-	Mentions        []interface{} `json:"mentions"`
-	MentionRoles    []string      `json:"mention_roles"`
-	Attachments     []interface{} `json:"attachments"`
-	Embeds          []interface{} `json:"embeds"`
-	Reactions       []interface{} `json:"reactions,omitempty"`
-	Pinned          bool          `json:"pinned"`
-	Type            int           `json:"type"`
-	Flags           int           `json:"flags,omitempty"`
-	ReferencedMessage interface{} `json:"referenced_message,omitempty"`
+	ID                string        `json:"id"`
+	ChannelID         string        `json:"channel_id"`
+	GuildID           string        `json:"guild_id,omitempty"`
+	Author            interface{}   `json:"author"`
+	Content           string        `json:"content"`
+	Timestamp         string        `json:"timestamp"`
+	EditedTimestamp   *string       `json:"edited_timestamp,omitempty"`
+	TTS               bool          `json:"tts"`
+	MentionEveryone   bool          `json:"mention_everyone"`
+	Mentions          []interface{} `json:"mentions"`
+	MentionRoles      []string      `json:"mention_roles"`
+	Attachments       []interface{} `json:"attachments"`
+	Embeds            []interface{} `json:"embeds"`
+	Reactions         []interface{} `json:"reactions,omitempty"`
+	Pinned            bool          `json:"pinned"`
+	Type              int           `json:"type"`
+	Flags             int           `json:"flags,omitempty"`
+	ReferencedMessage interface{}   `json:"referenced_message,omitempty"`
 }
 
 // TypingStartData represents a typing event
 type TypingStartData struct {
-	ChannelID string `json:"channel_id"`
-	GuildID   string `json:"guild_id,omitempty"`
-	UserID    string `json:"user_id"`
-	Timestamp int64  `json:"timestamp"`
+	ChannelID string      `json:"channel_id"`
+	GuildID   string      `json:"guild_id,omitempty"`
+	UserID    string      `json:"user_id"`
+	Timestamp int64       `json:"timestamp"`
 	Member    interface{} `json:"member,omitempty"`
 }
 
@@ -134,10 +134,10 @@ type PresenceUpdateData struct {
 
 // GuildMemberAddData represents a member join
 type GuildMemberAddData struct {
-	GuildID string      `json:"guild_id"`
-	User    interface{} `json:"user"`
-	JoinedAt string     `json:"joined_at"`
-	Roles   []string    `json:"roles"`
+	GuildID  string      `json:"guild_id"`
+	User     interface{} `json:"user"`
+	JoinedAt string      `json:"joined_at"`
+	Roles    []string    `json:"roles"`
 }
 
 // GuildMemberRemoveData represents a member leave

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hearth/internal/models"
 	"github.com/google/uuid"
+	"hearth/internal/models"
 )
 
 // DraftRepository defines the data access contract for draft-related operations.
@@ -39,14 +39,14 @@ func (s *DraftService) CreateDraft(ctx context.Context, req models.CreateDraftRe
 	}
 
 	draft := &models.Draft{
-		ID:          uuid.New(),
-		Title:       req.Title,
-		Content:     req.Content,
-		GuildID:     req.GuildID,
-		ChannelID:   req.ChannelID,
-		Status:      models.DraftStatusDraft,
-		CreatedBy:   req.CreatedBy,
-		LastEdited:  nil, // nil implies created now
+		ID:         uuid.New(),
+		Title:      req.Title,
+		Content:    req.Content,
+		GuildID:    req.GuildID,
+		ChannelID:  req.ChannelID,
+		Status:     models.DraftStatusDraft,
+		CreatedBy:  req.CreatedBy,
+		LastEdited: nil, // nil implies created now
 	}
 
 	if err := s.repo.CreateDraft(ctx, draft); err != nil {
@@ -67,7 +67,7 @@ func (s *DraftService) PublishDraft(ctx context.Context, id uuid.UUID, sessionID
 	if err := s.repo.UpdateDraftStatus(ctx, id, models.DraftStatusPublished); err != nil {
 		return fmt.Errorf("failed to update draft status: %w", err)
 	}
-	
+
 	// Assuming models.Draft has a method to append logs or similar,
 	// but for this service layer, we pass the transaction context primarily.
 	return nil
@@ -80,7 +80,7 @@ func (s *DraftService) GetDraftPreview(ctx context.Context, id uuid.UUID) (strin
 	if err != nil {
 		return "", err
 	}
-	
+
 	if draft.Content == "" {
 		return "", nil
 	}

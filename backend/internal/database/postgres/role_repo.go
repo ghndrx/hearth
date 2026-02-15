@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	
+
 	"hearth/internal/models"
 )
 
@@ -51,13 +51,13 @@ func (r *RoleRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*mode
 	if len(ids) == 0 {
 		return []*models.Role{}, nil
 	}
-	
+
 	query, args, err := sqlx.In(`SELECT * FROM roles WHERE id IN (?) ORDER BY position DESC`, ids)
 	if err != nil {
 		return nil, err
 	}
 	query = r.db.Rebind(query)
-	
+
 	var roles []*models.Role
 	err = r.db.SelectContext(ctx, &roles, query, args...)
 	return roles, err

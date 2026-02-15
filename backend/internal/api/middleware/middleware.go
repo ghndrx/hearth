@@ -3,8 +3,8 @@ package middleware
 import (
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
@@ -28,7 +28,7 @@ func (m *Middleware) RequireAuth(c *fiber.Ctx) error {
 			"error": "missing authorization header",
 		})
 	}
-	
+
 	// Extract token
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
@@ -36,9 +36,9 @@ func (m *Middleware) RequireAuth(c *fiber.Ctx) error {
 			"error": "invalid authorization format",
 		})
 	}
-	
+
 	token := parts[1]
-	
+
 	// TODO: Validate JWT token
 	// For now, try to parse as UUID directly (dev mode)
 	userID, err := uuid.Parse(token)
@@ -48,7 +48,7 @@ func (m *Middleware) RequireAuth(c *fiber.Ctx) error {
 			"error": "invalid token",
 		})
 	}
-	
+
 	c.Locals("userID", userID)
 	return c.Next()
 }
@@ -75,11 +75,11 @@ func (m *Middleware) CORS() fiber.Handler {
 		c.Set("Access-Control-Allow-Origin", "*")
 		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
-		
+
 		if c.Method() == "OPTIONS" {
 			return c.SendStatus(fiber.StatusNoContent)
 		}
-		
+
 		return c.Next()
 	}
 }

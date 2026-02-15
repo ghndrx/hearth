@@ -12,7 +12,7 @@ import (
 
 func TestDefaultGatewayConfig(t *testing.T) {
 	cfg := DefaultGatewayConfig()
-	
+
 	assert.Equal(t, 41250*time.Millisecond, cfg.HeartbeatInterval)
 	assert.Equal(t, 5*time.Minute, cfg.SessionTimeout)
 }
@@ -75,7 +75,7 @@ func TestReadyData(t *testing.T) {
 
 	assert.Equal(t, float64(10), decoded["v"])
 	assert.Equal(t, sessionID, decoded["session_id"])
-	
+
 	user := decoded["user"].(map[string]interface{})
 	assert.Equal(t, userID.String(), user["id"])
 	assert.Equal(t, "testuser", user["username"])
@@ -177,7 +177,7 @@ func TestGuildMemberAddData(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, guildID, decoded["guild_id"])
-	
+
 	user := decoded["user"].(map[string]interface{})
 	assert.Equal(t, "newmember", user["username"])
 }

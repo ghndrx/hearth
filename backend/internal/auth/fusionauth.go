@@ -26,8 +26,8 @@ func NewFusionAuthProvider(cfg *FusionAuthConfig) (*FusionAuthProvider, error) {
 
 // Implementation stubs
 
-func (p *FusionAuthProvider) Name() string                { return "FusionAuth" }
-func (p *FusionAuthProvider) Type() ProviderType          { return ProviderFusionAuth }
+func (p *FusionAuthProvider) Name() string       { return "FusionAuth" }
+func (p *FusionAuthProvider) Type() ProviderType { return ProviderFusionAuth }
 
 func (p *FusionAuthProvider) Register(ctx context.Context, req *RegisterRequest) (*AuthResult, error) {
 	return nil, ErrFusionAuthNotImplemented

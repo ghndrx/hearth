@@ -57,12 +57,12 @@ func NewInviteService(
 
 // CreateInviteRequest represents an invite creation request
 type CreateInviteRequest struct {
-	ServerID   uuid.UUID
-	ChannelID  uuid.UUID
-	CreatorID  uuid.UUID
-	MaxUses    int           // 0 = unlimited
-	MaxAge     time.Duration // 0 = never expires
-	Temporary  bool
+	ServerID  uuid.UUID
+	ChannelID uuid.UUID
+	CreatorID uuid.UUID
+	MaxUses   int           // 0 = unlimited
+	MaxAge    time.Duration // 0 = never expires
+	Temporary bool
 }
 
 // CreateInvite creates a new server invite
@@ -175,8 +175,8 @@ func (s *InviteService) UseInvite(ctx context.Context, code string, userID uuid.
 	}
 
 	s.eventBus.Publish("server.member_joined", &MemberJoinedEvent{
-		ServerID: invite.ServerID,
-		UserID:   userID,
+		ServerID:   invite.ServerID,
+		UserID:     userID,
 		InviteCode: code,
 	})
 

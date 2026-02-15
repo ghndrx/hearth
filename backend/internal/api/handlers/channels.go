@@ -11,12 +11,14 @@ import (
 type ChannelHandler struct {
 	channelService *services.ChannelService
 	messageService *services.MessageService
+	typingService  *services.TypingService
 }
 
-func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService) *ChannelHandler {
+func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService, typingService *services.TypingService) *ChannelHandler {
 	return &ChannelHandler{
 		channelService: channelService,
 		messageService: messageService,
+		typingService:  typingService,
 	}
 }
 
@@ -390,7 +392,37 @@ func (h *ChannelHandler) UnpinMessage(c *fiber.Ctx) error {
 
 // TriggerTyping triggers typing indicator
 func (h *ChannelHandler) TriggerTyping(c *fiber.Ctx) error {
-	// TODO: Broadcast typing event via WebSocket
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	// Verify user has access to channel
+	_, err = h.channelService.GetChannel(c.Context(), channelID)
+	if err != nil {
+		if err == services.ErrChannelNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel",
+		})
+	}
+
+	// Check if user is member (for guild channels)
+	// TODO: Implement proper permission check
+
+	// Start typing indicator
+	if err := h.typingService.StartTyping(c.Context(), channelID.String(), userID.String()); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to start typing",
+		})
+	}
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

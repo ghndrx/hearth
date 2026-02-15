@@ -8,34 +8,34 @@ import (
 
 // QuotaConfig represents instance-level quota defaults
 type QuotaConfig struct {
-	Storage  StorageQuotaConfig  `yaml:"storage" json:"storage"`
-	Messages MessageQuotaConfig  `yaml:"messages" json:"messages"`
-	Servers  ServerQuotaConfig   `yaml:"servers" json:"servers"`
-	Voice    VoiceQuotaConfig    `yaml:"voice" json:"voice"`
-	API      APIQuotaConfig      `yaml:"api" json:"api"`
+	Storage  StorageQuotaConfig `yaml:"storage" json:"storage"`
+	Messages MessageQuotaConfig `yaml:"messages" json:"messages"`
+	Servers  ServerQuotaConfig  `yaml:"servers" json:"servers"`
+	Voice    VoiceQuotaConfig   `yaml:"voice" json:"voice"`
+	API      APIQuotaConfig     `yaml:"api" json:"api"`
 }
 
 // StorageQuotaConfig defines storage limits
 type StorageQuotaConfig struct {
-	Enabled                 bool     `yaml:"enabled" json:"enabled"`
-	UserStorageMB           int64    `yaml:"user_storage_mb" json:"user_storage_mb"`                       // 0 = unlimited
-	ServerStorageMB         int64    `yaml:"server_storage_mb" json:"server_storage_mb"`                   // 0 = unlimited
-	MaxFileSizeMB           int64    `yaml:"max_file_size_mb" json:"max_file_size_mb"`                     // 0 = unlimited
-	MaxAvatarSizeMB         int64    `yaml:"max_avatar_size_mb" json:"max_avatar_size_mb"`
-	MaxEmojiSizeMB          int64    `yaml:"max_emoji_size_mb" json:"max_emoji_size_mb"`
-	MaxAttachmentsPerMsg    int      `yaml:"max_attachments_per_message" json:"max_attachments_per_message"`
-	MaxFilesPerUser         int      `yaml:"max_files_per_user" json:"max_files_per_user"`                 // 0 = unlimited
-	AllowedExtensions       []string `yaml:"allowed_extensions" json:"allowed_extensions"`                 // empty = all
-	BlockedExtensions       []string `yaml:"blocked_extensions" json:"blocked_extensions"`
+	Enabled              bool     `yaml:"enabled" json:"enabled"`
+	UserStorageMB        int64    `yaml:"user_storage_mb" json:"user_storage_mb"`     // 0 = unlimited
+	ServerStorageMB      int64    `yaml:"server_storage_mb" json:"server_storage_mb"` // 0 = unlimited
+	MaxFileSizeMB        int64    `yaml:"max_file_size_mb" json:"max_file_size_mb"`   // 0 = unlimited
+	MaxAvatarSizeMB      int64    `yaml:"max_avatar_size_mb" json:"max_avatar_size_mb"`
+	MaxEmojiSizeMB       int64    `yaml:"max_emoji_size_mb" json:"max_emoji_size_mb"`
+	MaxAttachmentsPerMsg int      `yaml:"max_attachments_per_message" json:"max_attachments_per_message"`
+	MaxFilesPerUser      int      `yaml:"max_files_per_user" json:"max_files_per_user"` // 0 = unlimited
+	AllowedExtensions    []string `yaml:"allowed_extensions" json:"allowed_extensions"` // empty = all
+	BlockedExtensions    []string `yaml:"blocked_extensions" json:"blocked_extensions"`
 }
 
 // MessageQuotaConfig defines message limits
 type MessageQuotaConfig struct {
-	RateLimitMessages      int `yaml:"rate_limit_messages" json:"rate_limit_messages"`           // 0 = unlimited
+	RateLimitMessages      int `yaml:"rate_limit_messages" json:"rate_limit_messages"` // 0 = unlimited
 	RateLimitWindowSeconds int `yaml:"rate_limit_window_seconds" json:"rate_limit_window_seconds"`
 	DefaultSlowmodeSeconds int `yaml:"default_slowmode_seconds" json:"default_slowmode_seconds"`
 	MaxSlowmodeSeconds     int `yaml:"max_slowmode_seconds" json:"max_slowmode_seconds"`
-	MaxMessageLength       int `yaml:"max_message_length" json:"max_message_length"`             // 0 = unlimited
+	MaxMessageLength       int `yaml:"max_message_length" json:"max_message_length"` // 0 = unlimited
 	MaxEmbedCount          int `yaml:"max_embed_count" json:"max_embed_count"`
 	MaxMentionsPerMessage  int `yaml:"max_mentions_per_message" json:"max_mentions_per_message"` // 0 = unlimited
 	MaxReactionsPerMessage int `yaml:"max_reactions_per_message" json:"max_reactions_per_message"`
@@ -57,13 +57,13 @@ type ServerQuotaConfig struct {
 
 // VoiceQuotaConfig defines voice/video limits
 type VoiceQuotaConfig struct {
-	Enabled                bool `yaml:"enabled" json:"enabled"`
-	MaxBitrateKbps         int  `yaml:"max_bitrate_kbps" json:"max_bitrate_kbps"`
-	MaxVideoHeight         int  `yaml:"max_video_height" json:"max_video_height"`
-	MaxScreenShareFPS      int  `yaml:"max_screen_share_fps" json:"max_screen_share_fps"`
-	MaxVoiceUsersPerChannel int `yaml:"max_voice_users_per_channel" json:"max_voice_users_per_channel"`
-	MaxVideoUsersPerChannel int `yaml:"max_video_users_per_channel" json:"max_video_users_per_channel"`
-	MaxCallDurationMinutes int  `yaml:"max_call_duration_minutes" json:"max_call_duration_minutes"` // 0 = unlimited
+	Enabled                 bool `yaml:"enabled" json:"enabled"`
+	MaxBitrateKbps          int  `yaml:"max_bitrate_kbps" json:"max_bitrate_kbps"`
+	MaxVideoHeight          int  `yaml:"max_video_height" json:"max_video_height"`
+	MaxScreenShareFPS       int  `yaml:"max_screen_share_fps" json:"max_screen_share_fps"`
+	MaxVoiceUsersPerChannel int  `yaml:"max_voice_users_per_channel" json:"max_voice_users_per_channel"`
+	MaxVideoUsersPerChannel int  `yaml:"max_video_users_per_channel" json:"max_video_users_per_channel"`
+	MaxCallDurationMinutes  int  `yaml:"max_call_duration_minutes" json:"max_call_duration_minutes"` // 0 = unlimited
 }
 
 // APIQuotaConfig defines API rate limits
@@ -79,23 +79,23 @@ type APIQuotaConfig struct {
 
 // ServerQuotas represents server-specific quota overrides
 type ServerQuotas struct {
-	ServerID      uuid.UUID  `json:"server_id" db:"server_id"`
-	StorageMB     *int64     `json:"storage_mb,omitempty" db:"storage_mb"`
-	MaxFileSizeMB *int       `json:"max_file_size_mb,omitempty" db:"max_file_size_mb"`
-	MaxChannels   *int       `json:"max_channels,omitempty" db:"max_channels"`
-	MaxRoles      *int       `json:"max_roles,omitempty" db:"max_roles"`
-	MaxEmoji      *int       `json:"max_emoji,omitempty" db:"max_emoji"`
-	MaxMembers    *int       `json:"max_members,omitempty" db:"max_members"`
-	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
+	ServerID      uuid.UUID `json:"server_id" db:"server_id"`
+	StorageMB     *int64    `json:"storage_mb,omitempty" db:"storage_mb"`
+	MaxFileSizeMB *int      `json:"max_file_size_mb,omitempty" db:"max_file_size_mb"`
+	MaxChannels   *int      `json:"max_channels,omitempty" db:"max_channels"`
+	MaxRoles      *int      `json:"max_roles,omitempty" db:"max_roles"`
+	MaxEmoji      *int      `json:"max_emoji,omitempty" db:"max_emoji"`
+	MaxMembers    *int      `json:"max_members,omitempty" db:"max_members"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // RoleQuotas represents role-specific quota overrides
 type RoleQuotas struct {
-	RoleID          uuid.UUID `json:"role_id" db:"role_id"`
-	StorageMB       *int64    `json:"storage_mb,omitempty" db:"storage_mb"`
-	MaxFileSizeMB   *int      `json:"max_file_size_mb,omitempty" db:"max_file_size_mb"`
-	MessageRateLimit *int     `json:"message_rate_limit,omitempty" db:"message_rate_limit"`
-	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
+	RoleID           uuid.UUID `json:"role_id" db:"role_id"`
+	StorageMB        *int64    `json:"storage_mb,omitempty" db:"storage_mb"`
+	MaxFileSizeMB    *int      `json:"max_file_size_mb,omitempty" db:"max_file_size_mb"`
+	MessageRateLimit *int      `json:"message_rate_limit,omitempty" db:"message_rate_limit"`
+	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // UserQuotas represents user-specific quota overrides
@@ -120,13 +120,13 @@ type StorageUsage struct {
 
 // EffectiveLimits represents the calculated limits for a user
 type EffectiveLimits struct {
-	StorageMB        int64  `json:"storage_mb"`         // -1 = unlimited
-	MaxFileSizeMB    int64  `json:"max_file_size_mb"`   // -1 = unlimited
-	MessageRateLimit int    `json:"message_rate_limit"` // 0 = unlimited
-	SlowmodeSeconds  int    `json:"slowmode_seconds"`
-	MaxServersOwned  int    `json:"max_servers_owned"`  // 0 = unlimited
-	MaxServersJoined int    `json:"max_servers_joined"` // 0 = unlimited
-	Sources          map[string]string `json:"sources"` // field -> source level
+	StorageMB        int64             `json:"storage_mb"`         // -1 = unlimited
+	MaxFileSizeMB    int64             `json:"max_file_size_mb"`   // -1 = unlimited
+	MessageRateLimit int               `json:"message_rate_limit"` // 0 = unlimited
+	SlowmodeSeconds  int               `json:"slowmode_seconds"`
+	MaxServersOwned  int               `json:"max_servers_owned"`  // 0 = unlimited
+	MaxServersJoined int               `json:"max_servers_joined"` // 0 = unlimited
+	Sources          map[string]string `json:"sources"`            // field -> source level
 }
 
 // StorageInfo provides user storage information
@@ -134,10 +134,10 @@ type StorageInfo struct {
 	UserID      uuid.UUID `json:"user_id"`
 	UsedBytes   int64     `json:"used_bytes"`
 	UsedMB      float64   `json:"used_mb"`
-	LimitBytes  int64     `json:"limit_bytes"`  // -1 = unlimited
-	LimitMB     int64     `json:"limit_mb"`     // -1 = unlimited
+	LimitBytes  int64     `json:"limit_bytes"` // -1 = unlimited
+	LimitMB     int64     `json:"limit_mb"`    // -1 = unlimited
 	FileCount   int       `json:"file_count"`
-	Percentage  float64   `json:"percentage"`   // 0-100, -1 if unlimited
+	Percentage  float64   `json:"percentage"` // 0-100, -1 if unlimited
 	IsUnlimited bool      `json:"is_unlimited"`
 }
 
@@ -200,13 +200,13 @@ func DefaultQuotaConfig() *QuotaConfig {
 	return &QuotaConfig{
 		Storage: StorageQuotaConfig{
 			Enabled:              true,
-			UserStorageMB:        500,   // 500 MB per user
-			ServerStorageMB:      5000,  // 5 GB per server
-			MaxFileSizeMB:        25,    // 25 MB max file
+			UserStorageMB:        500,  // 500 MB per user
+			ServerStorageMB:      5000, // 5 GB per server
+			MaxFileSizeMB:        25,   // 25 MB max file
 			MaxAvatarSizeMB:      8,
 			MaxEmojiSizeMB:       1,
 			MaxAttachmentsPerMsg: 10,
-			MaxFilesPerUser:      0,     // unlimited
+			MaxFilesPerUser:      0, // unlimited
 			AllowedExtensions:    []string{},
 			BlockedExtensions:    []string{"exe", "bat", "cmd", "sh", "ps1", "msi"},
 		},

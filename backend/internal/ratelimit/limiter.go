@@ -92,7 +92,7 @@ func (l *Limiter) CheckSlowmode(ctx context.Context, userID, channelID uuid.UUID
 	}
 
 	key := fmt.Sprintf("slowmode:%s:%s", channelID, userID)
-	
+
 	// Check if user has sent a message recently
 	_, err := l.cache.Get(ctx, key)
 	if err == nil {

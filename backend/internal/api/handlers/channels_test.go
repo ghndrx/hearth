@@ -31,6 +31,34 @@ type mockChannelMessageService struct {
 	unpinMessageFunc      func(ctx context.Context, messageID, requesterID uuid.UUID) error
 }
 
+// mockTypingServiceForChannels mocks TypingService for channel handler tests
+type mockTypingServiceForChannels struct {
+	startTypingFunc func(ctx context.Context, channelID, userID string) error
+	stopTypingFunc  func(ctx context.Context, channelID, userID string) error
+	getTypingFunc   func(ctx context.Context, channelID string) ([]string, error)
+}
+
+func (m *mockTypingServiceForChannels) StartTyping(ctx context.Context, channelID, userID string) error {
+	if m.startTypingFunc != nil {
+		return m.startTypingFunc(ctx, channelID, userID)
+	}
+	return nil
+}
+
+func (m *mockTypingServiceForChannels) StopTyping(ctx context.Context, channelID, userID string) error {
+	if m.stopTypingFunc != nil {
+		return m.stopTypingFunc(ctx, channelID, userID)
+	}
+	return nil
+}
+
+func (m *mockTypingServiceForChannels) GetTypingUsers(ctx context.Context, channelID string) ([]string, error) {
+	if m.getTypingFunc != nil {
+		return m.getTypingFunc(ctx, channelID)
+	}
+	return []string{}, nil
+}
+
 func (m *mockChannelMessageService) SendMessage(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID) (*models.Message, error) {
 	if m.sendMessageFunc != nil {
 		return m.sendMessageFunc(ctx, authorID, channelID, content, attachments, replyTo)
@@ -102,7 +130,7 @@ func (m *mockChannelMessageService) GetPinnedMessages(ctx context.Context, chann
 }
 
 // setupChannelTestApp creates a test Fiber app with channel routes
-func setupChannelTestApp(messageService *mockChannelMessageService) *fiber.App {
+func setupChannelTestApp(messageService *mockChannelMessageService, channelService *mockChannelService, typingService *mockTypingServiceForChannels) *fiber.App {
 	app := fiber.New()
 
 	// Inject userID middleware
@@ -464,8 +492,36 @@ func setupChannelTestApp(messageService *mockChannelMessageService) *fiber.App {
 		return c.JSON(message)
 	})
 
-	// TriggerTyping (stub)
+	// TriggerTyping
 	app.Post("/channels/:id/typing", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+		channelID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel id",
+			})
+		}
+
+		// Verify channel exists
+		_, err = channelService.GetChannel(c.Context(), channelID)
+		if err != nil {
+			if errors.Is(err, services.ErrChannelNotFound) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "channel not found",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get channel",
+			})
+		}
+
+		// Start typing indicator
+		if err := typingService.StartTyping(c.Context(), channelID.String(), userID.String()); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to start typing",
+			})
+		}
+
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
@@ -501,7 +557,7 @@ func TestChannelHandler_GetMessages_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages", nil)
 	req.Header.Set("X-User-ID", userID.String())
 
@@ -540,7 +596,7 @@ func TestChannelHandler_GetMessages_WithPagination(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages?before="+beforeID.String()+"&limit=25", nil)
 	req.Header.Set("X-User-ID", userID.String())
 
@@ -558,7 +614,7 @@ func TestChannelHandler_GetMessages_WithPagination(t *testing.T) {
 
 func TestChannelHandler_GetMessages_InvalidChannelID(t *testing.T) {
 	svc := &mockChannelMessageService{}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/invalid-uuid/messages", nil)
 	req.Header.Set("X-User-ID", uuid.New().String())
@@ -584,7 +640,7 @@ func TestChannelHandler_GetMessages_ChannelNotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages", nil)
 	req.Header.Set("X-User-ID", userID.String())
 
@@ -609,7 +665,7 @@ func TestChannelHandler_GetMessages_NoPermission(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages", nil)
 	req.Header.Set("X-User-ID", userID.String())
 
@@ -643,7 +699,7 @@ func TestChannelHandler_SendMessage_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": messageContent})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/messages", bytes.NewReader(body))
@@ -681,7 +737,7 @@ func TestChannelHandler_SendMessage_EmptyContent(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": ""})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/messages", bytes.NewReader(body))
@@ -709,7 +765,7 @@ func TestChannelHandler_SendMessage_TooLong(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": "some very long message"})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/messages", bytes.NewReader(body))
@@ -737,7 +793,7 @@ func TestChannelHandler_SendMessage_RateLimited(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": "message"})
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/messages", bytes.NewReader(body))
@@ -760,7 +816,7 @@ func TestChannelHandler_SendMessage_InvalidBody(t *testing.T) {
 	channelID := uuid.New()
 
 	svc := &mockChannelMessageService{}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/messages", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -797,7 +853,7 @@ func TestChannelHandler_SendMessage_WithReply(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"content":  "Reply message",
@@ -843,7 +899,7 @@ func TestChannelHandler_EditMessage_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": newContent})
 	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String()+"/messages/"+messageID.String(), bytes.NewReader(body))
@@ -873,7 +929,7 @@ func TestChannelHandler_EditMessage_NotAuthor(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": "new content"})
 	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String()+"/messages/"+messageID.String(), bytes.NewReader(body))
@@ -902,7 +958,7 @@ func TestChannelHandler_EditMessage_NotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	body, _ := json.Marshal(map[string]string{"content": "new content"})
 	req := httptest.NewRequest("PATCH", "/channels/"+channelID.String()+"/messages/"+messageID.String(), bytes.NewReader(body))
@@ -933,7 +989,7 @@ func TestChannelHandler_DeleteMessage_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -960,7 +1016,7 @@ func TestChannelHandler_DeleteMessage_NotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -987,7 +1043,7 @@ func TestChannelHandler_DeleteMessage_NoPermission(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1020,7 +1076,7 @@ func TestChannelHandler_AddReaction_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("PUT", "/channels/"+channelID.String()+"/messages/"+messageID.String()+"/reactions/"+emoji+"/@me", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1048,7 +1104,7 @@ func TestChannelHandler_AddReaction_MessageNotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("PUT", "/channels/"+channelID.String()+"/messages/"+messageID.String()+"/reactions/👍/@me", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1078,7 +1134,7 @@ func TestChannelHandler_RemoveReaction_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/messages/"+messageID.String()+"/reactions/"+emoji+"/@me", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1105,7 +1161,7 @@ func TestChannelHandler_RemoveReaction_MessageNotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/messages/"+messageID.String()+"/reactions/👍/@me", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1134,7 +1190,7 @@ func TestChannelHandler_PinMessage_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("PUT", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1161,7 +1217,7 @@ func TestChannelHandler_PinMessage_NoPermission(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("PUT", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1203,7 +1259,7 @@ func TestChannelHandler_GetPins_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1239,7 +1295,7 @@ func TestChannelHandler_GetPins_InvalidChannelID(t *testing.T) {
 	userID := uuid.New()
 
 	svc := &mockChannelMessageService{}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/invalid-uuid/pins", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1264,7 +1320,7 @@ func TestChannelHandler_GetPins_ChannelNotFound(t *testing.T) {
 			return nil, services.ErrChannelNotFound
 		},
 	}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1289,7 +1345,7 @@ func TestChannelHandler_GetPins_NoPermission(t *testing.T) {
 			return nil, services.ErrNoPermission
 		},
 	}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1314,7 +1370,7 @@ func TestChannelHandler_GetPins_Empty(t *testing.T) {
 			return []*models.Message{}, nil
 		},
 	}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/pins", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1346,8 +1402,29 @@ func TestChannelHandler_TriggerTyping_Success(t *testing.T) {
 	userID := uuid.New()
 	channelID := uuid.New()
 
+	channelSvc := &mockChannelService{
+		getChannelFunc: func(ctx context.Context, chID uuid.UUID) (*models.Channel, error) {
+			if chID == channelID {
+				return &models.Channel{
+					ID:   channelID,
+					Type: models.ChannelTypeText,
+				}, nil
+			}
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	var capturedChannelID, capturedUserID string
+	typingSvc := &mockTypingServiceForChannels{
+		startTypingFunc: func(ctx context.Context, chID, uID string) error {
+			capturedChannelID = chID
+			capturedUserID = uID
+			return nil
+		},
+	}
+
 	svc := &mockChannelMessageService{}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, channelSvc, typingSvc)
 
 	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/typing", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1360,6 +1437,60 @@ func TestChannelHandler_TriggerTyping_Success(t *testing.T) {
 
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Errorf("Expected 204, got %d", resp.StatusCode)
+	}
+
+	if capturedChannelID != channelID.String() {
+		t.Errorf("Expected channelID %s, got %s", channelID.String(), capturedChannelID)
+	}
+	if capturedUserID != userID.String() {
+		t.Errorf("Expected userID %s, got %s", userID.String(), capturedUserID)
+	}
+}
+
+func TestChannelHandler_TriggerTyping_ChannelNotFound(t *testing.T) {
+	userID := uuid.New()
+	channelID := uuid.New()
+
+	channelSvc := &mockChannelService{
+		getChannelFunc: func(ctx context.Context, chID uuid.UUID) (*models.Channel, error) {
+			return nil, services.ErrChannelNotFound
+		},
+	}
+
+	svc := &mockChannelMessageService{}
+	app := setupChannelTestApp(svc, channelSvc, &mockTypingServiceForChannels{})
+
+	req := httptest.NewRequest("POST", "/channels/"+channelID.String()+"/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("Expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestChannelHandler_TriggerTyping_InvalidChannelID(t *testing.T) {
+	userID := uuid.New()
+
+	svc := &mockChannelMessageService{}
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
+
+	req := httptest.NewRequest("POST", "/channels/invalid-uuid/typing", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
 	}
 }
 
@@ -1396,7 +1527,7 @@ func TestChannelHandler_GetMessage_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1436,7 +1567,7 @@ func TestChannelHandler_GetMessage_NotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1463,7 +1594,7 @@ func TestChannelHandler_GetMessage_NoPermission(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1484,7 +1615,7 @@ func TestChannelHandler_GetMessage_InvalidID(t *testing.T) {
 	channelID := uuid.New()
 
 	svc := &mockChannelMessageService{}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("GET", "/channels/"+channelID.String()+"/messages/invalid-uuid", nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1519,7 +1650,7 @@ func TestChannelHandler_UnpinMessage_Success(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1546,7 +1677,7 @@ func TestChannelHandler_UnpinMessage_NotFound(t *testing.T) {
 		},
 	}
 
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/"+messageID.String(), nil)
 	req.Header.Set("X-User-ID", userID.String())
@@ -1567,7 +1698,7 @@ func TestChannelHandler_UnpinMessage_InvalidID(t *testing.T) {
 	channelID := uuid.New()
 
 	svc := &mockChannelMessageService{}
-	app := setupChannelTestApp(svc)
+	app := setupChannelTestApp(svc, &mockChannelService{}, &mockTypingServiceForChannels{})
 
 	req := httptest.NewRequest("DELETE", "/channels/"+channelID.String()+"/pins/invalid-uuid", nil)
 	req.Header.Set("X-User-ID", userID.String())

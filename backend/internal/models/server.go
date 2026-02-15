@@ -38,14 +38,14 @@ const (
 
 // ExplicitContentFilter constants
 const (
-	ExplicitFilterDisabled    = 0 // Don't scan
-	ExplicitFilterNoRole      = 1 // Scan messages from members without roles
-	ExplicitFilterAllMembers  = 2 // Scan all messages
+	ExplicitFilterDisabled   = 0 // Don't scan
+	ExplicitFilterNoRole     = 1 // Scan messages from members without roles
+	ExplicitFilterAllMembers = 2 // Scan all messages
 )
 
 // DefaultNotificationLevel constants
 const (
-	NotifyAllMessages = 0 // Notify for all messages
+	NotifyAllMessages  = 0 // Notify for all messages
 	NotifyMentionsOnly = 1 // Only notify for mentions
 )
 
@@ -58,15 +58,15 @@ type CreateServerRequest struct {
 
 // UpdateServerRequest is the input for updating server settings
 type UpdateServerRequest struct {
-	Name                  *string  `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	IconURL               *string  `json:"icon_url,omitempty"`
-	BannerURL             *string  `json:"banner_url,omitempty"`
-	Description           *string  `json:"description,omitempty" validate:"omitempty,max=300"`
-	AFKChannelID          *string  `json:"afk_channel_id,omitempty"`
-	AFKTimeout            *int     `json:"afk_timeout,omitempty"`
-	VerificationLevel     *int     `json:"verification_level,omitempty"`
-	ExplicitContentFilter *int     `json:"explicit_content_filter,omitempty"`
-	DefaultNotifications  *int     `json:"default_notifications,omitempty"`
+	Name                  *string `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+	IconURL               *string `json:"icon_url,omitempty"`
+	BannerURL             *string `json:"banner_url,omitempty"`
+	Description           *string `json:"description,omitempty" validate:"omitempty,max=300"`
+	AFKChannelID          *string `json:"afk_channel_id,omitempty"`
+	AFKTimeout            *int    `json:"afk_timeout,omitempty"`
+	VerificationLevel     *int    `json:"verification_level,omitempty"`
+	ExplicitContentFilter *int    `json:"explicit_content_filter,omitempty"`
+	DefaultNotifications  *int    `json:"default_notifications,omitempty"`
 }
 
 // Member represents a user's membership in a server
@@ -152,8 +152,8 @@ func (i *Invite) IsValid() bool {
 
 // CreateInviteRequest is the input for creating an invite
 type CreateInviteRequest struct {
-	MaxAge    *int  `json:"max_age,omitempty"`    // seconds, 0 = never
-	MaxUses   *int  `json:"max_uses,omitempty"`   // 0 = unlimited
+	MaxAge    *int  `json:"max_age,omitempty"`   // seconds, 0 = never
+	MaxUses   *int  `json:"max_uses,omitempty"`  // 0 = unlimited
 	Temporary *bool `json:"temporary,omitempty"` // kick when disconnect
 }
 

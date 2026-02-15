@@ -140,12 +140,13 @@ func Migrate(ctx context.Context, db *sqlx.DB) error {
 
 // Repositories holds all database repositories
 type Repositories struct {
-	Users    *UserRepository
-	Servers  *ServerRepository
-	Channels *ChannelRepository
-	Messages *MessageRepository
-	Roles    *RoleRepository
-	Webhooks *WebhookRepository
+	Users       *UserRepository
+	Friendships *FriendshipRepository
+	Servers     *ServerRepository
+	Channels    *ChannelRepository
+	Messages    *MessageRepository
+	Roles       *RoleRepository
+	Webhooks    *WebhookRepository
 }
 
 // NewRepositories creates all repositories

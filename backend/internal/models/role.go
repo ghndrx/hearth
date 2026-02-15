@@ -14,10 +14,10 @@ type Role struct {
 	Color        int       `json:"color" db:"color"` // RGB integer
 	Permissions  int64     `json:"permissions" db:"permissions"`
 	Position     int       `json:"position" db:"position"`
-	Hoist        bool      `json:"hoist" db:"hoist"`             // Show separately in member list
-	Managed      bool      `json:"managed" db:"managed"`         // Managed by integration
+	Hoist        bool      `json:"hoist" db:"hoist"`     // Show separately in member list
+	Managed      bool      `json:"managed" db:"managed"` // Managed by integration
 	Mentionable  bool      `json:"mentionable" db:"mentionable"`
-	IsDefault    bool      `json:"is_default" db:"is_default"`   // @everyone role
+	IsDefault    bool      `json:"is_default" db:"is_default"` // @everyone role
 	IconURL      *string   `json:"icon_url,omitempty" db:"icon_url"`
 	UnicodeEmoji *string   `json:"unicode_emoji,omitempty" db:"unicode_emoji"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
@@ -26,52 +26,52 @@ type Role struct {
 // Permission bits
 const (
 	// General
-	PermViewChannels       int64 = 1 << 0
-	PermManageChannels     int64 = 1 << 1
-	PermManageRoles        int64 = 1 << 2
-	PermManageEmoji        int64 = 1 << 3
-	PermViewAuditLog       int64 = 1 << 4
-	PermManageWebhooks     int64 = 1 << 5
-	PermManageServer       int64 = 1 << 6
+	PermViewChannels   int64 = 1 << 0
+	PermManageChannels int64 = 1 << 1
+	PermManageRoles    int64 = 1 << 2
+	PermManageEmoji    int64 = 1 << 3
+	PermViewAuditLog   int64 = 1 << 4
+	PermManageWebhooks int64 = 1 << 5
+	PermManageServer   int64 = 1 << 6
 
 	// Membership
-	PermCreateInvite       int64 = 1 << 10
-	PermChangeNickname     int64 = 1 << 11
-	PermManageNicknames    int64 = 1 << 12
-	PermKickMembers        int64 = 1 << 13
-	PermBanMembers         int64 = 1 << 14
-	PermTimeoutMembers     int64 = 1 << 15
+	PermCreateInvite    int64 = 1 << 10
+	PermChangeNickname  int64 = 1 << 11
+	PermManageNicknames int64 = 1 << 12
+	PermKickMembers     int64 = 1 << 13
+	PermBanMembers      int64 = 1 << 14
+	PermTimeoutMembers  int64 = 1 << 15
 
 	// Text
-	PermSendMessages       int64 = 1 << 20
+	PermSendMessages          int64 = 1 << 20
 	PermSendMessagesInThreads int64 = 1 << 21
-	PermCreatePublicThreads int64 = 1 << 22
-	PermCreatePrivateThreads int64 = 1 << 23
-	PermSendTTS            int64 = 1 << 24
-	PermManageMessages     int64 = 1 << 25
-	PermManageThreads      int64 = 1 << 26
-	PermEmbedLinks         int64 = 1 << 27
-	PermAttachFiles        int64 = 1 << 28
-	PermReadMessageHistory int64 = 1 << 29
-	PermMentionEveryone    int64 = 1 << 30
-	PermUseExternalEmoji   int64 = 1 << 31
-	PermUseExternalStickers int64 = 1 << 32
-	PermAddReactions       int64 = 1 << 33
-	PermUseSlashCommands   int64 = 1 << 34
+	PermCreatePublicThreads   int64 = 1 << 22
+	PermCreatePrivateThreads  int64 = 1 << 23
+	PermSendTTS               int64 = 1 << 24
+	PermManageMessages        int64 = 1 << 25
+	PermManageThreads         int64 = 1 << 26
+	PermEmbedLinks            int64 = 1 << 27
+	PermAttachFiles           int64 = 1 << 28
+	PermReadMessageHistory    int64 = 1 << 29
+	PermMentionEveryone       int64 = 1 << 30
+	PermUseExternalEmoji      int64 = 1 << 31
+	PermUseExternalStickers   int64 = 1 << 32
+	PermAddReactions          int64 = 1 << 33
+	PermUseSlashCommands      int64 = 1 << 34
 
 	// Voice
-	PermConnect            int64 = 1 << 40
-	PermSpeak              int64 = 1 << 41
-	PermVideo              int64 = 1 << 42
-	PermUseVoiceActivity   int64 = 1 << 43
-	PermPrioritySpeaker    int64 = 1 << 44
-	PermMuteMembers        int64 = 1 << 45
-	PermDeafenMembers      int64 = 1 << 46
-	PermMoveMembers        int64 = 1 << 47
-	PermUseSoundboard      int64 = 1 << 48
+	PermConnect          int64 = 1 << 40
+	PermSpeak            int64 = 1 << 41
+	PermVideo            int64 = 1 << 42
+	PermUseVoiceActivity int64 = 1 << 43
+	PermPrioritySpeaker  int64 = 1 << 44
+	PermMuteMembers      int64 = 1 << 45
+	PermDeafenMembers    int64 = 1 << 46
+	PermMoveMembers      int64 = 1 << 47
+	PermUseSoundboard    int64 = 1 << 48
 
 	// Admin (bit 62 is max safe for int64)
-	PermAdministrator      int64 = 1 << 62
+	PermAdministrator int64 = 1 << 62
 )
 
 // PermissionAll is all permissions combined (except Administrator)
@@ -106,11 +106,11 @@ func HasPermission(perms, perm int64) bool {
 
 // CreateRoleRequest is the input for creating a role
 type CreateRoleRequest struct {
-	Name        string  `json:"name" validate:"required,min=1,max=100"`
-	Color       *int    `json:"color,omitempty"`
-	Permissions *int64  `json:"permissions,omitempty"`
-	Hoist       *bool   `json:"hoist,omitempty"`
-	Mentionable *bool   `json:"mentionable,omitempty"`
+	Name        string `json:"name" validate:"required,min=1,max=100"`
+	Color       *int   `json:"color,omitempty"`
+	Permissions *int64 `json:"permissions,omitempty"`
+	Hoist       *bool  `json:"hoist,omitempty"`
+	Mentionable *bool  `json:"mentionable,omitempty"`
 }
 
 // UpdateRoleRequest is the input for updating a role
@@ -139,7 +139,7 @@ func CalculatePermissions(member *Member, roles []*Role, server *Server, channel
 
 	// Start with @everyone role (assumed to be first/lowest)
 	var permissions int64 = 0
-	
+
 	// Find @everyone role and add its permissions
 	for _, role := range roles {
 		// @everyone role has same ID as server

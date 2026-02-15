@@ -9,15 +9,15 @@ import (
 )
 
 const (
-	presenceTTL     = 2 * time.Minute
-	idleTimeout     = 5 * time.Minute
+	presenceTTL       = 2 * time.Minute
+	idleTimeout       = 5 * time.Minute
 	heartbeatInterval = 30 * time.Second
 )
 
 // PresenceService handles user presence tracking
 type PresenceService struct {
-	cache     CacheService
-	eventBus  EventBus
+	cache      CacheService
+	eventBus   EventBus
 	serverRepo ServerRepository
 }
 
@@ -28,8 +28,8 @@ func NewPresenceService(
 	serverRepo ServerRepository,
 ) *PresenceService {
 	return &PresenceService{
-		cache:     cache,
-		eventBus:  eventBus,
+		cache:      cache,
+		eventBus:   eventBus,
 		serverRepo: serverRepo,
 	}
 }

@@ -18,21 +18,21 @@ import (
 
 // Mock ServerService
 type mockServerService struct {
-	createServerFunc  func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error)
-	getServerFunc     func(ctx context.Context, id uuid.UUID) (*models.Server, error)
-	updateServerFunc  func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ServerUpdate) (*models.Server, error)
-	deleteServerFunc  func(ctx context.Context, id, requesterID uuid.UUID) error
-	getMembersFunc    func(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error)
-	getMemberFunc     func(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error)
-	updateMemberFunc  func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, nickname *string, roles []uuid.UUID) (*models.Member, error)
-	kickMemberFunc    func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string) error
-	leaveServerFunc   func(ctx context.Context, serverID, userID uuid.UUID) error
-	getBansFunc       func(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error)
-	banMemberFunc     func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string, deleteDays int) error
-	unbanMemberFunc   func(ctx context.Context, serverID, requesterID, targetID uuid.UUID) error
-	getInvitesFunc    func(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error)
-	getChannelsFunc   func(ctx context.Context, serverID uuid.UUID) ([]*models.Channel, error)
-	createInviteFunc  func(ctx context.Context, serverID, channelID, creatorID uuid.UUID, maxUses int, expiresIn *time.Duration) (*models.Invite, error)
+	createServerFunc func(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error)
+	getServerFunc    func(ctx context.Context, id uuid.UUID) (*models.Server, error)
+	updateServerFunc func(ctx context.Context, id, requesterID uuid.UUID, updates *models.ServerUpdate) (*models.Server, error)
+	deleteServerFunc func(ctx context.Context, id, requesterID uuid.UUID) error
+	getMembersFunc   func(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error)
+	getMemberFunc    func(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error)
+	updateMemberFunc func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, nickname *string, roles []uuid.UUID) (*models.Member, error)
+	kickMemberFunc   func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string) error
+	leaveServerFunc  func(ctx context.Context, serverID, userID uuid.UUID) error
+	getBansFunc      func(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error)
+	banMemberFunc    func(ctx context.Context, serverID, requesterID, targetID uuid.UUID, reason string, deleteDays int) error
+	unbanMemberFunc  func(ctx context.Context, serverID, requesterID, targetID uuid.UUID) error
+	getInvitesFunc   func(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error)
+	getChannelsFunc  func(ctx context.Context, serverID uuid.UUID) ([]*models.Channel, error)
+	createInviteFunc func(ctx context.Context, serverID, channelID, creatorID uuid.UUID, maxUses int, expiresIn *time.Duration) (*models.Invite, error)
 }
 
 func (m *mockServerService) CreateServer(ctx context.Context, ownerID uuid.UUID, name, icon string) (*models.Server, error) {
@@ -144,6 +144,7 @@ func (m *mockServerService) CreateInvite(ctx context.Context, serverID, channelI
 type mockChannelService struct {
 	getServerChannelsFunc func(ctx context.Context, serverID, requesterID uuid.UUID) ([]*models.Channel, error)
 	createChannelFunc     func(ctx context.Context, serverID, creatorID uuid.UUID, name string, channelType models.ChannelType, parentID *uuid.UUID) (*models.Channel, error)
+	getChannelFunc        func(ctx context.Context, channelID uuid.UUID) (*models.Channel, error)
 }
 
 func (m *mockChannelService) GetServerChannels(ctx context.Context, serverID, requesterID uuid.UUID) ([]*models.Channel, error) {
@@ -158,6 +159,13 @@ func (m *mockChannelService) CreateChannel(ctx context.Context, serverID, creato
 		return m.createChannelFunc(ctx, serverID, creatorID, name, channelType, parentID)
 	}
 	return nil, nil
+}
+
+func (m *mockChannelService) GetChannel(ctx context.Context, channelID uuid.UUID) (*models.Channel, error) {
+	if m.getChannelFunc != nil {
+		return m.getChannelFunc(ctx, channelID)
+	}
+	return nil, services.ErrChannelNotFound
 }
 
 // Mock RoleService

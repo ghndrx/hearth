@@ -20,16 +20,16 @@ func TestValidatePasswordStrength(t *testing.T) {
 		{"valid with special chars", "Password123!@#", nil},
 		{"valid min length", "Passwo1d", nil}, // exactly 8 chars
 		{"valid complex", "MyStr0ngP@ssword!", nil},
-		
+
 		// Too short
 		{"too short - 7 chars", "Pass12a", ErrPasswordTooShort},
 		{"too short - 1 char", "A", ErrPasswordTooShort},
 		{"empty password", "", ErrPasswordTooShort},
-		
+
 		// Too long
 		{"too long - 73 chars", strings.Repeat("A", 72) + "a1", ErrPasswordTooLong},
 		{"too long - 100 chars", strings.Repeat("Ab1", 34), ErrPasswordTooLong}, // 102 chars
-		
+
 		// Missing requirements
 		{"missing uppercase", "password123", ErrPasswordWeak},
 		{"missing lowercase", "PASSWORD123", ErrPasswordWeak},
@@ -54,22 +54,22 @@ func TestValidatePasswordStrength(t *testing.T) {
 
 func TestValidatePasswordStrength_BoundaryLengths(t *testing.T) {
 	// Test exactly at boundaries
-	
+
 	// Exactly 8 characters (minimum)
 	minPassword := "Abcdef1x"
 	assert.Len(t, minPassword, 8)
 	assert.NoError(t, ValidatePasswordStrength(minPassword))
-	
+
 	// Exactly 72 characters (maximum)
 	maxPassword := strings.Repeat("Aa1", 24) // 72 chars
 	assert.Len(t, maxPassword, 72)
 	assert.NoError(t, ValidatePasswordStrength(maxPassword))
-	
+
 	// 73 characters (over max)
 	overMaxPassword := maxPassword + "x"
 	assert.Len(t, overMaxPassword, 73)
 	assert.Equal(t, ErrPasswordTooLong, ValidatePasswordStrength(overMaxPassword))
-	
+
 	// 7 characters (under min)
 	underMinPassword := "Abcde1x"
 	assert.Len(t, underMinPassword, 7)
@@ -84,7 +84,7 @@ func TestHashPassword_ValidPassword(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash)
 	assert.NotEqual(t, password, hash) // Hash should differ from plaintext
-	
+
 	// Should be valid bcrypt hash (starts with $2a$ or $2b$)
 	assert.True(t, strings.HasPrefix(hash, "$2a$") || strings.HasPrefix(hash, "$2b$"))
 }
@@ -139,8 +139,8 @@ func TestCheckPassword_Incorrect(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name     string
-		attempt  string
+		name    string
+		attempt string
 	}{
 		{"wrong password", "WrongPassword123"},
 		{"similar password", "SecurePassword124"},
@@ -188,7 +188,7 @@ func TestNeedsRehash_CurrentCost(t *testing.T) {
 
 func TestNeedsRehash_LowerCost(t *testing.T) {
 	password := "SecurePassword123"
-	
+
 	// Create hash with lower cost
 	lowerCostHash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestNeedsRehash_LowerCost(t *testing.T) {
 
 func TestNeedsRehash_HigherCost(t *testing.T) {
 	password := "SecurePassword123"
-	
+
 	// Create hash with higher cost (takes longer but shouldn't need rehash)
 	higherCostHash, err := bcrypt.GenerateFromPassword([]byte(password), 13)
 	require.NoError(t, err)

@@ -36,10 +36,10 @@ type Gateway struct {
 	sessionsMu sync.RWMutex
 
 	// Metrics
-	totalConnections   int64
-	activeConnections  int64
-	messagesProcessed  int64
-	connectionsMu      sync.RWMutex
+	totalConnections  int64
+	activeConnections int64
+	messagesProcessed int64
+	connectionsMu     sync.RWMutex
 }
 
 // Session represents a WebSocket session
@@ -51,11 +51,11 @@ type Session struct {
 	CreatedAt     time.Time
 	LastHeartbeat time.Time
 	Sequence      int64
-	
+
 	// Resume support
-	ResumeKey     string
-	ResumeEvents  [][]byte
-	resumeMu      sync.Mutex
+	ResumeKey    string
+	ResumeEvents [][]byte
+	resumeMu     sync.Mutex
 }
 
 // NewGateway creates a new WebSocket gateway
@@ -63,7 +63,7 @@ func NewGateway(hub *Hub, jwtService *auth.JWTService, config *GatewayConfig) *G
 	if config == nil {
 		config = DefaultGatewayConfig()
 	}
-	
+
 	return &Gateway{
 		hub:        hub,
 		jwtService: jwtService,
@@ -97,7 +97,7 @@ func (g *Gateway) HandleConnection(conn *websocket.Conn) {
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
-	
+
 	clientType := conn.Query("client_type")
 	if clientType == "" {
 		clientType = "web"
@@ -254,23 +254,23 @@ func (g *Gateway) handleMessage(conn *websocket.Conn, client *Client, session *S
 	switch msg.Op {
 	case OpHeartbeat:
 		g.handleHeartbeat(conn, session)
-		
+
 	case OpIdentify:
 		g.handleIdentify(conn, client, session, &msg)
-		
+
 	case OpPresenceUpdate:
 		g.handlePresenceUpdate(conn, client, session, &msg)
-		
+
 	case OpVoiceStateUpdate:
 		g.handleVoiceStateUpdate(conn, client, session, &msg)
-		
+
 	case OpResume:
 		// Already handled at connection time
 		g.sendError(conn, "resume must be initiated on connect")
-		
+
 	case OpRequestGuildMembers:
 		g.handleRequestMembers(conn, client, session, &msg)
-		
+
 	default:
 		g.sendError(conn, "unknown opcode")
 	}
@@ -290,7 +290,7 @@ func (g *Gateway) handleIdentify(conn *websocket.Conn, client *Client, session *
 		} `json:"properties"`
 		Compress bool `json:"compress"`
 	}
-	
+
 	if msg.Data != nil {
 		json.Unmarshal(msg.Data, &data)
 	}
@@ -299,7 +299,7 @@ func (g *Gateway) handleIdentify(conn *websocket.Conn, client *Client, session *
 	ready := ReadyData{
 		Version:         10,
 		SessionID:       session.ID,
-		ResumeURL:       "", // Set if using resume URL
+		ResumeURL:       "",              // Set if using resume URL
 		Guilds:          []interface{}{}, // Will be populated by services
 		PrivateChannels: []interface{}{},
 		User: map[string]interface{}{
@@ -324,7 +324,7 @@ func (g *Gateway) handlePresenceUpdate(conn *websocket.Conn, client *Client, ses
 		Since      *int64        `json:"since"`
 		AFK        bool          `json:"afk"`
 	}
-	
+
 	if msg.Data != nil {
 		json.Unmarshal(msg.Data, &data)
 	}
@@ -339,7 +339,7 @@ func (g *Gateway) handlePresenceUpdate(conn *websocket.Conn, client *Client, ses
 	}
 
 	presenceData, _ := json.Marshal(presence)
-	
+
 	// Broadcast to all servers the user is in
 	client.mu.RLock()
 	servers := make([]uuid.UUID, 0, len(client.servers))
@@ -370,7 +370,7 @@ func (g *Gateway) handleRequestMembers(conn *websocket.Conn, client *Client, ses
 		UserIDs   []string `json:"user_ids"`
 		Nonce     string   `json:"nonce"`
 	}
-	
+
 	if msg.Data != nil {
 		json.Unmarshal(msg.Data, &data)
 	}
@@ -436,7 +436,7 @@ func (g *Gateway) sendHello(conn *websocket.Conn) {
 	hello := HelloData{
 		HeartbeatInterval: int(g.config.HeartbeatInterval.Milliseconds()),
 	}
-	
+
 	helloData, _ := json.Marshal(hello)
 	g.sendMessage(conn, &Message{
 		Op:   OpHello,
@@ -485,9 +485,9 @@ func (g *Gateway) GetStats() map[string]interface{} {
 	g.sessionsMu.RUnlock()
 
 	return map[string]interface{}{
-		"total_connections":   g.totalConnections,
-		"active_connections":  g.activeConnections,
-		"messages_processed":  g.messagesProcessed,
-		"active_sessions":     sessionCount,
+		"total_connections":  g.totalConnections,
+		"active_connections": g.activeConnections,
+		"messages_processed": g.messagesProcessed,
+		"active_sessions":    sessionCount,
 	}
 }
