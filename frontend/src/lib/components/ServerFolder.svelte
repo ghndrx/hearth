@@ -3,8 +3,13 @@
 	import type { Server } from '$lib/stores/servers';
 	import ServerIcon from './ServerIcon.svelte';
 
+	interface ServerWithStatus extends Server {
+		hasUnread?: boolean;
+		mentionCount?: number;
+	}
+
 	export let name: string;
-	export let servers: Server[] = [];
+	export let servers: ServerWithStatus[] = [];
 	export let selectedServerId: string | null = null;
 	export let expanded: boolean = false;
 	export let color: string = '#5865f2';
@@ -14,15 +19,15 @@
 	}>();
 
 	// Calculate folder state
-	$: hasUnread = servers.some((s) => (s as any).hasUnread);
-	$: totalMentions = servers.reduce((sum, s) => sum + ((s as any).mentionCount || 0), 0);
+	$: hasUnread = servers.some((s) => s.hasUnread);
+	$: totalMentions = servers.reduce((sum, s) => sum + (s.mentionCount || 0), 0);
 	$: hasSelectedServer = servers.some((s) => s.id === selectedServerId);
 
 	function toggleExpanded() {
 		expanded = !expanded;
 	}
 
-	function getPreviewIcons(servers: Server[]): Server[] {
+	function getPreviewIcons(servers: ServerWithStatus[]): ServerWithStatus[] {
 		return servers.slice(0, 4);
 	}
 
@@ -42,15 +47,15 @@
 				</svg>
 			</div>
 			<div class="folder-servers">
-				{#each servers as server (server.id)}
-					<ServerIcon
-						{server}
-						isSelected={selectedServerId === server.id}
-						hasUnread={(server as any).hasUnread || false}
-						mentionCount={(server as any).mentionCount || 0}
-						on:click={handleServerClick}
-					/>
-				{/each}
+			{#each servers as server (server.id)}
+				<ServerIcon
+					{server}
+					isSelected={selectedServerId === server.id}
+					hasUnread={server.hasUnread || false}
+					mentionCount={server.mentionCount || 0}
+					on:click={handleServerClick}
+				/>
+			{/each}
 			</div>
 		</div>
 	{:else}

@@ -27,11 +27,21 @@
 	const unreadServers: Record<string, boolean> = {};
 	const mentionCounts: Record<string, number> = {};
 
+	interface ServerWithStatus extends Server {
+		hasUnread?: boolean;
+		mentionCount?: number;
+	}
+
 	// Get servers in a folder
-	function getFolderServers(folder: ServerFolderData): Server[] {
+	function getFolderServers(folder: ServerFolderData): ServerWithStatus[] {
 		return folder.serverIds
 			.map((id) => $servers.find((s) => s.id === id))
-			.filter((s): s is Server => s !== undefined);
+			.filter((s): s is Server => s !== undefined)
+			.map((s) => ({
+				...s,
+				hasUnread: unreadServers[s.id] || false,
+				mentionCount: mentionCounts[s.id] || 0
+			}));
 	}
 
 	// Get servers not in any folder
@@ -85,11 +95,7 @@
 		{@const folderServers = getFolderServers(folder)}
 		<ServerFolder
 			name={folder.name}
-			servers={folderServers.map((s) => ({
-				...s,
-				hasUnread: unreadServers[s.id] || false,
-				mentionCount: mentionCounts[s.id] || 0
-			}))}
+			servers={folderServers}
 			selectedServerId={$currentServer?.id || null}
 			expanded={folder.expanded}
 			color={folder.color}

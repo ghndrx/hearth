@@ -137,7 +137,7 @@
 					style="background-color: {getAvatarColor(displayName)}"
 				>
 					<span class="text-white font-semibold text-base">
-						{displayName.charAt(0).toUpperCase()}
+						{(displayName.charAt(0) || '?').toUpperCase()}
 					</span>
 				</div>
 			{/if}
