@@ -112,6 +112,42 @@ func (m *MockUserRepository) GetPresenceBulk(ctx context.Context, userIDs []uuid
 	return args.Get(0).(map[uuid.UUID]*models.Presence), args.Error(1)
 }
 
+func (m *MockUserRepository) GetRelationship(ctx context.Context, userID, targetID uuid.UUID) (int, error) {
+	args := m.Called(ctx, userID, targetID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepository) SendFriendRequest(ctx context.Context, senderID, receiverID uuid.UUID) error {
+	args := m.Called(ctx, senderID, receiverID)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) GetIncomingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.User), args.Error(1)
+}
+
+func (m *MockUserRepository) GetOutgoingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.User), args.Error(1)
+}
+
+func (m *MockUserRepository) AcceptFriendRequest(ctx context.Context, receiverID, senderID uuid.UUID) error {
+	args := m.Called(ctx, receiverID, senderID)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) DeclineFriendRequest(ctx context.Context, userID, otherID uuid.UUID) error {
+	args := m.Called(ctx, userID, otherID)
+	return args.Error(0)
+}
+
 func setupUserService() (*UserService, *MockUserRepository, *MockCacheService, *MockEventBus) {
 	repo := new(MockUserRepository)
 	cache := new(MockCacheService)
@@ -399,4 +435,288 @@ func TestUnblockUser_Success(t *testing.T) {
 	assert.NoError(t, err)
 	repo.AssertExpectations(t)
 	eventBus.AssertExpectations(t)
+}
+
+// =========================================
+// Friend Request System Tests
+// =========================================
+
+func TestSendFriendRequest_Success(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	receiver := &models.User{ID: receiverID, Username: "receiver"}
+
+	repo.On("GetByID", ctx, receiverID).Return(receiver, nil)
+	repo.On("GetRelationship", ctx, senderID, receiverID).Return(0, nil)
+	repo.On("GetRelationship", ctx, receiverID, senderID).Return(0, nil)
+	repo.On("SendFriendRequest", ctx, senderID, receiverID).Return(nil)
+	eventBus.On("Publish", "friend.request_sent", mock.AnythingOfType("*services.FriendRequestSentEvent")).Return()
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestSendFriendRequest_ToSelf(t *testing.T) {
+	service, _, _, _ := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	err := service.SendFriendRequest(ctx, userID, userID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "yourself")
+}
+
+func TestSendFriendRequest_AlreadyFriends(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	receiver := &models.User{ID: receiverID, Username: "receiver"}
+
+	repo.On("GetByID", ctx, receiverID).Return(receiver, nil)
+	repo.On("GetRelationship", ctx, senderID, receiverID).Return(1, nil) // 1 = friends
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already friends")
+}
+
+func TestSendFriendRequest_AlreadySent(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	receiver := &models.User{ID: receiverID, Username: "receiver"}
+
+	repo.On("GetByID", ctx, receiverID).Return(receiver, nil)
+	repo.On("GetRelationship", ctx, senderID, receiverID).Return(4, nil) // 4 = pending outgoing
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already sent")
+}
+
+func TestSendFriendRequest_BlockedUser(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	receiver := &models.User{ID: receiverID, Username: "receiver"}
+
+	repo.On("GetByID", ctx, receiverID).Return(receiver, nil)
+	repo.On("GetRelationship", ctx, senderID, receiverID).Return(2, nil) // 2 = blocked
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "blocked")
+}
+
+func TestSendFriendRequest_ReceiverBlocked(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	receiver := &models.User{ID: receiverID, Username: "receiver"}
+
+	repo.On("GetByID", ctx, receiverID).Return(receiver, nil)
+	repo.On("GetRelationship", ctx, senderID, receiverID).Return(0, nil)
+	repo.On("GetRelationship", ctx, receiverID, senderID).Return(2, nil) // Receiver blocked sender
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot send friend request")
+}
+
+func TestSendFriendRequest_AutoAcceptMutual(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	receiver := &models.User{ID: receiverID, Username: "receiver"}
+
+	repo.On("GetByID", ctx, receiverID).Return(receiver, nil)
+	repo.On("GetRelationship", ctx, senderID, receiverID).Return(3, nil) // 3 = pending incoming (they sent us a request)
+	repo.On("AcceptFriendRequest", ctx, senderID, receiverID).Return(nil)
+	eventBus.On("Publish", "friend.added", mock.AnythingOfType("*services.FriendAddedEvent")).Return()
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestSendFriendRequest_UserNotFound(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	senderID := uuid.New()
+	receiverID := uuid.New()
+
+	repo.On("GetByID", ctx, receiverID).Return(nil, nil)
+
+	err := service.SendFriendRequest(ctx, senderID, receiverID)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrUserNotFound, err)
+}
+
+func TestGetIncomingFriendRequests_Success(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	incoming := []*models.User{
+		{ID: uuid.New(), Username: "user1"},
+		{ID: uuid.New(), Username: "user2"},
+	}
+
+	repo.On("GetIncomingFriendRequests", ctx, userID).Return(incoming, nil)
+
+	result, err := service.GetIncomingFriendRequests(ctx, userID)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	repo.AssertExpectations(t)
+}
+
+func TestGetOutgoingFriendRequests_Success(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	outgoing := []*models.User{
+		{ID: uuid.New(), Username: "user1"},
+	}
+
+	repo.On("GetOutgoingFriendRequests", ctx, userID).Return(outgoing, nil)
+
+	result, err := service.GetOutgoingFriendRequests(ctx, userID)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	repo.AssertExpectations(t)
+}
+
+func TestAcceptFriendRequest_Success(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	receiverID := uuid.New()
+	senderID := uuid.New()
+
+	repo.On("GetRelationship", ctx, receiverID, senderID).Return(3, nil) // 3 = pending incoming
+	repo.On("AcceptFriendRequest", ctx, receiverID, senderID).Return(nil)
+	eventBus.On("Publish", "friend.added", mock.AnythingOfType("*services.FriendAddedEvent")).Return()
+
+	err := service.AcceptFriendRequest(ctx, receiverID, senderID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestAcceptFriendRequest_NoPendingRequest(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	receiverID := uuid.New()
+	senderID := uuid.New()
+
+	repo.On("GetRelationship", ctx, receiverID, senderID).Return(0, nil) // No relationship
+
+	err := service.AcceptFriendRequest(ctx, receiverID, senderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no pending friend request")
+}
+
+func TestAcceptFriendRequest_AlreadyFriends(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	receiverID := uuid.New()
+	senderID := uuid.New()
+
+	repo.On("GetRelationship", ctx, receiverID, senderID).Return(1, nil) // Already friends
+
+	err := service.AcceptFriendRequest(ctx, receiverID, senderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no pending friend request")
+}
+
+func TestDeclineFriendRequest_IncomingSuccess(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+	otherID := uuid.New()
+
+	repo.On("GetRelationship", ctx, userID, otherID).Return(3, nil) // 3 = pending incoming
+	repo.On("DeclineFriendRequest", ctx, userID, otherID).Return(nil)
+	eventBus.On("Publish", "friend.request_declined", mock.AnythingOfType("*services.FriendRequestDeclinedEvent")).Return()
+
+	err := service.DeclineFriendRequest(ctx, userID, otherID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestDeclineFriendRequest_OutgoingSuccess(t *testing.T) {
+	service, repo, _, eventBus := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+	otherID := uuid.New()
+
+	repo.On("GetRelationship", ctx, userID, otherID).Return(4, nil) // 4 = pending outgoing
+	repo.On("DeclineFriendRequest", ctx, userID, otherID).Return(nil)
+	eventBus.On("Publish", "friend.request_declined", mock.AnythingOfType("*services.FriendRequestDeclinedEvent")).Return()
+
+	err := service.DeclineFriendRequest(ctx, userID, otherID)
+
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+	eventBus.AssertExpectations(t)
+}
+
+func TestDeclineFriendRequest_NoPendingRequest(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+	otherID := uuid.New()
+
+	repo.On("GetRelationship", ctx, userID, otherID).Return(0, nil) // No relationship
+
+	err := service.DeclineFriendRequest(ctx, userID, otherID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no pending friend request")
+}
+
+func TestGetRelationship_Success(t *testing.T) {
+	service, repo, _, _ := setupUserService()
+	ctx := context.Background()
+	userID := uuid.New()
+	targetID := uuid.New()
+
+	repo.On("GetRelationship", ctx, userID, targetID).Return(1, nil) // Friends
+
+	relType, err := service.GetRelationship(ctx, userID, targetID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, relType)
+	repo.AssertExpectations(t)
 }

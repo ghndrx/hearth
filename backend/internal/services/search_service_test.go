@@ -141,6 +141,42 @@ func (m *MockUserRepositoryForSearch) GetPresenceBulk(ctx context.Context, userI
 	return args.Get(0).(map[uuid.UUID]*models.Presence), args.Error(1)
 }
 
+func (m *MockUserRepositoryForSearch) GetRelationship(ctx context.Context, userID, targetID uuid.UUID) (int, error) {
+	args := m.Called(ctx, userID, targetID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepositoryForSearch) SendFriendRequest(ctx context.Context, senderID, receiverID uuid.UUID) error {
+	args := m.Called(ctx, senderID, receiverID)
+	return args.Error(0)
+}
+
+func (m *MockUserRepositoryForSearch) GetIncomingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.User), args.Error(1)
+}
+
+func (m *MockUserRepositoryForSearch) GetOutgoingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.User), args.Error(1)
+}
+
+func (m *MockUserRepositoryForSearch) AcceptFriendRequest(ctx context.Context, receiverID, senderID uuid.UUID) error {
+	args := m.Called(ctx, receiverID, senderID)
+	return args.Error(0)
+}
+
+func (m *MockUserRepositoryForSearch) DeclineFriendRequest(ctx context.Context, userID, otherID uuid.UUID) error {
+	args := m.Called(ctx, userID, otherID)
+	return args.Error(0)
+}
+
 func setupSearchService() (*SearchService, *MockSearchRepository, *MockMessageRepository, *MockChannelRepositoryForMessages, *MockServerRepository, *MockUserRepositoryForSearch, *MockCacheService) {
 	searchRepo := new(MockSearchRepository)
 	msgRepo := new(MockMessageRepository)

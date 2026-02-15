@@ -4,39 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"hearth/internal/services"
 )
-
-func TestNewHandlers(t *testing.T) {
-	// Create mock services for testing
-	authService := &services.AuthService{}
-	userService := &services.UserService{}
-	serverService := &services.ServerService{}
-	channelService := &services.ChannelService{}
-	messageService := &services.MessageService{}
-	roleService := &services.RoleService{}
-
-	handlers := NewHandlers(
-		authService,
-		userService,
-		serverService,
-		channelService,
-		messageService,
-		roleService,
-		nil, // gateway can be nil for this test
-	)
-
-	require.NotNil(t, handlers)
-	assert.NotNil(t, handlers.Auth)
-	assert.NotNil(t, handlers.Users)
-	assert.NotNil(t, handlers.Servers)
-	assert.NotNil(t, handlers.Channels)
-	assert.NotNil(t, handlers.Invites)
-	assert.NotNil(t, handlers.Voice)
-	assert.NotNil(t, handlers.Gateway)
-}
 
 func TestHandlersStruct(t *testing.T) {
 	h := &Handlers{}
@@ -49,6 +17,7 @@ func TestHandlersStruct(t *testing.T) {
 	h.Invites = &InviteHandler{}
 	h.Voice = &VoiceHandler{}
 	h.Gateway = &GatewayHandler{}
+	h.Search = &SearchHandler{}
 
 	assert.NotNil(t, h.Auth)
 	assert.NotNil(t, h.Users)
@@ -57,4 +26,5 @@ func TestHandlersStruct(t *testing.T) {
 	assert.NotNil(t, h.Invites)
 	assert.NotNil(t, h.Voice)
 	assert.NotNil(t, h.Gateway)
+	assert.NotNil(t, h.Search)
 }

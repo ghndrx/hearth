@@ -12,6 +12,7 @@ import (
 
 	"hearth/internal/events"
 	"hearth/internal/models"
+	"hearth/internal/services"
 )
 
 func TestNewEventBridge(t *testing.T) {
@@ -96,7 +97,7 @@ func TestEventBridge_onMessageCreated(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	bus.Publish(events.MessageCreated, &MessageEventData{
+	bus.Publish(events.MessageCreated, &services.MessageCreatedEvent{
 		Message:   msg,
 		ChannelID: channelID,
 		ServerID:  &serverID,
@@ -147,7 +148,7 @@ func TestEventBridge_onMessageUpdated(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	bus.Publish(events.MessageUpdated, &MessageEventData{
+	bus.Publish(events.MessageUpdated, &services.MessageUpdatedEvent{
 		Message:   msg,
 		ChannelID: channelID,
 	})
@@ -189,9 +190,10 @@ func TestEventBridge_onMessageDeleted(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	hub.SubscribeChannel(client, channelID)
 
-	bus.Publish(events.MessageDeleted, &MessageDeleteData{
+	bus.Publish(events.MessageDeleted, &services.MessageDeletedEvent{
 		MessageID: uuid.New(),
 		ChannelID: channelID,
+		AuthorID:  userID,
 	})
 
 	select {
@@ -231,9 +233,10 @@ func TestEventBridge_onMessagePinned(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	hub.SubscribeChannel(client, channelID)
 
-	bus.Publish(events.MessagePinned, &ChannelPinsData{
-		ChannelID:        channelID,
-		LastPinTimestamp: time.Now().Format("2006-01-02T15:04:05.000Z"),
+	bus.Publish(events.MessagePinned, &services.MessagePinnedEvent{
+		MessageID: uuid.New(),
+		ChannelID: channelID,
+		PinnedBy:  userID,
 	})
 
 	select {
@@ -1079,12 +1082,12 @@ func TestEventBridge_ConversionHelpers(t *testing.T) {
 }
 
 func TestEventBridge_EventDataStructures(t *testing.T) {
-	t.Run("MessageEventData", func(t *testing.T) {
+	t.Run("MessageCreatedEvent", func(t *testing.T) {
 		msgID := uuid.New()
 		channelID := uuid.New()
 		serverID := uuid.New()
 
-		data := MessageEventData{
+		data := services.MessageCreatedEvent{
 			Message: &models.Message{
 				ID: msgID,
 			},
@@ -1095,7 +1098,7 @@ func TestEventBridge_EventDataStructures(t *testing.T) {
 		jsonData, err := json.Marshal(data)
 		require.NoError(t, err)
 
-		var decoded MessageEventData
+		var decoded services.MessageCreatedEvent
 		err = json.Unmarshal(jsonData, &decoded)
 		require.NoError(t, err)
 		assert.Equal(t, channelID, decoded.ChannelID)

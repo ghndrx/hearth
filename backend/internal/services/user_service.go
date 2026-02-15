@@ -26,6 +26,14 @@ type UserRepository interface {
 	BlockUser(ctx context.Context, userID, blockedID uuid.UUID) error
 	UnblockUser(ctx context.Context, userID, blockedID uuid.UUID) error
 	
+	// Friend Requests
+	GetRelationship(ctx context.Context, userID, targetID uuid.UUID) (int, error)
+	SendFriendRequest(ctx context.Context, senderID, receiverID uuid.UUID) error
+	GetIncomingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error)
+	GetOutgoingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error)
+	AcceptFriendRequest(ctx context.Context, receiverID, senderID uuid.UUID) error
+	DeclineFriendRequest(ctx context.Context, userID, otherID uuid.UUID) error
+	
 	// Presence
 	UpdatePresence(ctx context.Context, userID uuid.UUID, status models.PresenceStatus) error
 	GetPresence(ctx context.Context, userID uuid.UUID) (*models.Presence, error)
@@ -221,7 +229,136 @@ func (s *UserService) BlockUser(ctx context.Context, userID, blockedID uuid.UUID
 
 // UnblockUser unblocks a user
 func (s *UserService) UnblockUser(ctx context.Context, userID, blockedID uuid.UUID) error {
-	return s.repo.UnblockUser(ctx, userID, blockedID)
+	if err := s.repo.UnblockUser(ctx, userID, blockedID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("user.unblocked", &UserUnblockedEvent{
+		UserID:      userID,
+		UnblockedID: blockedID,
+	})
+	return nil
+}
+
+// SendFriendRequest sends a friend request from sender to receiver
+func (s *UserService) SendFriendRequest(ctx context.Context, senderID, receiverID uuid.UUID) error {
+	if senderID == receiverID {
+		return errors.New("cannot send friend request to yourself")
+	}
+	
+	// Check if target user exists
+	receiver, err := s.repo.GetByID(ctx, receiverID)
+	if err != nil {
+		return err
+	}
+	if receiver == nil {
+		return ErrUserNotFound
+	}
+	
+	// Check existing relationship
+	relType, err := s.repo.GetRelationship(ctx, senderID, receiverID)
+	if err != nil {
+		return err
+	}
+	
+	switch relType {
+	case 1: // Already friends
+		return errors.New("already friends")
+	case 2: // Blocked (sender blocked receiver)
+		return errors.New("cannot send friend request to blocked user")
+	case 4: // Already sent request
+		return errors.New("friend request already sent")
+	case 3: // They sent us a request - auto-accept
+		if err := s.repo.AcceptFriendRequest(ctx, senderID, receiverID); err != nil {
+			return err
+		}
+		s.eventBus.Publish("friend.added", &FriendAddedEvent{
+			UserID:   senderID,
+			FriendID: receiverID,
+		})
+		return nil
+	}
+	
+	// Check if receiver blocked sender
+	receiverRelType, err := s.repo.GetRelationship(ctx, receiverID, senderID)
+	if err != nil {
+		return err
+	}
+	if receiverRelType == 2 {
+		return errors.New("cannot send friend request")
+	}
+	
+	if err := s.repo.SendFriendRequest(ctx, senderID, receiverID); err != nil {
+		return err
+	}
+	
+	s.eventBus.Publish("friend.request_sent", &FriendRequestSentEvent{
+		SenderID:   senderID,
+		ReceiverID: receiverID,
+	})
+	
+	return nil
+}
+
+// GetIncomingFriendRequests returns all pending incoming friend requests
+func (s *UserService) GetIncomingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	return s.repo.GetIncomingFriendRequests(ctx, userID)
+}
+
+// GetOutgoingFriendRequests returns all pending outgoing friend requests
+func (s *UserService) GetOutgoingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	return s.repo.GetOutgoingFriendRequests(ctx, userID)
+}
+
+// AcceptFriendRequest accepts a pending friend request
+func (s *UserService) AcceptFriendRequest(ctx context.Context, receiverID, senderID uuid.UUID) error {
+	// Verify that there is a pending incoming request
+	relType, err := s.repo.GetRelationship(ctx, receiverID, senderID)
+	if err != nil {
+		return err
+	}
+	if relType != 3 {
+		return errors.New("no pending friend request from this user")
+	}
+	
+	if err := s.repo.AcceptFriendRequest(ctx, receiverID, senderID); err != nil {
+		return err
+	}
+	
+	s.eventBus.Publish("friend.added", &FriendAddedEvent{
+		UserID:   receiverID,
+		FriendID: senderID,
+	})
+	
+	return nil
+}
+
+// DeclineFriendRequest declines a pending friend request
+func (s *UserService) DeclineFriendRequest(ctx context.Context, userID, otherID uuid.UUID) error {
+	// Verify that there is a pending request (either incoming or outgoing)
+	relType, err := s.repo.GetRelationship(ctx, userID, otherID)
+	if err != nil {
+		return err
+	}
+	if relType != 3 && relType != 4 {
+		return errors.New("no pending friend request")
+	}
+	
+	if err := s.repo.DeclineFriendRequest(ctx, userID, otherID); err != nil {
+		return err
+	}
+	
+	s.eventBus.Publish("friend.request_declined", &FriendRequestDeclinedEvent{
+		UserID:  userID,
+		OtherID: otherID,
+	})
+	
+	return nil
+}
+
+// GetRelationship returns the relationship type between two users
+func (s *UserService) GetRelationship(ctx context.Context, userID, targetID uuid.UUID) (int, error) {
+	return s.repo.GetRelationship(ctx, userID, targetID)
 }
 
 // Events
@@ -250,4 +387,19 @@ type FriendRemovedEvent struct {
 type UserBlockedEvent struct {
 	UserID    uuid.UUID
 	BlockedID uuid.UUID
+}
+
+type UserUnblockedEvent struct {
+	UserID      uuid.UUID
+	UnblockedID uuid.UUID
+}
+
+type FriendRequestSentEvent struct {
+	SenderID   uuid.UUID
+	ReceiverID uuid.UUID
+}
+
+type FriendRequestDeclinedEvent struct {
+	UserID  uuid.UUID
+	OtherID uuid.UUID
 }

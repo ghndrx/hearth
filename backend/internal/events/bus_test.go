@@ -79,13 +79,13 @@ func TestUnsubscribe(t *testing.T) {
 	bus := NewBus()
 
 	handler := func(e Event) {}
-	bus.Subscribe("test.event", handler)
+	unsubscribe := bus.Subscribe("test.event", handler)
 
 	if !bus.HasHandlers("test.event") {
 		t.Fatal("expected handler to be registered")
 	}
 
-	bus.Unsubscribe("test.event", handler)
+	unsubscribe()
 
 	if bus.HasHandlers("test.event") {
 		t.Error("expected no handlers after unsubscribe")

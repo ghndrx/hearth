@@ -146,6 +146,11 @@ func (m *MockServerRepoForWebhook) Delete(ctx context.Context, id uuid.UUID) err
 	return args.Error(0)
 }
 
+func (m *MockServerRepoForWebhook) TransferOwnership(ctx context.Context, serverID, newOwnerID uuid.UUID) error {
+	args := m.Called(ctx, serverID, newOwnerID)
+	return args.Error(0)
+}
+
 func (m *MockServerRepoForWebhook) GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error) {
 	args := m.Called(ctx, serverID, userID)
 	if args.Get(0) == nil {

@@ -749,6 +749,8 @@ func TestUserHandler_GetRelationships(t *testing.T) {
 	}
 
 	th.userService.On("GetFriends", mock.Anything, th.userID).Return(friends, nil)
+	th.userService.On("GetIncomingFriendRequests", mock.Anything, th.userID).Return([]*models.User{}, nil)
+	th.userService.On("GetOutgoingFriendRequests", mock.Anything, th.userID).Return([]*models.User{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/users/@me/relationships", nil)
 	resp, err := th.app.Test(req)
@@ -770,7 +772,7 @@ func TestUserHandler_CreateRelationship_AddFriend(t *testing.T) {
 	th := newTestUserHandler()
 
 	friendID := uuid.New()
-	th.userService.On("AddFriend", mock.Anything, th.userID, friendID).Return(nil)
+	th.userService.On("SendFriendRequest", mock.Anything, th.userID, friendID).Return(nil)
 
 	body := map[string]interface{}{
 		"user_id": friendID.String(),
@@ -967,6 +969,355 @@ func TestUserHandler_DeleteAvatar_UpdateError(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+// =========================================
+// Friend System Tests
+// =========================================
+
+func TestUserHandler_SendFriendRequest_Success(t *testing.T) {
+	th := newTestUserHandler()
+
+	targetID := uuid.New()
+	th.userService.On("SendFriendRequest", mock.Anything, th.userID, targetID).Return(nil)
+
+	body := map[string]interface{}{
+		"user_id": targetID.String(),
+		"type":    1, // Friend request
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/users/@me/relationships", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_SendFriendRequest_ByUsername(t *testing.T) {
+	th := newTestUserHandler()
+
+	targetID := uuid.New()
+	targetUser := &models.User{
+		ID:       targetID,
+		Username: "targetuser",
+	}
+
+	th.userService.On("GetUserByUsername", mock.Anything, "targetuser").Return(targetUser, nil)
+	th.userService.On("SendFriendRequest", mock.Anything, th.userID, targetID).Return(nil)
+
+	body := map[string]interface{}{
+		"username": "targetuser",
+		"type":     1,
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/users/@me/relationships", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_SendFriendRequest_AlreadyFriends(t *testing.T) {
+	th := newTestUserHandler()
+
+	targetID := uuid.New()
+	th.userService.On("SendFriendRequest", mock.Anything, th.userID, targetID).
+		Return(assert.AnError)
+
+	// Mock the error message check
+	th.userService.ExpectedCalls[0].ReturnArguments = mock.Arguments{
+		func() error {
+			return assert.AnError
+		}(),
+	}
+
+	body := map[string]interface{}{
+		"user_id": targetID.String(),
+		"type":    1,
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/users/@me/relationships", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := th.app.Test(req)
+
+	// Should return error status
+	assert.NotEqual(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestUserHandler_GetFriends_Success(t *testing.T) {
+	th := newTestUserHandler()
+
+	friend1ID := uuid.New()
+	friend2ID := uuid.New()
+	friends := []*models.User{
+		{
+			ID:            friend1ID,
+			Username:      "friend1",
+			Discriminator: "0001",
+			CreatedAt:     time.Now(),
+		},
+		{
+			ID:            friend2ID,
+			Username:      "friend2",
+			Discriminator: "0002",
+			CreatedAt:     time.Now(),
+		},
+	}
+
+	th.userService.On("GetFriends", mock.Anything, th.userID).Return(friends, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/users/@me/friends", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result []UserResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	assert.Len(t, result, 2)
+	assert.Equal(t, friend1ID, result[0].ID)
+	assert.Equal(t, "friend1", result[0].Username)
+	assert.Equal(t, friend2ID, result[1].ID)
+	assert.Equal(t, "friend2", result[1].Username)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_GetFriends_Empty(t *testing.T) {
+	th := newTestUserHandler()
+
+	th.userService.On("GetFriends", mock.Anything, th.userID).Return([]*models.User{}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/users/@me/friends", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result []UserResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	assert.Len(t, result, 0)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_GetPendingFriendRequests_Success(t *testing.T) {
+	th := newTestUserHandler()
+
+	incomingID := uuid.New()
+	outgoingID := uuid.New()
+
+	incoming := []*models.User{
+		{
+			ID:            incomingID,
+			Username:      "incominguser",
+			Discriminator: "0001",
+		},
+	}
+
+	outgoing := []*models.User{
+		{
+			ID:            outgoingID,
+			Username:      "outgoinguser",
+			Discriminator: "0002",
+		},
+	}
+
+	th.userService.On("GetIncomingFriendRequests", mock.Anything, th.userID).Return(incoming, nil)
+	th.userService.On("GetOutgoingFriendRequests", mock.Anything, th.userID).Return(outgoing, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/users/@me/friends/pending", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string][]UserResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	assert.Len(t, result["incoming"], 1)
+	assert.Len(t, result["outgoing"], 1)
+	assert.Equal(t, incomingID, result["incoming"][0].ID)
+	assert.Equal(t, outgoingID, result["outgoing"][0].ID)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_AcceptFriendRequest_Success(t *testing.T) {
+	th := newTestUserHandler()
+
+	senderID := uuid.New()
+	th.userService.On("AcceptFriendRequest", mock.Anything, th.userID, senderID).Return(nil)
+
+	req := httptest.NewRequest(http.MethodPut, "/users/@me/friends/"+senderID.String(), nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_AcceptFriendRequest_NotFound(t *testing.T) {
+	th := newTestUserHandler()
+
+	senderID := uuid.New()
+	th.userService.On("AcceptFriendRequest", mock.Anything, th.userID, senderID).
+		Return(assert.AnError)
+
+	req := httptest.NewRequest(http.MethodPut, "/users/@me/friends/"+senderID.String(), nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.NotEqual(t, http.StatusNoContent, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_AcceptFriendRequest_InvalidUUID(t *testing.T) {
+	th := newTestUserHandler()
+
+	req := httptest.NewRequest(http.MethodPut, "/users/@me/friends/invalid-uuid", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestUserHandler_DeclineFriendRequest_Success(t *testing.T) {
+	th := newTestUserHandler()
+
+	otherID := uuid.New()
+	th.userService.On("DeclineFriendRequest", mock.Anything, th.userID, otherID).Return(nil)
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/@me/friends/"+otherID.String()+"/request", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_DeclineFriendRequest_NotFound(t *testing.T) {
+	th := newTestUserHandler()
+
+	otherID := uuid.New()
+	th.userService.On("DeclineFriendRequest", mock.Anything, th.userID, otherID).
+		Return(assert.AnError)
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/@me/friends/"+otherID.String()+"/request", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.NotEqual(t, http.StatusNoContent, resp.StatusCode)
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_DeclineFriendRequest_InvalidUUID(t *testing.T) {
+	th := newTestUserHandler()
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/@me/friends/invalid-uuid/request", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestUserHandler_GetRelationships_WithPendingRequests(t *testing.T) {
+	th := newTestUserHandler()
+
+	friendID := uuid.New()
+	incomingID := uuid.New()
+	outgoingID := uuid.New()
+
+	friends := []*models.User{
+		{
+			ID:            friendID,
+			Username:      "friend",
+			Discriminator: "0001",
+		},
+	}
+
+	incoming := []*models.User{
+		{
+			ID:            incomingID,
+			Username:      "incoming",
+			Discriminator: "0002",
+		},
+	}
+
+	outgoing := []*models.User{
+		{
+			ID:            outgoingID,
+			Username:      "outgoing",
+			Discriminator: "0003",
+		},
+	}
+
+	th.userService.On("GetFriends", mock.Anything, th.userID).Return(friends, nil)
+	th.userService.On("GetIncomingFriendRequests", mock.Anything, th.userID).Return(incoming, nil)
+	th.userService.On("GetOutgoingFriendRequests", mock.Anything, th.userID).Return(outgoing, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/users/@me/relationships", nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result []RelationshipResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	assert.Len(t, result, 3)
+
+	// Find each relationship type
+	var hasFriend, hasIncoming, hasOutgoing bool
+	for _, rel := range result {
+		switch rel.Type {
+		case RelationshipTypeFriend:
+			hasFriend = true
+			assert.Equal(t, friendID, rel.ID)
+		case RelationshipTypePendingIn:
+			hasIncoming = true
+			assert.Equal(t, incomingID, rel.ID)
+		case RelationshipTypePendingOut:
+			hasOutgoing = true
+			assert.Equal(t, outgoingID, rel.ID)
+		}
+	}
+
+	assert.True(t, hasFriend, "should have friend relationship")
+	assert.True(t, hasIncoming, "should have incoming request")
+	assert.True(t, hasOutgoing, "should have outgoing request")
+
+	th.userService.AssertExpectations(t)
+}
+
+func TestUserHandler_RemoveFriend_Success(t *testing.T) {
+	th := newTestUserHandler()
+
+	friendID := uuid.New()
+	th.userService.On("RemoveFriend", mock.Anything, th.userID, friendID).Return(nil)
+
+	req := httptest.NewRequest(http.MethodDelete, "/users/@me/relationships/"+friendID.String(), nil)
+	resp, err := th.app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	th.userService.AssertExpectations(t)
 }

@@ -392,6 +392,61 @@ func (h *testServerHandler) Delete(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func (h *testServerHandler) TransferOwnership(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid server id",
+		})
+	}
+
+	var req struct {
+		NewOwnerID string `json:"new_owner_id"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	newOwnerID, err := uuid.Parse(req.NewOwnerID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid new_owner_id",
+		})
+	}
+
+	server, err := h.serverSvc.TransferOwnership(c.Context(), id, userID, newOwnerID)
+	if err != nil {
+		switch err {
+		case services.ErrServerNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "server not found",
+			})
+		case services.ErrNotServerOwner:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "only server owner can transfer ownership",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "new owner must be a server member",
+			})
+		case services.ErrSelfAction:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "cannot transfer ownership to yourself",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+	}
+
+	return c.JSON(server)
+}
+
 func (h *testServerHandler) GetMembers(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -1079,6 +1134,116 @@ func TestServerHandler_Delete(t *testing.T) {
 
 			if resp.StatusCode != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestServerHandler_TransferOwnership(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	newOwnerID := uuid.New()
+
+	tests := []struct {
+		name           string
+		serverIDParam  string
+		body           map[string]interface{}
+		mockSetup      func(*mockServerService)
+		expectedStatus int
+	}{
+		{
+			name:          "successful transfer",
+			serverIDParam: serverID.String(),
+			body:          map[string]interface{}{"new_owner_id": newOwnerID.String()},
+			mockSetup: func(m *mockServerService) {
+				m.transferOwnershipFunc = func(ctx context.Context, sid, reqID, newOwner uuid.UUID) (*models.Server, error) {
+					return &models.Server{ID: sid, OwnerID: newOwner, Name: "Test Server"}, nil
+				}
+			},
+			expectedStatus: fiber.StatusOK,
+		},
+		{
+			name:          "not owner",
+			serverIDParam: serverID.String(),
+			body:          map[string]interface{}{"new_owner_id": newOwnerID.String()},
+			mockSetup: func(m *mockServerService) {
+				m.transferOwnershipFunc = func(ctx context.Context, sid, reqID, newOwner uuid.UUID) (*models.Server, error) {
+					return nil, services.ErrNotServerOwner
+				}
+			},
+			expectedStatus: fiber.StatusForbidden,
+		},
+		{
+			name:          "server not found",
+			serverIDParam: serverID.String(),
+			body:          map[string]interface{}{"new_owner_id": newOwnerID.String()},
+			mockSetup: func(m *mockServerService) {
+				m.transferOwnershipFunc = func(ctx context.Context, sid, reqID, newOwner uuid.UUID) (*models.Server, error) {
+					return nil, services.ErrServerNotFound
+				}
+			},
+			expectedStatus: fiber.StatusNotFound,
+		},
+		{
+			name:          "new owner not member",
+			serverIDParam: serverID.String(),
+			body:          map[string]interface{}{"new_owner_id": newOwnerID.String()},
+			mockSetup: func(m *mockServerService) {
+				m.transferOwnershipFunc = func(ctx context.Context, sid, reqID, newOwner uuid.UUID) (*models.Server, error) {
+					return nil, services.ErrNotServerMember
+				}
+			},
+			expectedStatus: fiber.StatusBadRequest,
+		},
+		{
+			name:          "self transfer",
+			serverIDParam: serverID.String(),
+			body:          map[string]interface{}{"new_owner_id": userID.String()},
+			mockSetup: func(m *mockServerService) {
+				m.transferOwnershipFunc = func(ctx context.Context, sid, reqID, newOwner uuid.UUID) (*models.Server, error) {
+					return nil, services.ErrSelfAction
+				}
+			},
+			expectedStatus: fiber.StatusBadRequest,
+		},
+		{
+			name:           "invalid server id",
+			serverIDParam:  "invalid",
+			body:           map[string]interface{}{"new_owner_id": newOwnerID.String()},
+			mockSetup:      func(m *mockServerService) {},
+			expectedStatus: fiber.StatusBadRequest,
+		},
+		{
+			name:           "invalid new owner id",
+			serverIDParam:  serverID.String(),
+			body:           map[string]interface{}{"new_owner_id": "invalid"},
+			mockSetup:      func(m *mockServerService) {},
+			expectedStatus: fiber.StatusBadRequest,
+		},
+		{
+			name:           "missing new owner id",
+			serverIDParam:  serverID.String(),
+			body:           map[string]interface{}{},
+			mockSetup:      func(m *mockServerService) {},
+			expectedStatus: fiber.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			serverSvc := &mockServerService{}
+			tt.mockSetup(serverSvc)
+
+			app := setupServerTestApp(serverSvc, &mockChannelService{}, &mockRoleService{}, userID)
+
+			bodyBytes, _ := json.Marshal(tt.body)
+			req := httptest.NewRequest("POST", "/servers/"+tt.serverIDParam+"/transfer-ownership", bytes.NewReader(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			resp, _ := app.Test(req)
+
+			if resp.StatusCode != tt.expectedStatus {
+				body, _ := io.ReadAll(resp.Body)
+				t.Errorf("expected status %d, got %d, body: %s", tt.expectedStatus, resp.StatusCode, string(body))
 			}
 		})
 	}

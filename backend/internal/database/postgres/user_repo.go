@@ -115,6 +115,124 @@ func (r *UserRepository) RemoveFriend(ctx context.Context, userID, friendID uuid
 	return err
 }
 
+// GetRelationship gets the relationship between two users
+func (r *UserRepository) GetRelationship(ctx context.Context, userID, targetID uuid.UUID) (int, error) {
+	var relType int
+	query := `SELECT type FROM relationships WHERE user_id = $1 AND target_id = $2`
+	err := r.db.GetContext(ctx, &relType, query, userID, targetID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return relType, err
+}
+
+// SendFriendRequest creates a pending friend request from sender to receiver
+func (r *UserRepository) SendFriendRequest(ctx context.Context, senderID, receiverID uuid.UUID) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+
+	// Create outgoing request for sender
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO relationships (user_id, target_id, type, created_at)
+		VALUES ($1, $2, 4, $3)
+		ON CONFLICT (user_id, target_id) DO UPDATE SET type = 4, created_at = $3
+	`, senderID, receiverID, now)
+	if err != nil {
+		return err
+	}
+
+	// Create incoming request for receiver
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO relationships (user_id, target_id, type, created_at)
+		VALUES ($1, $2, 3, $3)
+		ON CONFLICT (user_id, target_id) DO UPDATE SET type = 3, created_at = $3
+	`, receiverID, senderID, now)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// GetIncomingFriendRequests gets all pending incoming friend requests for a user
+func (r *UserRepository) GetIncomingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	query := `
+		SELECT u.* FROM users u
+		INNER JOIN relationships r ON r.user_id = $1 AND r.target_id = u.id AND r.type = 3
+	`
+	var users []*models.User
+	err := r.db.SelectContext(ctx, &users, query, userID)
+	return users, err
+}
+
+// GetOutgoingFriendRequests gets all pending outgoing friend requests for a user
+func (r *UserRepository) GetOutgoingFriendRequests(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
+	query := `
+		SELECT u.* FROM users u
+		INNER JOIN relationships r ON r.user_id = $1 AND r.target_id = u.id AND r.type = 4
+	`
+	var users []*models.User
+	err := r.db.SelectContext(ctx, &users, query, userID)
+	return users, err
+}
+
+// AcceptFriendRequest accepts a pending friend request
+func (r *UserRepository) AcceptFriendRequest(ctx context.Context, receiverID, senderID uuid.UUID) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Update both relationships to type 1 (friend)
+	_, err = tx.ExecContext(ctx, `
+		UPDATE relationships SET type = 1 WHERE user_id = $1 AND target_id = $2 AND type = 3
+	`, receiverID, senderID)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE relationships SET type = 1 WHERE user_id = $1 AND target_id = $2 AND type = 4
+	`, senderID, receiverID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// DeclineFriendRequest declines/cancels a pending friend request
+func (r *UserRepository) DeclineFriendRequest(ctx context.Context, userID, otherID uuid.UUID) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Remove both pending relationships (works for both declining incoming and canceling outgoing)
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM relationships WHERE user_id = $1 AND target_id = $2 AND type IN (3, 4)
+	`, userID, otherID)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM relationships WHERE user_id = $1 AND target_id = $2 AND type IN (3, 4)
+	`, otherID, userID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func (r *UserRepository) GetBlockedUsers(ctx context.Context, userID uuid.UUID) ([]*models.User, error) {
 	query := `
 		SELECT u.* FROM users u
