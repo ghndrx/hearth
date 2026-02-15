@@ -5,9 +5,9 @@
 
 	export let open = false;
 	export let serverName = '';
-	export const serverId = '';
+	export let serverId = '';
 	export let channelName = '';
-	export const channelId = '';
+	export let channelId = '';
 	export let baseUrl = 'https://hearth.chat';
 
 	const dispatch = createEventDispatcher<{
@@ -147,7 +147,7 @@
 					variant={isCopied ? 'secondary' : 'primary'}
 					on:click={copyInviteLink}
 					disabled={!inviteLink}
-					aria-label={isCopied ? 'Link copied to clipboard' : 'Copy invite link to clipboard'}
+					ariaLabel={isCopied ? 'Link copied to clipboard' : 'Copy invite link to clipboard'}
 				>
 					{isCopied ? 'Copied' : 'Copy'}
 				</Button>
