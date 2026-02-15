@@ -55,6 +55,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { popoutStore } from '$lib/stores/popout';
+	import { threadStore } from '$lib/stores/thread';
 	
 	export let message: any;
 	export let grouped = false;
@@ -92,6 +93,10 @@
 		if (confirm('Are you sure you want to delete this message?')) {
 			dispatch('delete', { messageId: message.id });
 		}
+	}
+	
+	function openThread() {
+		threadStore.open(message, message.channel_id);
 	}
 	
 	function handleKeydown(e: KeyboardEvent) {
@@ -299,6 +304,15 @@
 				title="Add Reaction"
 			>
 				👍
+			</button>
+			<button 
+				class="p-1.5 hover:bg-[#383a40] rounded text-[#b5bac1] hover:text-[#dbdee1] transition-colors"
+				on:click={openThread}
+				title="Reply in Thread"
+			>
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+					<path d="M5.43309 21C5.35842 21 5.30189 20.9325 5.31494 20.859L5.99991 17H2.14274C2.06148 17 1.99906 16.9254 2.01378 16.8459L2.24541 15.5459C2.25692 15.4846 2.31082 15.4393 2.37276 15.4393H6.35988L7.25 10.5H3.14274C3.06148 10.5 2.99906 10.4254 3.01378 10.3459L3.24541 9.0459C3.25692 8.9846 3.31082 8.9393 3.37276 8.9393H7.60988L8.47733 4.141C8.48884 4.07967 8.54274 4.0343 8.60489 4.0343H9.93021C10.0049 4.0343 10.0614 4.10179 10.0483 4.1753L9.19991 9H13.6599L14.5274 4.141C14.5389 4.07967 14.5928 4.0343 14.6549 4.0343H15.9802C16.0549 4.0343 16.1114 4.10179 16.0983 4.1753L15.2499 9H19.1073C19.1885 9 19.2509 9.0746 19.2362 9.1541L19.0046 10.4541C18.9931 10.5154 18.9392 10.5607 18.8772 10.5607H14.8899L14.0299 15.5H17.8572C17.9385 15.5 18.0009 15.5746 17.9862 15.6541L17.7546 16.9541C17.7431 17.0154 17.6892 17.0607 17.6272 17.0607H13.6699L12.7692 21.859C12.7577 21.9203 12.7038 21.9657 12.6418 21.9657H11.3165C11.2418 21.9657 11.1853 21.8982 11.1984 21.8247L12.0699 17H7.60988L6.70891 21.859C6.69739 21.9203 6.6435 21.9657 6.58155 21.9657H5.25623C5.18156 21.9657 5.12503 21.8982 5.13808 21.8247L5.43309 21ZM7.96991 15.5H12.4299L13.29 10.5607H8.82991L7.96991 15.5Z"/>
+				</svg>
 			</button>
 			{#if isOwn}
 				<button 

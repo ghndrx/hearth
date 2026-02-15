@@ -7,9 +7,11 @@
 	import { isSettingsOpen, isServerSettingsOpen, settings } from '$lib/stores/settings';
 	import { currentServer } from '$lib/stores/servers';
 	import { popoutStore } from '$lib/stores/popout';
+	import { threadStore } from '$lib/stores/thread';
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import MemberList from '$lib/components/MemberList.svelte';
+	import ThreadView from '$lib/components/ThreadView.svelte';
 	import UserSettings from '$lib/components/UserSettings.svelte';
 	import ServerSettings from '$lib/components/ServerSettings.svelte';
 	import UserPopout from '$lib/components/UserPopout.svelte';
@@ -67,6 +69,11 @@
 	<!-- Member List - Right sidebar (only in servers) -->
 	{#if $currentServer}
 		<MemberList />
+	{/if}
+
+	<!-- Thread View - Right sidebar panel for viewing threads -->
+	{#if $threadStore.currentThread}
+		<ThreadView />
 	{/if}
 </div>
 

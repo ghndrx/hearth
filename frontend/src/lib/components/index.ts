@@ -25,6 +25,7 @@ export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as Reactions } from './Reactions.svelte';
 export { default as EmojiPicker } from './EmojiPicker.svelte';
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte';
+export { default as ThreadView } from './ThreadView.svelte';
 
 // User components
 export { default as Avatar } from './Avatar.svelte';
@@ -36,6 +37,7 @@ export { default as PresenceIndicator } from './PresenceIndicator.svelte';
 export { default as SettingsLayout } from './SettingsLayout.svelte';
 export { default as UserSettings } from './UserSettings.svelte';
 export { default as ServerSettings } from './ServerSettings.svelte';
+export { default as NotificationSettings } from './NotificationSettings.svelte';
 
 // Modal components
 export { default as Modal } from './Modal.svelte';

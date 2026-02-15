@@ -6,3 +6,4 @@ export { messages } from './messages';
 export { settings, isSettingsOpen, appSettings, currentTheme } from './settings';
 export { typingStore, formatTypingText, setCurrentUserId } from './typing';
 export { popoutStore, isPopoutOpen } from './popout';
+export { threadStore, currentThread, threadMessages, threadLoading } from './thread';
