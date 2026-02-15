@@ -91,7 +91,7 @@ function createAuthStore() {
 				}));
 				
 				goto('/channels/@me');
-			} catch (error: any) {
+			} catch (error: unknown) {
 				update(s => ({ ...s, loading: false }));
 				throw error;
 			}
@@ -122,7 +122,7 @@ function createAuthStore() {
 				}));
 				
 				goto('/channels/@me');
-			} catch (error: any) {
+			} catch (error: unknown) {
 				update(s => ({ ...s, loading: false }));
 				throw error;
 			}

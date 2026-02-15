@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import InviteModal from './InviteModal.svelte';
+
+type InviteModalComponent = { onInviteGenerated: (code: string) => void; $on: (event: string, handler: () => void) => void };
 
 describe('InviteModal', () => {
   const mockClipboard = {
@@ -98,7 +100,7 @@ describe('InviteModal', () => {
     });
 
     // Simulate API response by calling onInviteGenerated
-    (component as any).onInviteGenerated('ABC12345');
+    (component as InviteModalComponent).onInviteGenerated('ABC12345');
 
     await waitFor(() => {
       const input = container.querySelector('.invite-input') as HTMLInputElement;
@@ -116,7 +118,7 @@ describe('InviteModal', () => {
     });
 
     // Simulate API response
-    (component as any).onInviteGenerated('TEST1234');
+    (component as InviteModalComponent).onInviteGenerated('TEST1234');
 
     await waitFor(() => {
       const input = container.querySelector('.invite-input') as HTMLInputElement;
@@ -133,7 +135,7 @@ describe('InviteModal', () => {
     });
 
     // Simulate API response
-    (component as any).onInviteGenerated('COPYTEST');
+    (component as InviteModalComponent).onInviteGenerated('COPYTEST');
 
     await waitFor(() => {
       const input = container.querySelector('.invite-input') as HTMLInputElement;
@@ -156,7 +158,7 @@ describe('InviteModal', () => {
     });
 
     // Simulate API response
-    (component as any).onInviteGenerated('COPYTEST');
+    (component as InviteModalComponent).onInviteGenerated('COPYTEST');
 
     await waitFor(() => {
       const input = container.querySelector('.invite-input') as HTMLInputElement;
@@ -210,7 +212,7 @@ describe('InviteModal', () => {
 
   it('dispatches generateInvite event with correct settings', async () => {
     const handleGenerateInvite = vi.fn();
-    const { container, component } = render(InviteModal, {
+    const { container } = render(InviteModal, {
       props: {
         open: true,
         serverName: 'Test Server'
@@ -290,7 +292,7 @@ describe('InviteModal', () => {
   });
 
   it('shows never expire note when expiresIn is 0', async () => {
-    const { container, component } = render(InviteModal, {
+    const { container } = render(InviteModal, {
       props: {
         open: true,
         serverName: 'Test Server'
@@ -317,7 +319,7 @@ describe('InviteModal', () => {
   });
 
   it('shows error message when invite generation fails', async () => {
-    const { container, component } = render(InviteModal, {
+    const { container } = render(InviteModal, {
       props: {
         open: true,
         serverName: 'Test Server'
@@ -343,7 +345,7 @@ describe('InviteModal', () => {
     });
 
     // Simulate API response
-    (component as any).onInviteGenerated('ERRORTEST');
+    (component as InviteModalComponent).onInviteGenerated('ERRORTEST');
 
     await waitFor(() => {
       const input = container.querySelector('.invite-input') as HTMLInputElement;
@@ -369,7 +371,7 @@ describe('InviteModal', () => {
     });
 
     // Generate an invite first
-    (component as any).onInviteGenerated('CLEARTEST');
+    (component as InviteModalComponent).onInviteGenerated('CLEARTEST');
 
     await waitFor(() => {
       const input = container.querySelector('.invite-input') as HTMLInputElement;
@@ -377,11 +379,10 @@ describe('InviteModal', () => {
     });
 
     // Close modal by dispatching close event (simulating prop change)
-    const closeEvent = new CustomEvent('close');
-    (component as any).$on('close', () => {});
+    (component as InviteModalComponent).$on('close', () => {});
     
     // Simulate reopening
-    const { container: newContainer, component: newComponent } = render(InviteModal, {
+    const { container: newContainer } = render(InviteModal, {
       props: {
         open: true,
         serverName: 'Test Server'

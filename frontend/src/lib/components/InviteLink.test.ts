@@ -286,7 +286,7 @@ describe('InviteLink', () => {
 	});
 
 	it('regenerates invite when expiration setting changes', async () => {
-		const { container, getByText } = render(InviteLink, {
+		const { container } = render(InviteLink, {
 			props: {
 				channelId: 'channel-123',
 				showSettings: true,
@@ -407,7 +407,7 @@ describe('InviteLink', () => {
 			}
 		});
 
-		const result = await (component as any).generateInvite();
+		const result = await (component as { generateInvite: () => Promise<string> }).generateInvite();
 
 		expect(result).toBe('ABC12345');
 		expect(api.post).toHaveBeenCalled();
@@ -426,7 +426,7 @@ describe('InviteLink', () => {
 			expect(api.post).toHaveBeenCalled();
 		});
 
-		const result = await (component as any).copyToClipboard();
+		const result = await (component as { copyToClipboard: () => Promise<boolean> }).copyToClipboard();
 
 		expect(result).toBe(true);
 		expect(mockClipboard.writeText).toHaveBeenCalled();
@@ -439,7 +439,7 @@ describe('InviteLink', () => {
 			}
 		});
 
-		const result = await (component as any).copyToClipboard();
+		const result = await (component as { copyToClipboard: () => Promise<boolean> }).copyToClipboard();
 
 		expect(result).toBe(false);
 		expect(mockClipboard.writeText).not.toHaveBeenCalled();

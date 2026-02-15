@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
-import { tick } from 'svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import Button from './Button.svelte';
 
 describe('Button', () => {

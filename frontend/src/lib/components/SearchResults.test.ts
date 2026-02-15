@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import SearchResults from './SearchResults.svelte';
 import { searchStore } from '$lib/stores/search';
@@ -59,7 +59,7 @@ describe('SearchResults', () => {
 	});
 
 	it('shows empty state when no search query', () => {
-		const { container } = render(SearchResults);
+		render(SearchResults);
 
 		expect(screen.getByText('Search messages')).toBeInTheDocument();
 		expect(screen.getByText('Enter a search term to find messages')).toBeInTheDocument();
