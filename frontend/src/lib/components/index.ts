@@ -42,6 +42,7 @@ export { default as Modal } from './Modal.svelte';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';
 export { default as CreateServerModal } from './CreateServerModal.svelte';
 export { default as InviteModal } from './InviteModal.svelte';
+export { default as ServerSettingsModal } from './ServerSettingsModal.svelte';
 
 // Context menu components
 export { default as ContextMenu } from './ContextMenu.svelte';
