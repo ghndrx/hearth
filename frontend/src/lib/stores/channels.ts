@@ -130,11 +130,37 @@ export async function loadDMChannels() {
 	}
 }
 
-export async function createChannel(serverId: string, name: string, type: number = 0, parentId?: string) {
+export type ChannelTypeString = 'text' | 'voice' | 'announcement';
+
+export interface CreateChannelOptions {
+	name: string;
+	type?: ChannelTypeString;
+	topic?: string;
+	parentId?: string;
+	nsfw?: boolean;
+}
+
+export async function createChannel(serverId: string, options: CreateChannelOptions) {
 	try {
-		const payload: { name: string; type: number; parent_id?: string } = { name, type };
-		if (parentId) {
-			payload.parent_id = parentId;
+		const payload: {
+			name: string;
+			type: string;
+			topic?: string;
+			parent_id?: string;
+			nsfw?: boolean;
+		} = {
+			name: options.name,
+			type: options.type || 'text'
+		};
+		
+		if (options.topic) {
+			payload.topic = options.topic;
+		}
+		if (options.parentId) {
+			payload.parent_id = options.parentId;
+		}
+		if (options.nsfw !== undefined) {
+			payload.nsfw = options.nsfw;
 		}
 		
 		const response = await api.post<BackendChannel>(`/servers/${serverId}/channels`, payload);

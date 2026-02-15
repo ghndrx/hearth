@@ -82,7 +82,7 @@
 	// Channel editing
 	let showCreateChannelModal = false;
 	let editingChannel: Channel | null = null;
-	let newChannel = { name: '', type: 0 };
+	let newChannel: { name: string; type: 'text' | 'voice' | 'announcement' } = { name: '', type: 'text' };
 	let channelForm = { name: '', topic: '', slowmode: 0, nsfw: false };
 
 	const tabs: { id: TabId; label: string; icon: string }[] = [
@@ -238,8 +238,8 @@
 	async function handleCreateChannel() {
 		if (!$currentServer || !newChannel.name.trim()) return;
 		try {
-			await createChannel($currentServer.id, newChannel.name.trim(), newChannel.type);
-			newChannel = { name: '', type: 0 };
+			await createChannel($currentServer.id, { name: newChannel.name.trim(), type: newChannel.type });
+			newChannel = { name: '', type: 'text' };
 			showCreateChannelModal = false;
 		} catch (error) {
 			console.error('Failed to create channel:', error);
@@ -639,16 +639,16 @@
 		<Modal open={true} title="Create Channel" on:close={() => showCreateChannelModal = false}>
 			<div class="create-channel-form">
 				<div class="channel-type-select">
-					<label class="channel-type-option" class:selected={newChannel.type === 0}>
-						<input type="radio" value={0} bind:group={newChannel.type} />
+					<label class="channel-type-option" class:selected={newChannel.type === 'text'}>
+						<input type="radio" value="text" bind:group={newChannel.type} />
 						<span class="type-icon">#</span>
 						<div>
 							<span class="type-name">Text</span>
 							<span class="type-desc">Send messages and files</span>
 						</div>
 					</label>
-					<label class="channel-type-option" class:selected={newChannel.type === 2}>
-						<input type="radio" value={2} bind:group={newChannel.type} />
+					<label class="channel-type-option" class:selected={newChannel.type === 'voice'}>
+						<input type="radio" value="voice" bind:group={newChannel.type} />
 						<span class="type-icon">🔊</span>
 						<div>
 							<span class="type-name">Voice</span>
@@ -660,7 +660,7 @@
 				<div class="form-field">
 					<label for="new-channel-name">Channel Name</label>
 					<div class="channel-name-input">
-						<span class="prefix">{newChannel.type === 0 ? '#' : '🔊'}</span>
+						<span class="prefix">{newChannel.type === 'text' ? '#' : '🔊'}</span>
 						<input
 							type="text"
 							id="new-channel-name"

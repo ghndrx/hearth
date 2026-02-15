@@ -55,9 +55,9 @@
 		{ value: 'south-africa', label: 'South Africa', flag: '🇿🇦' }
 	];
 	
-	let newChannel = {
+	let newChannel: { name: string; type: 'text' | 'voice' | 'announcement'; topic: string } = {
 		name: '',
-		type: 0,
+		type: 'text',
 		topic: ''
 	};
 	
@@ -244,8 +244,8 @@
 	async function handleCreateChannel() {
 		if (!$currentServer || !newChannel.name.trim()) return;
 		try {
-			await createChannel($currentServer.id, newChannel.name.trim(), newChannel.type);
-			newChannel = { name: '', type: 0, topic: '' };
+			await createChannel($currentServer.id, { name: newChannel.name.trim(), type: newChannel.type, topic: newChannel.topic });
+			newChannel = { name: '', type: 'text', topic: '' };
 			showCreateChannelModal = false;
 		} catch (error) {
 			console.error('Failed to create channel:', error);
@@ -797,8 +797,8 @@
 				<h2>Create Channel</h2>
 				
 				<div class="channel-type-select">
-					<label class="channel-type-option" class:selected={newChannel.type === 0}>
-						<input type="radio" value={0} bind:group={newChannel.type} />
+					<label class="channel-type-option" class:selected={newChannel.type === 'text'}>
+						<input type="radio" value="text" bind:group={newChannel.type} />
 						<span class="type-icon">#</span>
 						<div>
 							<span class="type-name">Text</span>
@@ -806,8 +806,8 @@
 						</div>
 					</label>
 					
-					<label class="channel-type-option" class:selected={newChannel.type === 2}>
-						<input type="radio" value={2} bind:group={newChannel.type} />
+					<label class="channel-type-option" class:selected={newChannel.type === 'voice'}>
+						<input type="radio" value="voice" bind:group={newChannel.type} />
 						<span class="type-icon">🔊</span>
 						<div>
 							<span class="type-name">Voice</span>
@@ -819,7 +819,7 @@
 				<div class="form-field">
 					<label for="channel-name">Channel Name</label>
 					<div class="channel-name-input">
-						<span class="prefix">{newChannel.type === 0 ? '#' : '🔊'}</span>
+						<span class="prefix">{newChannel.type === 'text' ? '#' : '🔊'}</span>
 						<input 
 							type="text" 
 							id="channel-name"

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { channels, currentChannel, type Channel } from '$lib/stores/channels';
+	import { channels, currentChannel, type Channel, type ChannelTypeString } from '$lib/stores/channels';
 	import { currentServer, leaveServer } from '$lib/stores/servers';
 	import { user } from '$lib/stores/auth';
 	import { settings } from '$lib/stores/settings';
@@ -10,12 +10,15 @@
 	import ChannelCategory from './ChannelCategory.svelte';
 	import ChannelItem from './ChannelItem.svelte';
 	import InviteModal from './InviteModal.svelte';
+	import CreateChannelModal from './CreateChannelModal.svelte';
 
 	const dispatch = createEventDispatcher();
 
 	let textCategoryCollapsed = false;
 	let voiceCategoryCollapsed = false;
 	let showInviteModal = false;
+	let showCreateChannelModal = false;
+	let createChannelType: ChannelTypeString = 'text';
 
 	// Mock connected users for voice channels (would come from voice state in real app)
 	let voiceConnectedUsers: Record<string, Array<{
@@ -69,11 +72,25 @@
 	}
 
 	function handleAddTextChannel() {
-		// TODO: Open create channel modal
+		createChannelType = 'text';
+		showCreateChannelModal = true;
 	}
 
 	function handleAddVoiceChannel() {
-		// TODO: Open create voice channel modal
+		createChannelType = 'voice';
+		showCreateChannelModal = true;
+	}
+
+	function handleCreateChannelClose() {
+		showCreateChannelModal = false;
+	}
+
+	function handleChannelCreated(event: CustomEvent<Channel>) {
+		const channel = event.detail;
+		// Navigate to the newly created channel
+		if (channel.server_id) {
+			goto(`/channels/${channel.server_id}/${channel.id}`);
+		}
 	}
 
 	function handleChannelSettings(event: CustomEvent<Channel>) {
@@ -180,6 +197,14 @@
 		channelId={$currentChannel?.id ?? ''}
 		on:close={handleInviteClose}
 		on:invite={handleInviteCreated}
+	/>
+
+	<!-- Create Channel Modal -->
+	<CreateChannelModal
+		open={showCreateChannelModal}
+		defaultType={createChannelType}
+		on:close={handleCreateChannelClose}
+		on:created={handleChannelCreated}
 	/>
 {/if}
 
