@@ -181,7 +181,8 @@ describe('InviteModal', () => {
     });
 
     // Before invite is generated, button should be disabled
-    const copyButton = container.querySelector('button') as HTMLButtonElement;
+    // Select the copy button specifically (not the close button)
+    const copyButton = container.querySelector('button[aria-label*="Copy"]') as HTMLButtonElement;
     expect(copyButton?.disabled).toBe(true);
   });
 
