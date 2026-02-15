@@ -202,6 +202,7 @@ func TestComprehensiveService_CreateServer(t *testing.T) {
 		mockRepo.On("GetUserByID", ctx, ownerID).Return(existingUser, nil).Once()
 		mockRepo.On("CreateServer", ctx, mock.AnythingOfType("*models.Server")).Return(nil).Once()
 		mockRepo.On("AddMemberToServer", ctx, mock.AnythingOfType("uuid.UUID"), ownerID).Return(nil).Once()
+		mockRepo.On("CreateChannel", ctx, mock.AnythingOfType("*models.Channel")).Return(nil).Once()
 
 		server, err := service.CreateServer(ctx, serverName, ownerID)
 
