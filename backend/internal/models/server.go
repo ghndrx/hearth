@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // Server represents a Hearth server (community)
@@ -20,7 +21,7 @@ type Server struct {
 	VerificationLevel     int        `json:"verification_level" db:"verification_level"`
 	ExplicitContentFilter int        `json:"explicit_content_filter" db:"explicit_content_filter"`
 	DefaultNotifications  int        `json:"default_notifications" db:"default_notifications"`
-	Features              []string   `json:"features" db:"features"`
+	Features              pq.StringArray `json:"features" db:"features"`
 	MaxMembers            int        `json:"max_members" db:"max_members"`
 	VanityURLCode         *string    `json:"vanity_url_code,omitempty" db:"vanity_url_code"`
 	CreatedAt             time.Time  `json:"created_at" db:"created_at"`
