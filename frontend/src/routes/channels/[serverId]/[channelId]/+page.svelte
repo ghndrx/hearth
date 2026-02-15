@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { currentServer } from '$lib/stores/servers';
-	import { currentChannel, loadServerChannels } from '$lib/stores/channels';
+	import { servers, currentServer } from '$lib/stores/servers';
+	import { channels, currentChannel, loadServerChannels } from '$lib/stores/channels';
+	import { loadServerMembers, loadServerRoles } from '$lib/stores/members';
 	import { sendMessage } from '$lib/stores/messages';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
@@ -10,15 +11,36 @@
 	$: serverId = $page.params.serverId;
 	$: channelId = $page.params.channelId;
 	
+	// Set current server when route changes
+	$: if (serverId && serverId !== '@me') {
+		const server = $servers.find(s => s.id === serverId);
+		if (server && $currentServer?.id !== serverId) {
+			currentServer.set(server);
+		}
+	}
+	
+	// Set current channel when channels load or route changes
+	$: if (channelId && $channels.length > 0) {
+		const channel = $channels.find(c => c.id === channelId);
+		if (channel && $currentChannel?.id !== channelId) {
+			currentChannel.set(channel);
+		}
+	}
+	
 	$: pageTitle = $currentChannel
 		? `${$currentChannel.type === 1 
 			? $currentChannel.recipients?.[0]?.username 
 			: '#' + $currentChannel.name} | ${$currentServer?.name || 'Hearth'}`
 		: $currentServer?.name || 'Hearth';
 	
-	onMount(() => {
+	onMount(async () => {
 		if (serverId && serverId !== '@me') {
-			loadServerChannels(serverId);
+			// Load server data in parallel
+			await Promise.all([
+				loadServerChannels(serverId),
+				loadServerMembers(serverId),
+				loadServerRoles(serverId)
+			]);
 		}
 	});
 	

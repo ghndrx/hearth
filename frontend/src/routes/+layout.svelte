@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth, isAuthenticated, isLoading } from '$lib/stores/auth';
-	import { gateway } from '$lib/gateway';
+	import { gateway } from '$lib/stores/gateway';
 	import '$lib/styles/theme.css';
 	
 	onMount(() => {

@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { channels, currentChannel, type Channel } from '$lib/stores/channels';
+	import { channels, currentChannel, type Channel, createChannel } from '$lib/stores/channels';
 	import { currentServer, leaveServer } from '$lib/stores/servers';
 	import { user } from '$lib/stores/auth';
 	import { settings } from '$lib/stores/settings';
+	import { createInvite } from '$lib/stores/invites';
 	import { createEventDispatcher } from 'svelte';
 	import { goto } from '$app/navigation';
 	import UserPanel from './UserPanel.svelte';
@@ -16,6 +17,7 @@
 	let textCategoryCollapsed = false;
 	let voiceCategoryCollapsed = false;
 	let showInviteModal = false;
+	let inviteModalRef: InviteModal;
 
 	// Mock connected users for voice channels (would come from voice state in real app)
 	let voiceConnectedUsers: Record<string, Array<{
@@ -63,21 +65,51 @@
 		showInviteModal = false;
 	}
 
-	function handleInviteCreated(event: CustomEvent<{ code: string; maxUses: number; expiresIn: number }>) {
-		// In production, this would send the invite to the API
-		console.log('Invite created:', event.detail);
+	async function handleGenerateInvite(event: CustomEvent<{ maxUses: number; expiresIn: number }>) {
+		if (!$currentChannel) return;
+		
+		try {
+			const invite = await createInvite($currentChannel.id, {
+				max_age: event.detail.expiresIn,
+				max_uses: event.detail.maxUses
+			});
+			// Pass the invite code back to the modal
+			inviteModalRef?.onInviteGenerated(invite.code);
+		} catch (error) {
+			console.error('Failed to create invite:', error);
+		}
 	}
 
-	function handleAddTextChannel() {
-		// TODO: Open create channel modal
+	async function handleAddTextChannel() {
+		if (!$currentServer) return;
+		const name = prompt('Enter channel name:');
+		if (!name) return;
+		
+		try {
+			const channel = await createChannel($currentServer.id, name.trim(), 0);
+			selectChannel(channel);
+		} catch (error) {
+			console.error('Failed to create channel:', error);
+			alert('Failed to create channel');
+		}
 	}
 
-	function handleAddVoiceChannel() {
-		// TODO: Open create voice channel modal
+	async function handleAddVoiceChannel() {
+		if (!$currentServer) return;
+		const name = prompt('Enter voice channel name:');
+		if (!name) return;
+		
+		try {
+			const channel = await createChannel($currentServer.id, name.trim(), 2);
+			selectChannel(channel);
+		} catch (error) {
+			console.error('Failed to create channel:', error);
+			alert('Failed to create channel');
+		}
 	}
 
 	function handleChannelSettings(event: CustomEvent<Channel>) {
-		// TODO: Open channel settings
+		// Open channel settings - could be expanded later
 		console.log('Open settings for channel:', event.detail.name);
 	}
 </script>
@@ -173,13 +205,14 @@
 <!-- Invite Modal -->
 {#if $currentServer}
 	<InviteModal
+		bind:this={inviteModalRef}
 		open={showInviteModal}
 		serverName={$currentServer.name}
 		serverId={$currentServer.id}
 		channelName={$currentChannel?.name ?? ''}
 		channelId={$currentChannel?.id ?? ''}
 		on:close={handleInviteClose}
-		on:invite={handleInviteCreated}
+		on:generateInvite={handleGenerateInvite}
 	/>
 {/if}
 

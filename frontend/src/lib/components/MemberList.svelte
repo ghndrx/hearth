@@ -1,32 +1,15 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { currentServer } from '$lib/stores/servers';
+	import { members, roles, loadServerMembers, loadServerRoles, type Member, type Role } from '$lib/stores/members';
 	import { presenceStore, type PresenceStatus, type Activity, getActivityLabel } from '$lib/stores/presence';
-	import { writable } from 'svelte/store';
 	import Avatar from './Avatar.svelte';
 
-	interface Member {
-		id: string;
-		user: {
-			id: string;
-			username: string;
-			display_name: string | null;
-			avatar: string | null;
-		};
-		nickname: string | null;
-		roles: string[];
+	// Load members and roles when server changes
+	$: if ($currentServer) {
+		loadServerMembers($currentServer.id);
+		loadServerRoles($currentServer.id);
 	}
-
-	interface Role {
-		id: string;
-		name: string;
-		color: string;
-		position: number;
-		hoist: boolean;
-	}
-
-	// TODO: Load from API
-	const members = writable<Member[]>([]);
-	const roles = writable<Role[]>([]);
 
 	// Get presence status for a member
 	function getMemberStatus(userId: string): PresenceStatus {

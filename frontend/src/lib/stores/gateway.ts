@@ -1,4 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
+import { browser } from '$app/environment';
+import { handleMessageCreate, handleMessageUpdate, handleMessageDelete } from './messages';
 
 // Opcodes
 export const Op = {
@@ -71,14 +73,22 @@ function createGatewayStore() {
   }
 
   function connect(token: string) {
+    if (!browser) return;
     if (ws?.readyState === WebSocket.OPEN) return;
 
     state.update(s => ({ ...s, connecting: true }));
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/gateway`;
+    const apiUrl = import.meta.env.VITE_API_URL || '';
+    let url: string;
+    
+    if (apiUrl.startsWith('http')) {
+      url = apiUrl.replace(/^http/, 'ws').replace('/api/v1', '/gateway');
+    } else {
+      url = `${protocol}//${window.location.host}/gateway`;
+    }
 
-    ws = new WebSocket(url);
+    ws = new WebSocket(`${url}?token=${token}`);
 
     ws.onopen = () => {
       console.log('[Gateway] Connected');
@@ -210,9 +220,21 @@ function createGatewayStore() {
       case 'RESUMED':
         console.log('[Gateway] Session resumed');
         break;
+        
+      case 'MESSAGE_CREATE':
+        handleMessageCreate(data as any);
+        break;
+        
+      case 'MESSAGE_UPDATE':
+        handleMessageUpdate(data as any);
+        break;
+        
+      case 'MESSAGE_DELETE':
+        handleMessageDelete(data as { id: string; channel_id: string });
+        break;
     }
 
-    // Emit to subscribers
+    // Emit to subscribers (for stores that subscribe to events)
     emit(type, data);
     emit('*', { type, data });
   }
