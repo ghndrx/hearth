@@ -375,7 +375,7 @@
 									accept="image/*"
 									bind:this={iconInput}
 									on:change={handleIconUpload}
-									class="hidden"
+									style="display: none; position: absolute; visibility: hidden;"
 								/>
 								<div class="icon-actions">
 									<Button

@@ -908,7 +908,7 @@
 	.settings-overlay {
 		position: fixed;
 		inset: 0;
-		background: var(--bg-tertiary);
+		background: var(--bg-tertiary, #1e1f22);
 		z-index: 1000;
 		display: flex;
 	}
