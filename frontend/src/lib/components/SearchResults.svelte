@@ -131,17 +131,17 @@
 	});
 </script>
 
-<aside class="search-panel">
+<aside class="search-panel" role="search" aria-label="Search messages">
 	<!-- Header -->
 	<header class="search-header">
 		<div class="search-header-left">
-			<svg class="search-icon-header" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+			<svg class="search-icon-header" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 				<path d="M21.707 20.293L16.314 14.9C17.403 13.504 18 11.799 18 10C18 5.589 14.411 2 10 2C5.589 2 2 5.589 2 10C2 14.411 5.589 18 10 18C11.799 18 13.504 17.403 14.9 16.314L20.293 21.707L21.707 20.293ZM10 16C6.691 16 4 13.309 4 10C4 6.691 6.691 4 10 4C13.309 4 16 6.691 16 10C16 13.309 13.309 16 10 16Z" />
 			</svg>
 			<span class="search-title">Search</span>
 		</div>
-		<button class="close-btn" on:click={close} title="Close search">
-			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+		<button class="close-btn" on:click={close} title="Close search" aria-label="Close search panel" type="button">
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
 				<line x1="18" y1="6" x2="6" y2="18" />
 				<line x1="6" y1="6" x2="18" y2="18" />
 			</svg>
@@ -151,7 +151,7 @@
 	<!-- Search Input -->
 	<div class="search-input-container">
 		<div class="search-input-wrapper">
-			<svg class="search-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+			<svg class="search-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 				<path d="M21.707 20.293L16.314 14.9C17.403 13.504 18 11.799 18 10C18 5.589 14.411 2 10 2C5.589 2 2 5.589 2 10C2 14.411 5.589 18 10 18C11.799 18 13.504 17.403 14.9 16.314L20.293 21.707L21.707 20.293ZM10 16C6.691 16 4 13.309 4 10C4 6.691 6.691 4 10 4C13.309 4 16 6.691 16 10C16 13.309 13.309 16 10 16Z" />
 			</svg>
 			<input
@@ -162,14 +162,18 @@
 				type="text"
 				class="search-input"
 				placeholder="Search messages..."
+				aria-label="Search messages"
+				aria-describedby="search-results-count"
 			/>
 			{#if searchInput}
 				<button 
 					class="clear-btn" 
 					on:click={() => { searchInput = ''; searchStore.reset(); }}
 					title="Clear search"
+					aria-label="Clear search"
+					type="button"
 				>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 						<path d="M18.4 4L12 10.4L5.6 4L4 5.6L10.4 12L4 18.4L5.6 20L12 13.6L18.4 20L20 18.4L13.6 12L20 5.6L18.4 4Z" />
 					</svg>
 				</button>
@@ -179,7 +183,7 @@
 
 	<!-- Results Count -->
 	{#if searchInput.trim() && !$searchLoading}
-		<div class="results-count">
+		<div class="results-count" id="search-results-count" role="status" aria-live="polite">
 			{#if $searchTotalCount > 0}
 				<span>{$searchTotalCount.toLocaleString()} result{$searchTotalCount !== 1 ? 's' : ''}</span>
 			{:else if $searchResults.length === 0}
@@ -193,6 +197,8 @@
 		class="search-results" 
 		bind:this={resultsContainer}
 		on:scroll={handleScroll}
+		role="list"
+		aria-label="Search results"
 	>
 		{#if $searchLoading && $searchResults.length === 0}
 			<div class="loading-container">
@@ -231,6 +237,8 @@
 				<button 
 					class="search-result-item"
 					on:click={() => jumpToMessage(result)}
+					aria-label="Message from {authorName(result)} in #{getChannelName(result.channel_id)}: {truncateContent(result.content, 50)}"
+					type="button"
 				>
 					<div class="result-avatar">
 						<Avatar

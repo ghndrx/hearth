@@ -124,8 +124,10 @@
 		<button
 			class="explore-icon"
 			on:click={() => goto('/guild-discovery')}
+			aria-label="Explore public servers"
+			type="button"
 		>
-			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
 				<path
 					stroke-linecap="round"
 					stroke-linejoin="round"
@@ -134,7 +136,7 @@
 				/>
 			</svg>
 		</button>
-		<div class="tooltip">
+		<div class="tooltip" role="tooltip">
 			Explore Public Servers
 		</div>
 	</div>

@@ -99,7 +99,7 @@
 	}
 </script>
 
-<div class="channel-list">
+<nav class="channel-list" aria-label="Channels and direct messages">
 	<div class="channel-list-content">
 		{#if $currentServer}
 			<ServerHeader
@@ -151,41 +151,48 @@
 		{:else}
 			<!-- DM List -->
 			<div class="dm-header">
-				<button class="dm-search">Find or start a conversation</button>
+				<button class="dm-search" aria-label="Find or start a conversation" type="button">Find or start a conversation</button>
 			</div>
 
-			<div class="dm-section">
+			<div class="dm-section" role="heading" aria-level="2">
 				<span>DIRECT MESSAGES</span>
 			</div>
 
-			{#each $channels.filter((c) => c.type === 1 || c.type === 3) as dm (dm.id)}
-				<button
-					class="dm-item"
-					class:active={$currentChannel?.id === dm.id}
-					on:click={() => selectChannel(dm)}
-				>
-					<div class="dm-avatar">
-						{#if dm.recipients?.[0]?.avatar}
-							<img src={dm.recipients[0].avatar} alt="" />
-						{:else}
-							<div class="avatar-placeholder">
-								{(dm.recipients?.[0]?.username || '?')[0].toUpperCase()}
+			<ul role="list" aria-label="Direct messages" class="dm-list">
+				{#each $channels.filter((c) => c.type === 1 || c.type === 3) as dm (dm.id)}
+					<li role="listitem">
+						<button
+							class="dm-item"
+							class:active={$currentChannel?.id === dm.id}
+							on:click={() => selectChannel(dm)}
+							aria-current={$currentChannel?.id === dm.id ? 'page' : undefined}
+							aria-label="Direct message with {dm.name || dm.recipients?.map((r) => r.display_name || r.username).join(', ') || 'Unknown'}{dm.e2ee_enabled ? ', encrypted' : ''}"
+							type="button"
+						>
+							<div class="dm-avatar">
+								{#if dm.recipients?.[0]?.avatar}
+									<img src={dm.recipients[0].avatar} alt="" />
+								{:else}
+									<div class="avatar-placeholder">
+										{(dm.recipients?.[0]?.username || '?')[0].toUpperCase()}
+									</div>
+								{/if}
 							</div>
-						{/if}
-					</div>
-					<span class="dm-name">
-						{dm.name || dm.recipients?.map((r) => r.display_name || r.username).join(', ') || 'Unknown'}
-					</span>
-					{#if dm.e2ee_enabled}
-						<span class="e2ee-indicator">🔒</span>
-					{/if}
-				</button>
-			{/each}
+							<span class="dm-name">
+								{dm.name || dm.recipients?.map((r) => r.display_name || r.username).join(', ') || 'Unknown'}
+							</span>
+							{#if dm.e2ee_enabled}
+								<span class="e2ee-indicator" aria-hidden="true">🔒</span>
+							{/if}
+						</button>
+					</li>
+				{/each}
+			</ul>
 		{/if}
 	</div>
 
 	<UserPanel />
-</div>
+</nav>
 
 <!-- Invite Modal -->
 {#if $currentServer}
@@ -250,6 +257,18 @@
 		font-weight: 600;
 		color: #949ba4;
 		letter-spacing: 0.02em;
+	}
+
+	.dm-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.dm-list li {
+		list-style: none;
+		margin: 0;
+		padding: 0;
 	}
 
 	.dm-item {

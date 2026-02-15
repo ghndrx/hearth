@@ -56,9 +56,9 @@
 	}
 </script>
 
-<div class="flex-1 flex flex-col min-w-0">
+<div class="flex-1 flex flex-col min-w-0" role="main">
 	<!-- Channel Header -->
-	<div class="h-12 px-4 flex items-center border-b border-[#1e1f22] bg-[#313338] shrink-0">
+	<div class="h-12 px-4 flex items-center border-b border-[#1e1f22] bg-[#313338] shrink-0" role="banner">
 		{#if $currentChannel}
 			{#if $currentChannel.type === 1 || $currentChannel.type === 3}
 				<!-- DM Header -->
@@ -100,7 +100,15 @@
 	</div>
 
 	<!-- Messages -->
-	<div class="flex-1 overflow-y-auto px-4" bind:this={messageContainer} on:scroll={handleScroll}>
+	<div
+		class="flex-1 overflow-y-auto px-4"
+		bind:this={messageContainer}
+		on:scroll={handleScroll}
+		role="log"
+		aria-label="Message history"
+		aria-live="polite"
+		aria-relevant="additions"
+	>
 		{#if $currentChannel}
 			<!-- Channel Welcome -->
 			<div class="pt-4 pb-5">

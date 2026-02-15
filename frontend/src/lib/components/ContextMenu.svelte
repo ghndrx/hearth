@@ -57,6 +57,7 @@
     class="context-menu"
     style="left: {x}px; top: {y}px;"
     role="menu"
+    aria-label="Context menu"
   >
     <slot />
   </div>

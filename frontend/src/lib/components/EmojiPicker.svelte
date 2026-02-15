@@ -222,11 +222,11 @@
 </script>
 
 {#if show}
-  <div bind:this={pickerElement} class="emoji-picker">
+  <div bind:this={pickerElement} class="emoji-picker" role="dialog" aria-label="Emoji picker" aria-modal="true">
     <!-- Header with search and skin tone -->
     <div class="header">
       <div class="search-container">
-        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16">
+        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
           <path fill="currentColor" d="M21.707 20.293l-4.054-4.054A8.46 8.46 0 0 0 19.5 11c0-4.687-3.813-8.5-8.5-8.5S2.5 6.313 2.5 11s3.813 8.5 8.5 8.5a8.46 8.46 0 0 0 5.239-1.847l4.054 4.054a1 1 0 0 0 1.414-1.414zM11 17.5c-3.584 0-6.5-2.916-6.5-6.5S7.416 4.5 11 4.5s6.5 2.916 6.5 6.5-2.916 6.5-6.5 6.5z"/>
         </svg>
         <input
@@ -235,6 +235,7 @@
           placeholder="Search emoji"
           bind:value={searchQuery}
           class="search-input"
+          aria-label="Search emoji"
         />
       </div>
 
@@ -244,20 +245,28 @@
           class="skin-tone-button"
           on:click|stopPropagation={() => showSkinTonePicker = !showSkinTonePicker}
           title="Select skin tone"
+          aria-label="Select skin tone: {skinTones[selectedSkinTone].name}"
+          aria-expanded={showSkinTonePicker}
+          aria-haspopup="listbox"
+          type="button"
         >
-          <span class="skin-tone-preview" style="background-color: {skinTones[selectedSkinTone].color}"></span>
+          <span class="skin-tone-preview" style="background-color: {skinTones[selectedSkinTone].color}" aria-hidden="true"></span>
         </button>
 
         {#if showSkinTonePicker}
-          <div class="skin-tone-picker">
+          <div class="skin-tone-picker" role="listbox" aria-label="Skin tone options">
             {#each skinTones as tone, i}
               <button
                 class="skin-tone-option"
                 class:selected={selectedSkinTone === i}
                 on:click|stopPropagation={() => selectSkinTone(i)}
                 title={tone.name}
+                role="option"
+                aria-selected={selectedSkinTone === i}
+                aria-label="{tone.name} skin tone"
+                type="button"
               >
-                <span class="skin-tone-swatch" style="background-color: {tone.color}"></span>
+                <span class="skin-tone-swatch" style="background-color: {tone.color}" aria-hidden="true"></span>
               </button>
             {/each}
           </div>
@@ -266,7 +275,7 @@
     </div>
 
     <!-- Category tabs -->
-    <div class="categories">
+    <div class="categories" role="tablist" aria-label="Emoji categories">
       {#each categories as category, i}
         {#if i > 0 || hasRecentEmojis}
           <button
@@ -274,8 +283,12 @@
             class:active={selectedCategory === i && !searchQuery}
             on:click={() => { selectedCategory = i; searchQuery = ''; }}
             title={category.name}
+            role="tab"
+            aria-selected={selectedCategory === i && !searchQuery}
+            aria-label={category.name}
+            type="button"
           >
-            {category.icon}
+            <span aria-hidden="true">{category.icon}</span>
           </button>
         {/if}
       {/each}
@@ -293,12 +306,14 @@
     {/if}
 
     <!-- Emoji grid -->
-    <div class="emojis">
+    <div class="emojis" role="tabpanel" aria-label="{searchQuery ? 'Search Results' : categories[selectedCategory].name} emoji">
       {#each filteredEmojis as emoji}
         <button
           class="emoji-btn"
           on:click={() => selectEmoji(emoji)}
           title={emoji}
+          aria-label="Select {emoji} emoji"
+          type="button"
         >
           {applySkintone(emoji)}
         </button>

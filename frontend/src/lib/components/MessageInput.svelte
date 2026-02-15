@@ -164,7 +164,7 @@
 <div class="message-input-container">
 	<!-- Reply Preview -->
 	{#if replyTo}
-		<div class="reply-preview-bar">
+		<div class="reply-preview-bar" role="status" aria-label="Replying to {replyTo.author.username}">
 			<div class="reply-bar"></div>
 			<div class="reply-info">
 				<span class="reply-label">Replying to</span>
@@ -173,7 +173,7 @@
 					{replyTo.content.slice(0, 100)}{replyTo.content.length > 100 ? '...' : ''}
 				</p>
 			</div>
-			<button class="close-reply-btn" on:click={clearReply}>
+			<button class="close-reply-btn" on:click={clearReply} aria-label="Cancel reply" type="button">
 				<svg
 					width="16"
 					height="16"
@@ -181,6 +181,7 @@
 					fill="none"
 					stroke="currentColor"
 					stroke-width="2"
+					aria-hidden="true"
 				>
 					<line x1="18" y1="6" x2="6" y2="18" />
 					<line x1="6" y1="6" x2="18" y2="18" />
@@ -191,11 +192,11 @@
 
 	<!-- Attachments Preview -->
 	{#if files?.length}
-		<div class="attachments-preview">
+		<div class="attachments-preview" role="list" aria-label="Attached files">
 			{#each Array.from(files) as file, i}
-				<div class="attachment-preview">
+				<div class="attachment-preview" role="listitem">
 					{#if file.type.startsWith('image/')}
-						<img src={URL.createObjectURL(file)} alt={file.name} />
+						<img src={URL.createObjectURL(file)} alt="Attachment: {file.name}" />
 					{:else}
 						<div class="file-preview">
 							<svg
@@ -205,6 +206,7 @@
 								fill="none"
 								stroke="currentColor"
 								stroke-width="2"
+								aria-hidden="true"
 							>
 								<path
 									d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
@@ -213,7 +215,7 @@
 							<span>{file.name}</span>
 						</div>
 					{/if}
-					<button class="remove-attachment" on:click={() => removeFile(i)}>
+					<button class="remove-attachment" on:click={() => removeFile(i)} aria-label="Remove {file.name}" type="button">
 						<svg
 							width="16"
 							height="16"
@@ -221,6 +223,7 @@
 							fill="none"
 							stroke="currentColor"
 							stroke-width="2"
+							aria-hidden="true"
 						>
 							<line x1="18" y1="6" x2="6" y2="18" />
 							<line x1="6" y1="6" x2="18" y2="18" />
@@ -232,7 +235,7 @@
 	{/if}
 
 	<!-- Input Area -->
-	<div class="input-wrapper">
+	<div class="input-wrapper" role="group" aria-label="Message composition">
 		<!-- Attach Button -->
 		<div class="input-button attach-button">
 			<input
@@ -242,8 +245,9 @@
 				accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
 				on:change={handleFileSelect}
 				disabled={!$currentChannel}
+				aria-label="Upload files"
 			/>
-			<label for="file-upload" class="icon-button" title="Upload a file">
+			<label for="file-upload" class="icon-button" title="Upload a file" aria-label="Upload a file">
 				<svg
 					width="24"
 					height="24"
@@ -251,6 +255,7 @@
 					fill="none"
 					stroke="currentColor"
 					stroke-width="2"
+					aria-hidden="true"
 				>
 					<path
 						d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
@@ -269,17 +274,24 @@
 			placeholder={actualPlaceholder}
 			rows="1"
 			disabled={!$currentChannel}
+			aria-label={actualPlaceholder}
+			aria-describedby="message-input-hint"
 		></textarea>
+		<span id="message-input-hint" class="sr-only">Press Enter to send, Shift+Enter for new line</span>
 
 		<!-- Right Buttons -->
-		<div class="input-buttons-right">
+		<div class="input-buttons-right" role="group" aria-label="Message actions">
 			<!-- GIF Button -->
 			<div class="gif-button-container">
 				<button
 					class="icon-button gif-button"
 					title="Select GIF"
+					aria-label="Select GIF"
+					aria-expanded={showGifPicker}
+					aria-haspopup="dialog"
 					on:click={toggleGifPicker}
 					disabled={!$currentChannel}
+					type="button"
 				>
 					<svg
 						width="24"
@@ -288,6 +300,7 @@
 						fill="none"
 						stroke="currentColor"
 						stroke-width="2"
+						aria-hidden="true"
 					>
 						<rect x="2" y="4" width="20" height="16" rx="2" />
 						<text x="6" y="15" font-size="8" font-weight="bold" fill="currentColor" stroke="none">GIF</text>
@@ -305,7 +318,9 @@
 			<button
 				class="icon-button gift-button"
 				title="Upgrade to Hearth Nitro to send gifts!"
+				aria-label="Send gift (requires Hearth Nitro)"
 				disabled={!$currentChannel}
+				type="button"
 			>
 				<svg
 					width="24"
@@ -314,6 +329,7 @@
 					fill="none"
 					stroke="currentColor"
 					stroke-width="2"
+					aria-hidden="true"
 				>
 					<polyline points="20 12 20 22 4 22 4 12" />
 					<rect x="2" y="7" width="20" height="5" />
@@ -328,8 +344,12 @@
 				<button
 					class="icon-button emoji-button"
 					title="Select emoji"
+					aria-label="Select emoji"
+					aria-expanded={showEmojiPicker}
+					aria-haspopup="dialog"
 					on:click={toggleEmojiPicker}
 					disabled={!$currentChannel}
+					type="button"
 				>
 					<svg
 						width="24"
@@ -338,6 +358,7 @@
 						fill="none"
 						stroke="currentColor"
 						stroke-width="2"
+						aria-hidden="true"
 					>
 						<circle cx="12" cy="12" r="10" />
 						<path d="M8 14s1.5 2 4 2 4-2 4-2" />
@@ -577,5 +598,18 @@
 
 	.emoji-button:hover:not(:disabled) {
 		color: #ffd700;
+	}
+
+	/* Screen reader only - visually hidden but accessible */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 </style>
