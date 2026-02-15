@@ -253,8 +253,6 @@
 <svelte:window on:keydown={handleKeydown} />
 
 {#if open}
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div 
     class="fixed inset-0 z-[1000] flex"
     style="background-color: #1e1f22;"

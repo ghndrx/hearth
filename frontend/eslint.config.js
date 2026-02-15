@@ -60,6 +60,6 @@ export default [
 		}
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/', 'vitest.config.ts']
+		ignores: ['build/', '.svelte-kit/', 'dist/', 'node_modules/', 'vitest.config.ts', 'playwright.config.ts']
 	}
 ];
