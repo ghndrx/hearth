@@ -164,20 +164,25 @@
 <svelte:window on:keydown={handleKeydown} />
 
 {#if open}
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div 
-    class="fixed inset-0 bg-[var(--bg-tertiary)] z-[1000] flex"
+    class="fixed inset-0 z-[1000] flex"
+    style="background-color: #1e1f22;"
     transition:fade={{ duration: 150 }}
     on:click|self={close}
+    on:keydown={handleKeydown}
     role="dialog"
     aria-modal="true"
     aria-labelledby="settings-title"
+    tabindex="-1"
   >
     <div 
       class="flex w-full h-full"
       transition:fly={{ y: 20, duration: 200 }}
     >
       <!-- Sidebar -->
-      <nav class="w-[218px] bg-[var(--bg-secondary)] flex justify-end py-15 px-6 pl-5 flex-shrink-0" aria-label="Settings navigation">
+      <nav class="w-[218px] bg-[var(--bg-secondary)] flex justify-end py-[60px] px-6 pl-5 flex-shrink-0 overflow-y-auto" aria-label="Settings navigation">
         <div class="w-[192px]">
           {#each sections as section}
             {#if section.divider}
@@ -199,7 +204,7 @@
       </nav>
       
       <!-- Content -->
-      <main class="flex-1 relative flex justify-start py-15 pr-10 pl-10 pb-20">
+      <main class="flex-1 relative flex justify-start py-[60px] pr-10 pl-10 pb-20 overflow-y-auto">
         <div class="w-full max-w-[740px] overflow-y-auto">
           {#if activeSection === 'account'}
             <section>
