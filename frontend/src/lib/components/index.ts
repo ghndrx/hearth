@@ -6,6 +6,8 @@ export { default as ChannelCategory } from './ChannelCategory.svelte';
 export { default as ChannelItem } from './ChannelItem.svelte';
 export { default as MessageArea } from './MessageArea.svelte';
 export { default as MemberList } from './MemberList.svelte';
+export { default as MemberSection } from './MemberSection.svelte';
+export { default as MemberItem } from './MemberItem.svelte';
 export { default as TypingIndicator } from './TypingIndicator.svelte';
 
 // Server components
@@ -48,3 +50,4 @@ export { default as ContextMenuItem } from './ContextMenuItem.svelte';
 // UI components
 export { default as Button } from './Button.svelte';
 export { default as Tooltip } from './Tooltip.svelte';
+export { default as LoadingSpinner } from './LoadingSpinner.svelte';
