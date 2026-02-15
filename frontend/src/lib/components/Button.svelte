@@ -5,6 +5,14 @@
   export let type: 'button' | 'submit' | 'reset' = 'button';
   export let fullWidth = false;
   export let ariaLabel: string | undefined = undefined;
+
+  function handleClick(event: MouseEvent) {
+    if (disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+  }
 </script>
 
 <button
@@ -20,6 +28,7 @@
   class:lg={size === 'lg'}
   class:full-width={fullWidth}
   aria-label={ariaLabel}
+  on:click={handleClick}
   on:click
 >
   <slot />

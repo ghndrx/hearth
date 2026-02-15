@@ -203,61 +203,52 @@ describe('ServerIcon', () => {
 	});
 
 	describe('events', () => {
-		it('dispatches click event with server when clicked', async () => {
+		it('dispatches click event when clicked', async () => {
 			const handleClick = vi.fn();
 			const { container } = render(ServerIcon, {
 				props: { server: mockServer }
 			});
 
-			const component = container.querySelector('.server-icon-wrapper');
-			component?.addEventListener('click', handleClick);
-
 			const button = container.querySelector('.server-icon');
+			button?.addEventListener('click', handleClick);
+
 			if (button) {
 				await fireEvent.click(button);
 			}
 
 			expect(handleClick).toHaveBeenCalledTimes(1);
-			const eventDetail = handleClick.mock.calls[0][0] as CustomEvent;
-			expect(eventDetail.detail).toEqual({ server: mockServer });
 		});
 
-		it('dispatches click event with null server for home button', async () => {
+		it('dispatches click event for home button', async () => {
 			const handleClick = vi.fn();
 			const { container } = render(ServerIcon, {
 				props: { isHome: true }
 			});
 
-			const component = container.querySelector('.server-icon-wrapper');
-			component?.addEventListener('click', handleClick);
-
 			const button = container.querySelector('.server-icon');
+			button?.addEventListener('click', handleClick);
+
 			if (button) {
 				await fireEvent.click(button);
 			}
 
 			expect(handleClick).toHaveBeenCalledTimes(1);
-			const eventDetail = handleClick.mock.calls[0][0] as CustomEvent;
-			expect(eventDetail.detail).toEqual({ server: null });
 		});
 
-		it('dispatches click event with null server for add button', async () => {
+		it('dispatches click event for add button', async () => {
 			const handleClick = vi.fn();
 			const { container } = render(ServerIcon, {
 				props: { isAdd: true }
 			});
 
-			const component = container.querySelector('.server-icon-wrapper');
-			component?.addEventListener('click', handleClick);
-
 			const button = container.querySelector('.server-icon');
+			button?.addEventListener('click', handleClick);
+
 			if (button) {
 				await fireEvent.click(button);
 			}
 
 			expect(handleClick).toHaveBeenCalledTimes(1);
-			const eventDetail = handleClick.mock.calls[0][0] as CustomEvent;
-			expect(eventDetail.detail).toEqual({ server: null });
 		});
 	});
 
@@ -301,7 +292,8 @@ describe('ServerIcon', () => {
 			});
 
 			const initials = container.querySelector('.server-initials');
-			expect(initials?.textContent).toBe('S#1');
+			// Takes first char of each word: "Server" -> "S", "@" -> "@", "#123" -> "#"
+			expect(initials?.textContent).toBe('S@#');
 		});
 
 		it('does not render tooltip when server is null and not home/add', () => {

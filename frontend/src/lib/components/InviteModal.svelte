@@ -5,9 +5,9 @@
 
 	export let open = false;
 	export let serverName = '';
-	export let serverId = '';
+	export const serverId = '';
 	export let channelName = '';
-	export let channelId = '';
+	export const channelId = '';
 	export let baseUrl = 'https://hearth.chat';
 
 	const dispatch = createEventDispatcher<{
@@ -163,7 +163,7 @@
 			</div>
 		</div>
 
-		<div class="divider" />
+		<div class="divider"></div>
 
 		<details class="advanced-settings">
 			<summary>

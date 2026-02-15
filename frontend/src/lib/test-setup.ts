@@ -2,6 +2,13 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
 // Mock SvelteKit's $app modules
+vi.mock('$app/environment', () => ({
+  browser: true,
+  dev: true,
+  building: false,
+  version: '1.0.0'
+}));
+
 vi.mock('$app/navigation', () => ({
   goto: vi.fn(),
   beforeNavigate: vi.fn(),
