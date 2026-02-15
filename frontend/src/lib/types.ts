@@ -179,6 +179,35 @@ export interface WSEvent<T = unknown> {
 	timestamp: string;
 }
 
+// User Profile Enhancements (UX-003)
+export interface SharedChannel {
+	id: string;
+	name: string;
+	server_id: string;
+	server_name: string;
+	server_icon: string | null;
+}
+
+export interface RecentActivity {
+	last_message_at: string | null;
+	server_name: string | null;
+	channel_name: string | null;
+	message_count_24h: number;
+}
+
+export interface UserProfile {
+	user: User;
+	mutual_servers: { id: string; name: string; icon_url: string | null }[];
+	shared_channels: SharedChannel[];
+	mutual_friends: { id: string; username: string; avatar_url: string | null }[];
+	recent_activity: RecentActivity | null;
+	total_mutual: {
+		servers: number;
+		channels: number;
+		friends: number;
+	};
+}
+
 // Auth types
 export interface LoginRequest {
 	email: string;

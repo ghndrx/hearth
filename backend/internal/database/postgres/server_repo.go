@@ -33,7 +33,15 @@ func (r *ServerRepository) Create(ctx context.Context, server *models.Server) er
 
 func (r *ServerRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Server, error) {
 	var server models.Server
-	query := `SELECT * FROM servers WHERE id = $1`
+	query := `
+		SELECT 
+			id, name, icon_url, banner_url, description,
+			owner_id, verification_level, 
+			explicit_filter as explicit_content_filter,
+			default_notifications, features, vanity_url as vanity_url_code,
+			created_at, updated_at
+		FROM servers WHERE id = $1
+	`
 	err := r.db.GetContext(ctx, &server, query, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -130,7 +138,13 @@ func (r *ServerRepository) GetMemberCount(ctx context.Context, serverID uuid.UUI
 
 func (r *ServerRepository) GetUserServers(ctx context.Context, userID uuid.UUID) ([]*models.Server, error) {
 	query := `
-		SELECT s.* FROM servers s
+		SELECT 
+			s.id, s.name, s.icon_url, s.banner_url, s.description,
+			s.owner_id, s.verification_level, 
+			s.explicit_filter as explicit_content_filter,
+			s.default_notifications, s.features, s.vanity_url as vanity_url_code,
+			s.created_at, s.updated_at
+		FROM servers s
 		INNER JOIN members m ON m.server_id = s.id
 		WHERE m.user_id = $1
 		ORDER BY s.name

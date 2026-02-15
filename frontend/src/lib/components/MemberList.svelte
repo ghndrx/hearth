@@ -211,10 +211,8 @@
 			user,
 			member: memberData,
 			position,
-			anchor: 'left',
-			// TODO: Fetch mutual servers/friends from API
-			mutualServers: [],
-			mutualFriends: []
+			anchor: 'left'
+			// Profile enhancements (mutual servers, friends, shared channels) are fetched automatically by popoutStore
 		});
 	}
 
