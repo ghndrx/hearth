@@ -17,6 +17,18 @@ type RedisCache struct {
 	prefix string
 }
 
+// Client returns the underlying Redis client for advanced operations
+func (c *RedisCache) Client() *redis.Client {
+	return c.client
+}
+
+// URL returns a Redis URL that can be used to create new connections
+// Useful for creating separate pub/sub connections
+func (c *RedisCache) URL() string {
+	opts := c.client.Options()
+	return "redis://" + opts.Addr + "/" + "0"
+}
+
 // NewRedisCache creates a new Redis cache client
 func NewRedisCache(redisURL string) (*RedisCache, error) {
 	opts, err := redis.ParseURL(redisURL)
