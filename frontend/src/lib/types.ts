@@ -2,10 +2,14 @@
 export interface User {
 	id: string;
 	username: string;
-	email: string;
+	email?: string;
+	display_name: string | null;
+	avatar: string | null;
 	avatarUrl?: string;
-	status: 'online' | 'idle' | 'dnd' | 'offline';
-	createdAt: string;
+	role_color?: string;
+	status?: 'online' | 'idle' | 'dnd' | 'offline';
+	createdAt?: string;
+	created_at?: string;
 }
 
 // Server (Guild) types
@@ -40,7 +44,9 @@ export interface Message {
 	server_id?: string;
 	content: string;
 	encrypted_content?: string;
+	encrypted: boolean;
 	type: MessageType;
+	reply_to?: string | null;
 	reply_to_id?: string;
 	thread_id?: string;
 	pinned: boolean;
@@ -96,6 +102,7 @@ export interface Reaction {
 	emoji: string;
 	count: number;
 	me: boolean;
+	user_ids?: string[];
 }
 
 // Member types
