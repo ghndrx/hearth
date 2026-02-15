@@ -20,6 +20,8 @@ type Handlers struct {
 	Gateway       *GatewayHandler
 	Search        *SearchHandler
 	Attachments   *AttachmentHandler
+	Polls         *PollHandler
+	AuditLog      *AuditLogHandler
 }
 
 // NewHandlers creates all handlers with dependencies

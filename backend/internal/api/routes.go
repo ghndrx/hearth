@@ -112,6 +112,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	servers.Patch("/:id/roles/:roleId", h.Servers.UpdateRole)
 	servers.Delete("/:id/roles/:roleId", h.Servers.DeleteRole)
 	
+	// Server audit logs
+	if h.AuditLog != nil {
+		servers.Get("/:id/audit-logs", h.AuditLog.GetAuditLogs)
+		servers.Get("/:id/audit-logs/action-types", h.AuditLog.GetActionTypes)
+		servers.Get("/:id/audit-logs/:entryId", h.AuditLog.GetAuditLogEntry)
+	}
+	
 	// Channels
 	channels := api.Group("/channels")
 	channels.Get("/:id", h.Channels.Get)
@@ -167,6 +174,22 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	
 	// Channel invites
 	channels.Post("/:id/invites", h.Channels.CreateInvite)
+	
+	// Channel polls
+	if h.Polls != nil {
+		channels.Get("/:id/polls", h.Polls.GetChannelPolls)
+		channels.Post("/:id/polls", h.Polls.CreatePoll)
+	}
+	
+	// Polls
+	if h.Polls != nil {
+		polls := api.Group("/polls")
+		polls.Get("/:id", h.Polls.GetPoll)
+		polls.Get("/:id/results", h.Polls.GetResults)
+		polls.Post("/:id/vote", h.Polls.Vote)
+		polls.Post("/:id/close", h.Polls.ClosePoll)
+		polls.Delete("/:id", h.Polls.DeletePoll)
+	}
 	
 	// Attachments (if handler is configured)
 	if h.Attachments != nil {

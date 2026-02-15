@@ -11,9 +11,7 @@ import (
 	"hearth/internal/models"
 )
 
-var (
-	ErrNotificationNotFound = errors.New("notification not found")
-)
+// ErrNotificationNotFound is defined in errors.go
 
 // NotificationRepository defines the interface for notification data access
 type NotificationRepository interface {

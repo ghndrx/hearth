@@ -54,4 +54,10 @@ var (
 
 	// Cache errors
 	ErrCacheNotFound = errors.New("key not found in cache")
+
+	// Notification errors
+	ErrNotificationNotFound = errors.New("notification not found")
+
+	// Audit log errors
+	ErrAuditLogNotFound = errors.New("audit log entry not found")
 )
