@@ -7,6 +7,7 @@
 	import Avatar from './Avatar.svelte';
 	import Modal from './Modal.svelte';
 	import RoleEditor from './RoleEditor.svelte';
+	import AuditLogViewer from './AuditLogViewer.svelte';
 	
 	export let open = false;
 	
@@ -569,15 +570,9 @@
 						</section>
 					
 					{:else if activeSection === 'audit-log'}
-						<section>
+						<section class="audit-log-section">
 							<h1>Audit Log</h1>
-							
-							<div class="placeholder-section">
-								<div class="placeholder-icon">📜</div>
-								<h3>Audit Log</h3>
-								<p>View a log of all administrative actions in your server.</p>
-								<p class="coming-soon">Coming soon</p>
-							</div>
+							<AuditLogViewer serverId={$currentServer.id} />
 						</section>
 					
 					{:else if activeSection === 'channels'}
@@ -1441,6 +1436,25 @@
 	}
 	
 	.roles-section :global(.role-editor) {
+		flex: 1;
+		background: var(--bg-secondary);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+	
+	/* Audit Log Section */
+	.audit-log-section {
+		height: calc(100vh - 200px);
+		min-height: 500px;
+		display: flex;
+		flex-direction: column;
+	}
+	
+	.audit-log-section h1 {
+		flex-shrink: 0;
+	}
+	
+	.audit-log-section :global(.audit-log-viewer) {
 		flex: 1;
 		background: var(--bg-secondary);
 		border-radius: 8px;
