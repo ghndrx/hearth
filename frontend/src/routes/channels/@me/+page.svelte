@@ -54,6 +54,7 @@
 	<title>Friends | Hearth</title>
 </svelte:head>
 
+<div class="friends-page">
 <div class="friends-header">
 	<div class="header-left">
 		<span class="icon">👥</span>
@@ -127,8 +128,16 @@
 		</div>
 	{/if}
 </div>
+</div>
 
 <style>
+	.friends-page {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		width: 100%;
+	}
+
 	.friends-header {
 		position: sticky;
 		top: 0;
