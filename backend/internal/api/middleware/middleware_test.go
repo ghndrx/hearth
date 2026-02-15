@@ -7,32 +7,37 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	
+	"hearth/internal/auth"
 )
 
 const testSecret = "test-secret"
 
-// generateTestToken creates a valid JWT for testing
+// generateTestToken creates a valid JWT for testing using the actual JWTService
+// This ensures test tokens match production token format exactly
 func generateTestToken(userID uuid.UUID, tokenType string, expired bool) string {
-	expiresAt := time.Now().Add(time.Hour)
+	var expiry time.Duration
 	if expired {
-		expiresAt = time.Now().Add(-time.Hour)
+		expiry = -time.Hour // Already expired
+	} else {
+		expiry = time.Hour
 	}
-
-	claims := &Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-		UserID:   userID.String(),
-		Username: "testuser",
-		Type:     tokenType,
+	
+	jwtService := auth.NewJWTService(testSecret, expiry, expiry)
+	
+	var token string
+	var err error
+	if tokenType == "access" {
+		token, err = jwtService.GenerateAccessToken(userID, "testuser")
+	} else if tokenType == "refresh" {
+		token, err = jwtService.GenerateRefreshToken(userID)
 	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString([]byte(testSecret))
-	return tokenString
+	
+	if err != nil {
+		panic("failed to generate test token: " + err.Error())
+	}
+	return token
 }
 
 func TestNewMiddleware(t *testing.T) {
@@ -42,8 +47,8 @@ func TestNewMiddleware(t *testing.T) {
 	if m == nil {
 		t.Fatal("NewMiddleware returned nil")
 	}
-	if string(m.jwtSecret) != secret {
-		t.Errorf("expected jwtSecret %q, got %q", secret, string(m.jwtSecret))
+	if m.jwtService == nil {
+		t.Error("expected jwtService to be initialized")
 	}
 }
 
