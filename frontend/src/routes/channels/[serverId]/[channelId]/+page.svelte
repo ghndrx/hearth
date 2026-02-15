@@ -1,14 +1,30 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { currentServer } from '$lib/stores/servers';
-	import { currentChannel, loadServerChannels } from '$lib/stores/channels';
+	import { currentServer, servers } from '$lib/stores/servers';
+	import { currentChannel, loadServerChannels, channels } from '$lib/stores/channels';
 	import { sendMessage } from '$lib/stores/messages';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
 	
 	$: serverId = $page.params.serverId;
 	$: channelId = $page.params.channelId;
+	
+	// Set currentServer from URL if not already set
+	$: if (serverId && serverId !== '@me' && $servers.length > 0) {
+		const server = $servers.find(s => s.id === serverId);
+		if (server && $currentServer?.id !== serverId) {
+			currentServer.set(server);
+		}
+	}
+	
+	// Set currentChannel from URL if not already set
+	$: if (channelId && $channels.length > 0) {
+		const channel = $channels.find(c => c.id === channelId);
+		if (channel && $currentChannel?.id !== channelId) {
+			currentChannel.set(channel);
+		}
+	}
 	
 	$: pageTitle = $currentChannel
 		? `${$currentChannel.type === 1 
