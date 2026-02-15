@@ -15,6 +15,7 @@
 	import UserSettings from '$lib/components/UserSettings.svelte';
 	import ServerSettings from '$lib/components/ServerSettings.svelte';
 	import UserPopout from '$lib/components/UserPopout.svelte';
+	import VoiceCallOverlay from '$lib/components/VoiceCallOverlay.svelte';
 
 	onMount(() => {
 		if (!$isAuthenticated) {
@@ -96,3 +97,6 @@
 <UserSettings open={$isSettingsOpen} on:close={() => settings.close()} />
 
 <ServerSettings open={$isServerSettingsOpen} on:close={() => settings.closeServerSettings()} />
+
+<!-- Voice Call Overlay - Floating mini-view during active calls -->
+<VoiceCallOverlay />

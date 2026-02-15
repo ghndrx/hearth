@@ -44,6 +44,7 @@ export { default as Modal } from './Modal.svelte';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';
 export { default as CreateServerModal } from './CreateServerModal.svelte';
 export { default as InviteModal } from './InviteModal.svelte';
+export { default as InviteLink } from './InviteLink.svelte';
 export { default as ServerSettingsModal } from './ServerSettingsModal.svelte';
 
 // Context menu components
@@ -54,3 +55,7 @@ export { default as ContextMenuItem } from './ContextMenuItem.svelte';
 export { default as Button } from './Button.svelte';
 export { default as Tooltip } from './Tooltip.svelte';
 export { default as LoadingSpinner } from './LoadingSpinner.svelte';
+
+// Voice components
+export { default as VoiceCallOverlay } from './VoiceCallOverlay.svelte';
+export { default as FileUpload } from './FileUpload.svelte';
