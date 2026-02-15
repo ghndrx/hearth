@@ -258,13 +258,14 @@ export function removeMessage(channelId: string, messageId: string) {
 
 // Handle incoming WebSocket events (data already normalized by gateway)
 export function handleMessageCreate(data: Record<string, unknown>) {
-	// Ensure required fields exist
+	console.log('[messages store] handleMessageCreate:', data);
+	
 	const message: Message = {
 		id: data.id as string,
 		channel_id: data.channel_id as string,
-		author_id: data.author_id as string || '',
+		author_id: (data.author_id as string) || ((data.author as Record<string, unknown>)?.id as string) || '',
 		author: data.author as Message['author'],
-		content: data.content as string || '',
+		content: (data.content as string) || '',
 		encrypted: false,
 		attachments: (data.attachments as Attachment[]) || [],
 		reactions: (data.reactions as Reaction[]) || [],
@@ -273,6 +274,8 @@ export function handleMessageCreate(data: Record<string, unknown>) {
 		created_at: (data.created_at as string) || new Date().toISOString(),
 		edited_at: (data.edited_at as string) || null,
 	};
+	
+	console.log('[messages store] Adding message:', message.id, '-', message.content?.substring(0, 50));
 	addMessage(message);
 }
 
