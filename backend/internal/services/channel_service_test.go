@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -505,4 +506,63 @@ func TestGetServerChannels_NotMember(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, ErrNotServerMember, err)
 	assert.Nil(t, channels)
+}
+
+func TestGetUserDMs_Success(t *testing.T) {
+	service, channelRepo, _, _, _ := setupChannelService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	expectedChannels := []*models.Channel{
+		{
+			ID:         uuid.New(),
+			Type:       models.ChannelTypeDM,
+			Recipients: []uuid.UUID{userID, uuid.New()},
+		},
+		{
+			ID:         uuid.New(),
+			Type:       models.ChannelTypeGroupDM,
+			Recipients: []uuid.UUID{userID, uuid.New(), uuid.New()},
+		},
+	}
+
+	channelRepo.On("GetUserDMs", ctx, userID).Return(expectedChannels, nil)
+
+	channels, err := service.GetUserDMs(ctx, userID)
+
+	assert.NoError(t, err)
+	assert.Len(t, channels, 2)
+	assert.Equal(t, expectedChannels[0].ID, channels[0].ID)
+	assert.Equal(t, expectedChannels[1].ID, channels[1].ID)
+	channelRepo.AssertExpectations(t)
+}
+
+func TestGetUserDMs_Empty(t *testing.T) {
+	service, channelRepo, _, _, _ := setupChannelService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	channelRepo.On("GetUserDMs", ctx, userID).Return([]*models.Channel{}, nil)
+
+	channels, err := service.GetUserDMs(ctx, userID)
+
+	assert.NoError(t, err)
+	assert.Empty(t, channels)
+	assert.NotNil(t, channels)
+	channelRepo.AssertExpectations(t)
+}
+
+func TestGetUserDMs_RepositoryError(t *testing.T) {
+	service, channelRepo, _, _, _ := setupChannelService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	channelRepo.On("GetUserDMs", ctx, userID).Return(nil, errors.New("database error"))
+
+	channels, err := service.GetUserDMs(ctx, userID)
+
+	assert.Error(t, err)
+	assert.Nil(t, channels)
+	assert.Equal(t, "database error", err.Error())
+	channelRepo.AssertExpectations(t)
 }
