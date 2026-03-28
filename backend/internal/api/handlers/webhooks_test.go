@@ -68,45 +68,8 @@ func (m *mockWebhookService) DeleteWebhook(ctx context.Context, webhookID uuid.U
 	return args.Error(0)
 }
 
-func (m *mockWebhookService) CheckRateLimit(ctx context.Context, webhookID uuid.UUID) error {
-	args := m.Called(ctx, webhookID)
-	return args.Error(0)
-}
-
 func (m *mockWebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error) {
 	args := m.Called(ctx, webhookID, token, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Message), args.Error(1)
-}
-
-func (m *mockWebhookService) ExecuteWebhookWithRetry(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error) {
-	args := m.Called(ctx, webhookID, token, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Message), args.Error(1)
-}
-
-func (m *mockWebhookService) GetWebhookStats(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.WebhookDeliveryStats, error) {
-	args := m.Called(ctx, webhookID, requesterID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.WebhookDeliveryStats), args.Error(1)
-}
-
-func (m *mockWebhookService) GetWebhookDeliveries(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, limit, offset int) ([]*models.WebhookDelivery, error) {
-	args := m.Called(ctx, webhookID, requesterID, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.WebhookDelivery), args.Error(1)
-}
-
-func (m *mockWebhookService) TestWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Message, error) {
-	args := m.Called(ctx, webhookID, requesterID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -917,8 +880,7 @@ func TestExecuteWebhook_Success_NoWait(t *testing.T) {
 	webhookID := uuid.New()
 	token := "test-token"
 
-	// Default retry=true uses ExecuteWebhookWithRetry
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(&models.Message{
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(&models.Message{
 		ID:        uuid.New(),
 		Content:   "hello",
 		ChannelID: uuid.New(),
@@ -926,7 +888,7 @@ func TestExecuteWebhook_Success_NoWait(t *testing.T) {
 	}, nil)
 
 	body := `{"content":"hello from webhook"}`
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?retry=true", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -943,8 +905,7 @@ func TestExecuteWebhook_Success_WithWait(t *testing.T) {
 	token := "test-token"
 	msgID := uuid.New()
 
-	// wait=true still uses retry=true by default (uses ExecuteWebhookWithRetry)
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(&models.Message{
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(&models.Message{
 		ID:        msgID,
 		Content:   "hello with wait",
 		ChannelID: uuid.New(),
@@ -952,7 +913,7 @@ func TestExecuteWebhook_Success_WithWait(t *testing.T) {
 	}, nil)
 
 	body := `{"content":"hello with wait"}`
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?wait=true&retry=true", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?wait=true", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -999,10 +960,10 @@ func TestExecuteWebhook_WebhookNotFound(t *testing.T) {
 	webhookID := uuid.New()
 	token := "test-token"
 
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(nil, services.ErrWebhookNotFound)
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(nil, services.ErrWebhookNotFound)
 
 	body := `{"content":"hello"}`
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?retry=true", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -1018,10 +979,10 @@ func TestExecuteWebhook_InvalidToken(t *testing.T) {
 	webhookID := uuid.New()
 	token := "bad-token"
 
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(nil, services.ErrInvalidWebhookToken)
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(nil, services.ErrInvalidWebhookToken)
 
 	body := `{"content":"hello"}`
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?retry=true", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -1037,10 +998,10 @@ func TestExecuteWebhook_EmptyMessage(t *testing.T) {
 	webhookID := uuid.New()
 	token := "test-token"
 
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(nil, services.ErrEmptyMessage)
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(nil, services.ErrEmptyMessage)
 
 	body := `{"content":""}`
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?retry=true", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -1056,10 +1017,10 @@ func TestExecuteWebhook_InternalError(t *testing.T) {
 	webhookID := uuid.New()
 	token := "test-token"
 
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(nil, assert.AnError)
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(nil, assert.AnError)
 
 	body := `{"content":"hello"}`
-	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token+"?retry=true", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/"+webhookID.String()+"/"+token, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
