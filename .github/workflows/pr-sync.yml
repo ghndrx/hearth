@@ -17,8 +17,8 @@ jobs:
           
       - name: Set up Git
         run: |
-          git config --global user.email "bot@hearth.dev"
-          git config --global user.name "Hearth Bot"
+          git config --global user.email "greg@gregh.dev"
+          git config --global user.name "Greg Hendrickson"
           
       - name: Rebase feature branches
         env:
