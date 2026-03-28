@@ -1,0 +1,79 @@
+name: Auto-fix PR Conflicts
+
+on:
+  schedule:
+    # Every 10 minutes during work hours
+    - cron: '*/10 14-22 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Specific PR to fix (optional)'
+        required: false
+        type: string
+
+jobs:
+  fix-conflicts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows
+          sparse-checkout-cone-mode: false
+      - name: Fix PR conflicts
+        id: fix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ github.event.inputs.pr_number || '' }}
+        run: |
+          # Check specific PR or all dirty PRs
+          if [ -n "$PR_NUM" ]; then
+            echo "Fixing specific PR #$PR_NUM"
+            gh pr edit "$PR_NUM" --add-reviewer @claude 2>/dev/null || true
+          else
+            # Find all dirty PRs
+            DIRTY_PRS=$(gh pr list --base develop --state open --json number,mergeStateStatus --jq '.[] | select(.mergeStateStatus == "DIRTY") | .number')
+            
+            for PR in $DIRTY_PRS; do
+              echo "=== Requesting AI to fix PR #$PR ==="
+              gh pr edit "$PR" --add-reviewer @claude 2>/dev/null || true
+            done
+          fi
+          
+      - name: Auto-rebase clean PRs
+        if: github.event.inputs.pr_number == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get all dirty PRs
+          DIRTY_PRS=$(gh pr list --base develop --state open --json number,headRefName --jq '.[] | select(.mergeStateStatus == "DIRTY") | .number + "|" + .headRefName')
+          
+          for PR_INFO in $DIRTY_PRS; do
+            PR_NUM=$(echo "$PR_INFO" | cut -d'|' -f1)
+            BRANCH=$(echo "$PR_INFO" | cut -d'|' -f2)
+            
+            echo "Attempting auto-rebase for PR #$PR_NUM ($BRANCH)"
+            
+            # Clone and rebase
+            git clone --bare "https://github.com/${{ github.repository }}.git" /tmp/pr-fix
+            cd /tmp/pr-fix
+            
+            git config user.email "bot@hearth.dev"
+            git config user.name "Hearth Bot"
+            
+            git fetch origin develop "$BRANCH"
+            git checkout "$BRANCH"
+            
+            if git rebase origin/develop 2>&1; then
+              echo "Rebase successful, pushing..."
+              git push origin "$BRANCH" --force
+            else
+              echo "Rebase had conflicts, requesting manual AI review..."
+              gh pr edit "$PR_NUM" --add-reviewer @claude 2>/dev/null || true
+            fi
+            
+            cd /
+            rm -rf /tmp/pr-fix
+          done

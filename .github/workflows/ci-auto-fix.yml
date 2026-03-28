@@ -1,0 +1,82 @@
+name: CI Auto-Fix
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [develop]
+  schedule:
+    # Every 5 minutes as backup
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to fix'
+        required: false
+        type: string
+
+jobs:
+  analyze-and-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+      
+      - name: Install deps
+        run: |
+          cd backend && go mod download
+          cd ../frontend && bun install
+      
+      - name: Check Backend CI
+        id: backend
+        run: |
+          cd backend
+          if ! go vet ./... 2>&1; then
+            echo "backend_has_errors=true" >> $GITHUB_OUTPUT
+          fi
+          if ! go test ./... -short 2>&1; then
+            echo "backend_tests_failing=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Check Frontend CI
+        id: frontend
+        run: |
+          cd frontend
+          if ! bun run check 2>&1; then
+            echo "frontend_has_errors=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create fix branch
+        if: steps.backend.outputs.backend_has_errors == 'true' || steps.frontend.outputs.frontend_has_errors == 'true'
+        run: |
+          git checkout -b fix/ci-$(date +%Y%m%d-%H%M%S)
+          git config user.email "bot@hearth.dev"
+          git config user.name "Hearth Bot"
+      
+      - name: Fix and commit
+        if: steps.backend.outputs.backend_has_errors == 'true' || steps.frontend.outputs.frontend_has_errors == 'true'
+        run: |
+          # Let AI handle the actual fixes
+          # For now, just stage changes and push
+          git add -A
+          git commit -m "fix: resolve CI errors" || true
+      
+      - name: Create PR or push
+        if: steps.backend.outputs.backend_has_errors == 'true' || steps.frontend.outputs.frontend_has_errors == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push origin -u $(git branch --show-current) 2>&1 || true
+          # Create PR if there are changes
+          if git log --oneline origin/develop..HEAD 2>/dev/null | grep -q .; then
+            gh pr create --base develop --fill || true
+          fi

@@ -1,0 +1,104 @@
+name: Accessibility Checks
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/**/*.css'
+      - 'frontend/src/**/*.svelte'
+      - 'frontend/tailwind.config.js'
+      - 'scripts/contrast-checker.js'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/src/**/*.css'
+      - 'frontend/src/**/*.svelte'
+      - 'frontend/tailwind.config.js'
+
+jobs:
+  contrast-check:
+    name: Color Contrast Audit (WCAG AA)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Run contrast checker
+        run: node scripts/contrast-checker.js --ci
+        
+      - name: Upload contrast report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contrast-report
+          path: |
+            scripts/contrast-checker.js
+          retention-days: 7
+      
+      - name: Comment on PR (failures)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const output = execSync('node scripts/contrast-checker.js 2>&1 || true').toString();
+            
+            const failureSection = output.match(/❌ FAILING COMBINATIONS[\s\S]*?(?=━━━|$)/);
+            const body = `## ❌ Color Contrast Check Failed
+            
+            This PR introduces color changes that don't meet WCAG 2.1 AA requirements (4.5:1 contrast ratio for text).
+            
+            <details>
+            <summary>View failing combinations</summary>
+            
+            \`\`\`
+            ${failureSection ? failureSection[0] : 'See workflow logs for details'}
+            \`\`\`
+            
+            </details>
+            
+            ### How to fix
+            1. Run \`node scripts/contrast-checker.js\` locally to see all failures
+            2. Adjust color values in \`frontend/src/lib/styles/theme.css\` or \`tailwind.config.js\`
+            3. Use a tool like [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/) to find compliant colors
+            
+            📚 See [docs/accessibility/A11Y-003-contrast-audit.md](docs/accessibility/A11Y-003-contrast-audit.md) for details.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # Optional: Run axe-core for broader a11y checks
+  axe-audit:
+    name: Axe Accessibility Audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: cd frontend && npm ci
+      
+      - name: Build frontend
+        run: cd frontend && npm run build
+        continue-on-error: true  # Don't fail if build has other issues
+      
+      # Add axe-core or playwright accessibility tests here when available
+      - name: Placeholder for axe tests
+        run: echo "Axe accessibility tests would run here"

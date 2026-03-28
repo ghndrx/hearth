@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fusionauth.fullname" . }}-config
+  labels:
+    {{- include "fusionauth.labels" . | nindent 4 }}
+data:
+  FUSIONAUTH_APP_URL: "http://{{ include "fusionauth.fullname" . }}:{{ .Values.service.port }}"
+  {{- range $key, $value := .Values.config.additionalProperties }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

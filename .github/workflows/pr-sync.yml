@@ -1,0 +1,38 @@
+name: Keep PRs Updated
+description: Auto-rebase open PRs when develop changes
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  update-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows
+          sparse-checkout-cone-mode: false
+          
+      - name: Set up Git
+        run: |
+          git config --global user.email "bot@hearth.dev"
+          git config --global user.name "Hearth Bot"
+          
+      - name: Rebase feature branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get all open PRs targeting develop
+          prs=$(gh pr list --base develop --state open --json number,headRefName --jq '.[].number')
+          
+          for pr in $prs; do
+            echo "Checking PR #$pr"
+            # Check if PR needs rebase
+            status=$(gh pr view $pr --json mergeStateStatus --jq '.mergeStateStatus')
+            if [ "$status" = "DIRTY" ] || [ "$status" = "BEHIND" ]; then
+              echo "  PR #$pr needs update, attempting rebase..."
+              gh pr edit $pr --add-reviewer @claude 2>/dev/null || true
+            fi
+          done

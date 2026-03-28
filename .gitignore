@@ -1,0 +1,80 @@
+
+.agent-context/
+# Agent context files (local only)
+bin/
+build/
+# Build outputs
+# Compiled Go binary
+backend/hearth
+*.cover
+coverage/
+data/
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+# Dependencies
+dist/
+.DS_Store
+.env
+# Environment
+.env.*.local
+.env.local
+*.exe
+# IDE
+.idea/
+*.log
+logs/
+# Logs
+node_modules/
+# OS files
+*.out
+# Performance test results (generated, can be large)
+PROJECT_STATUS.md
+*.secret
+.secret_key
+*.swo
+*.swp
+TASK_QUEUE.md
+temp/
+# Temporary
+# Test coverage
+tests/performance/*-results.json
+Thumbs.db
+*.tmp
+tmp/
+uploads/
+# Uploads (in dev)
+vendor/
+.vscode/
+specs/
+
+# Agent instruction files
+AGENTS.md
+TASKS.json
+orchestration/
+*.spec.md
+
+# AI management files (local only)
+agent_output.md
+AI_CHAT_FEATURE.md
+SECURITY_AUDIT.md
+AUDIT_REPORT.md
+AUDIT_REPORT_*.md
+TASK_QUEUE.md
+TODO_*.md
+*_REPORT_*.md
+*_AUDIT_*.md
+*_REVIEW_*.md
+*_IMPROVEMENTS.md
+opencode-task.md
+
+# Audit reports - keep these local only
+AUDIT_REPORT_*.md
+SENIOR_AUDITOR_REPORT_*.md
+SENIOR_AUDIT_REPORT_*.md
+FEATURE_GAP_REPORT.md
+SECURITY_AUDIT.md
+COVERAGE_REPORT_*.md
+TIER2_REVIEW_REPORT_*.md

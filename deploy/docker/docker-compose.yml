@@ -1,0 +1,107 @@
+# Hearth Docker Compose - Fast Deployment
+# Single command: docker-compose up -d
+
+version: '3.8'
+
+services:
+  # ============ CORE SERVICES ============
+  
+  hearth-backend:
+    image: ghndrx/hearth-backend:latest
+    container_name: hearth-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://hearth:hearth_secret@postgres:5432/hearth?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - PORT=8080
+      - LOG_LEVEL=info
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hearth-frontend:
+    image: ghndrx/hearth-frontend:latest
+    container_name: hearth-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://localhost:8080
+      - WS_URL=ws://localhost:8080
+    depends_on:
+      - hearth-backend
+
+  # ============ DATA STORES ============
+  
+  postgres:
+    image: postgres:16-alpine
+    container_name: hearth-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=hearth
+      - POSTGRES_PASSWORD=hearth_secret
+      - POSTGRES_DB=hearth
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: hearth-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ OPTIONAL SERVICES ============
+  
+  # Uncomment for monitoring
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: hearth-prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  # Uncomment for object storage (MinIO for S3-compatible)
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: hearth-minio
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   environment:
+  #     - MINIO_ROOT_USER=hearth
+  #     - MINIO_ROOT_PASSWORD=hearth_secret
+  #   command: server /data --console-address ":9001"
+  #   volumes:
+  #     - minio_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  # minio_data:

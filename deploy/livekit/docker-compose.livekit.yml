@@ -1,0 +1,41 @@
+version: '3.8'
+
+# LiveKit Services for Hearth Voice Channels
+# Run alongside main hearth docker-compose
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: hearth-livekit
+    restart: unless-stopped
+    ports:
+      - "7880:7880"      # HTTP / WebSocket
+      - "7881:7881"      # WebRTC TCP
+      - "7882:7882/udp"  # WebRTC UDP
+      - "50000-50100:50000-50100/udp"  # RTP ports (limited range for docker)
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      - LIVEKIT_KEYS=APIcKPP67nS9WWXH9mWx3XGc:8fDdP39mJYSBcW4w2hDFP8pUB0WYR0tvbVZ0tFSdHXTzDPap
+    networks:
+      - hearth-network
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: hearth-livekit-redis
+    restart: unless-stopped
+    volumes:
+      - livekit-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - hearth-network
+
+networks:
+  hearth-network:
+    external: true
+
+volumes:
+  livekit-redis-data:

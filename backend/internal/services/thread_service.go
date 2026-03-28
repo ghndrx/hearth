@@ -1,0 +1,693 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+
+	"hearth/internal/models"
+)
+
+var (
+	ErrThreadNotFound     = errors.New("thread not found")
+	ErrThreadArchived     = errors.New("thread is archived")
+	ErrThreadLocked       = errors.New("thread is locked")
+	ErrNotThreadMember    = errors.New("not a thread member")
+	ErrNotThreadOwner     = errors.New("not the thread owner")
+	ErrInvalidAutoArchive = errors.New("invalid auto archive duration")
+)
+
+// ThreadRepository defines thread data access
+type ThreadRepository interface {
+	Create(ctx context.Context, thread *models.Thread) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Thread, error)
+	GetByParentMessageID(ctx context.Context, messageID uuid.UUID) (*models.Thread, error)
+	Update(ctx context.Context, thread *models.Thread) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	GetByChannelID(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error)
+	GetActiveByChannelID(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error)
+	Archive(ctx context.Context, id uuid.UUID) error
+	Unarchive(ctx context.Context, id uuid.UUID) error
+	AddMember(ctx context.Context, threadID, userID uuid.UUID) error
+	RemoveMember(ctx context.Context, threadID, userID uuid.UUID) error
+	IsMember(ctx context.Context, threadID, userID uuid.UUID) (bool, error)
+	GetMembers(ctx context.Context, threadID uuid.UUID) ([]uuid.UUID, error)
+	CreateMessage(ctx context.Context, threadID, authorID uuid.UUID, content string) (*models.ThreadMessage, error)
+	GetMessages(ctx context.Context, threadID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
+	IncrementMessageCount(ctx context.Context, threadID uuid.UUID) error
+	// Notification preferences
+	GetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error)
+	SetNotificationPreference(ctx context.Context, pref *models.ThreadNotificationPreference) error
+	DeleteNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) error
+	// Presence
+	SetPresence(ctx context.Context, threadID, userID uuid.UUID) error
+	RemovePresence(ctx context.Context, threadID, userID uuid.UUID) error
+	GetActiveViewers(ctx context.Context, threadID uuid.UUID) ([]models.ThreadPresenceUser, error)
+	UpdatePresenceHeartbeat(ctx context.Context, threadID, userID uuid.UUID) error
+}
+
+// ThreadService handles thread-related business logic
+type ThreadService struct {
+	threadRepo  ThreadRepository
+	channelRepo ChannelRepository
+	serverRepo  ServerRepository
+	permService *PermissionService
+	eventBus    EventBus
+}
+
+// NewThreadService creates a new thread service
+func NewThreadService(
+	threadRepo ThreadRepository,
+	channelRepo ChannelRepository,
+	serverRepo ServerRepository,
+	permService *PermissionService,
+	eventBus EventBus,
+) *ThreadService {
+	return &ThreadService{
+		threadRepo:  threadRepo,
+		channelRepo: channelRepo,
+		serverRepo:  serverRepo,
+		permService: permService,
+		eventBus:    eventBus,
+	}
+}
+
+// CreateThread creates a new thread in a channel
+func (s *ThreadService) CreateThread(
+	ctx context.Context,
+	channelID uuid.UUID,
+	creatorID uuid.UUID,
+	name string,
+	autoArchive *int,
+	parentMessageID *uuid.UUID,
+) (*models.Thread, error) {
+	// Verify channel exists
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// For server channels, verify membership
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, creatorID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+	}
+
+	// If a thread already exists for this parent message, return it
+	if parentMessageID != nil {
+		existing, err := s.threadRepo.GetByParentMessageID(ctx, *parentMessageID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return existing, nil
+		}
+	}
+
+	// Validate auto archive duration
+	archiveDuration := models.AutoArchive24Hour // Default: 24 hours
+	if autoArchive != nil {
+		switch *autoArchive {
+		case models.AutoArchive1Hour, models.AutoArchive24Hour, models.AutoArchive3Day, models.AutoArchive1Week:
+			archiveDuration = *autoArchive
+		default:
+			return nil, ErrInvalidAutoArchive
+		}
+	}
+
+	thread := &models.Thread{
+		ID:              uuid.New(),
+		ParentChannelID: channelID,
+		ParentMessageID: parentMessageID,
+		OwnerID:         creatorID,
+		Name:            name,
+		MessageCount:    0,
+		MemberCount:     1,
+		Archived:        false,
+		AutoArchive:     archiveDuration,
+		Locked:          false,
+		CreatedAt:       time.Now(),
+	}
+
+	if err := s.threadRepo.Create(ctx, thread); err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish("thread.created", &ThreadCreatedEvent{
+		Thread:    thread,
+		ChannelID: channelID,
+	})
+
+	return thread, nil
+}
+
+// UpdateThread updates a thread's name, archived, or locked state
+func (s *ThreadService) UpdateThread(ctx context.Context, threadID uuid.UUID, requesterID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error) {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	// Only thread owner or server moderators can update
+	if thread.OwnerID != requesterID {
+		channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+		if err != nil {
+			return nil, err
+		}
+		if channel != nil && channel.ServerID != nil {
+			member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+			if err != nil || member == nil {
+				return nil, ErrNotServerMember
+			}
+			if s.permService != nil {
+				if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageThreads); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			return nil, ErrNotThreadOwner
+		}
+	}
+
+	if req.Name != nil {
+		thread.Name = *req.Name
+	}
+	if req.Archived != nil {
+		thread.Archived = *req.Archived
+		if *req.Archived {
+			now := time.Now()
+			thread.ArchivedAt = &now
+		} else {
+			thread.ArchivedAt = nil
+		}
+	}
+	if req.Locked != nil {
+		thread.Locked = *req.Locked
+	}
+	if req.AutoArchive != nil {
+		switch *req.AutoArchive {
+		case models.AutoArchive1Hour, models.AutoArchive24Hour, models.AutoArchive3Day, models.AutoArchive1Week:
+			thread.AutoArchive = *req.AutoArchive
+		default:
+			return nil, ErrInvalidAutoArchive
+		}
+	}
+
+	if err := s.threadRepo.Update(ctx, thread); err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish("thread.updated", &ThreadUpdatedEvent{
+		Thread:    thread,
+		ChannelID: thread.ParentChannelID,
+	})
+
+	return thread, nil
+}
+
+// GetThread retrieves a thread by ID
+func (s *ThreadService) GetThread(ctx context.Context, threadID uuid.UUID) (*models.Thread, error) {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+	return thread, nil
+}
+
+// GetThreadMessages retrieves messages from a thread with pagination
+func (s *ThreadService) GetThreadMessages(
+	ctx context.Context,
+	threadID uuid.UUID,
+	requesterID uuid.UUID,
+	before *uuid.UUID,
+	limit int,
+) ([]*models.ThreadMessage, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	// Get the parent channel to check permissions
+	channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// For server channels, verify membership
+	if channel != nil && channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+	}
+
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	return s.threadRepo.GetMessages(ctx, threadID, before, limit)
+}
+
+// SendThreadMessage sends a message to a thread
+func (s *ThreadService) SendThreadMessage(
+	ctx context.Context,
+	threadID uuid.UUID,
+	authorID uuid.UUID,
+	content string,
+) (*models.ThreadMessage, error) {
+	// Verify thread exists and is not archived/locked
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	if thread.Archived {
+		return nil, ErrThreadArchived
+	}
+	if thread.Locked {
+		return nil, ErrThreadLocked
+	}
+
+	// Get the parent channel to check permissions
+	channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// For server channels, verify membership
+	if channel != nil && channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, authorID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+	}
+
+	// Add user to thread if not already a member
+	isMember, err := s.threadRepo.IsMember(ctx, threadID, authorID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		if err := s.threadRepo.AddMember(ctx, threadID, authorID); err != nil {
+			return nil, err
+		}
+	}
+
+	msg, err := s.threadRepo.CreateMessage(ctx, threadID, authorID, content)
+	if err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish("thread.message_created", &ThreadMessageCreatedEvent{
+		Message:  msg,
+		ThreadID: threadID,
+	})
+
+	return msg, nil
+}
+
+// ArchiveThread archives a thread
+func (s *ThreadService) ArchiveThread(ctx context.Context, threadID uuid.UUID, requesterID uuid.UUID) error {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	// Only thread owner or server moderators can archive
+	if thread.OwnerID != requesterID {
+		// Check if user has manage threads permission in server
+		channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+		if err != nil {
+			return err
+		}
+		if channel != nil && channel.ServerID != nil {
+			member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+			if err != nil || member == nil {
+				return ErrNotServerMember
+			}
+			if s.permService != nil {
+				if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageThreads); err != nil {
+					return err
+				}
+			}
+		} else {
+			return ErrNotThreadOwner
+		}
+	}
+
+	if err := s.threadRepo.Archive(ctx, threadID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("thread.archived", &ThreadArchivedEvent{
+		ThreadID:  threadID,
+		ChannelID: thread.ParentChannelID,
+	})
+
+	return nil
+}
+
+// UnarchiveThread unarchives a thread
+func (s *ThreadService) UnarchiveThread(ctx context.Context, threadID uuid.UUID, requesterID uuid.UUID) error {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	// Only thread owner or server moderators can unarchive
+	if thread.OwnerID != requesterID {
+		channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+		if err != nil {
+			return err
+		}
+		if channel != nil && channel.ServerID != nil {
+			member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+			if err != nil || member == nil {
+				return ErrNotServerMember
+			}
+		} else {
+			return ErrNotThreadOwner
+		}
+	}
+
+	if err := s.threadRepo.Unarchive(ctx, threadID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("thread.unarchived", &ThreadUnarchivedEvent{
+		ThreadID:  threadID,
+		ChannelID: thread.ParentChannelID,
+	})
+
+	return nil
+}
+
+// GetChannelThreads retrieves all threads for a channel
+func (s *ThreadService) GetChannelThreads(
+	ctx context.Context,
+	channelID uuid.UUID,
+	requesterID uuid.UUID,
+	includeArchived bool,
+) ([]*models.Thread, error) {
+	// Verify channel exists
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// For server channels, verify membership
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+	}
+
+	if includeArchived {
+		return s.threadRepo.GetByChannelID(ctx, channelID)
+	}
+	return s.threadRepo.GetActiveByChannelID(ctx, channelID)
+}
+
+// JoinThread adds a user to a thread
+func (s *ThreadService) JoinThread(ctx context.Context, threadID, userID uuid.UUID) error {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	return s.threadRepo.AddMember(ctx, threadID, userID)
+}
+
+// LeaveThread removes a user from a thread
+func (s *ThreadService) LeaveThread(ctx context.Context, threadID, userID uuid.UUID) error {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	return s.threadRepo.RemoveMember(ctx, threadID, userID)
+}
+
+// DeleteThread deletes a thread
+func (s *ThreadService) DeleteThread(ctx context.Context, threadID, requesterID uuid.UUID) error {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	// Only thread owner or server moderators can delete
+	if thread.OwnerID != requesterID {
+		channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+		if err != nil {
+			return err
+		}
+		if channel != nil && channel.ServerID != nil {
+			member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+			if err != nil || member == nil {
+				return ErrNotServerMember
+			}
+			if s.permService != nil {
+				if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageThreads); err != nil {
+					return err
+				}
+			}
+		} else {
+			return ErrNotThreadOwner
+		}
+	}
+
+	if err := s.threadRepo.Delete(ctx, threadID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("thread.deleted", &ThreadDeletedEvent{
+		ThreadID:  threadID,
+		ChannelID: thread.ParentChannelID,
+	})
+
+	return nil
+}
+
+// ============================================================================
+// Thread Notification Preferences
+// ============================================================================
+
+// GetNotificationPreference gets a user's notification preference for a thread
+func (s *ThreadService) GetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	return s.threadRepo.GetNotificationPreference(ctx, threadID, userID)
+}
+
+// SetNotificationPreference sets a user's notification preference for a thread
+func (s *ThreadService) SetNotificationPreference(ctx context.Context, threadID, userID uuid.UUID, level models.ThreadNotificationLevel) error {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	// Validate level
+	switch level {
+	case models.ThreadNotifyAll, models.ThreadNotifyMentions, models.ThreadNotifyNone:
+		// Valid
+	default:
+		return errors.New("invalid notification level")
+	}
+
+	pref := &models.ThreadNotificationPreference{
+		ThreadID: threadID,
+		UserID:   userID,
+		Level:    level,
+	}
+
+	if err := s.threadRepo.SetNotificationPreference(ctx, pref); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("thread.notification_preference_updated", &ThreadNotificationUpdatedEvent{
+		ThreadID: threadID,
+		UserID:   userID,
+		Level:    level,
+	})
+
+	return nil
+}
+
+// ============================================================================
+// Thread Presence (Active Viewers)
+// ============================================================================
+
+// EnterThread marks a user as actively viewing a thread
+func (s *ThreadService) EnterThread(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadPresenceResponse, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	// Set presence
+	if err := s.threadRepo.SetPresence(ctx, threadID, userID); err != nil {
+		return nil, err
+	}
+
+	// Get all active viewers
+	viewers, err := s.threadRepo.GetActiveViewers(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &models.ThreadPresenceResponse{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	}
+
+	// Broadcast presence update
+	s.eventBus.Publish("thread.presence_update", &ThreadPresenceUpdateEvent{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	})
+
+	return response, nil
+}
+
+// ExitThread removes a user's presence from a thread (stops viewing)
+func (s *ThreadService) ExitThread(ctx context.Context, threadID, userID uuid.UUID) error {
+	// Remove presence (don't error if thread doesn't exist)
+	if err := s.threadRepo.RemovePresence(ctx, threadID, userID); err != nil {
+		return err
+	}
+
+	// Get remaining active viewers
+	viewers, _ := s.threadRepo.GetActiveViewers(ctx, threadID)
+
+	// Broadcast presence update
+	s.eventBus.Publish("thread.presence_update", &ThreadPresenceUpdateEvent{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	})
+
+	return nil
+}
+
+// GetActiveViewers gets users currently viewing a thread
+func (s *ThreadService) GetActiveViewers(ctx context.Context, threadID uuid.UUID) (*models.ThreadPresenceResponse, error) {
+	// Verify thread exists
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	viewers, err := s.threadRepo.GetActiveViewers(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ThreadPresenceResponse{
+		ThreadID:    threadID,
+		ActiveUsers: viewers,
+	}, nil
+}
+
+// HeartbeatPresence updates the last_seen_at for an active viewer
+func (s *ThreadService) HeartbeatPresence(ctx context.Context, threadID, userID uuid.UUID) error {
+	return s.threadRepo.UpdatePresenceHeartbeat(ctx, threadID, userID)
+}
+
+// Events
+
+type ThreadCreatedEvent struct {
+	Thread    *models.Thread
+	ChannelID uuid.UUID
+}
+
+type ThreadUpdatedEvent struct {
+	Thread    *models.Thread
+	ChannelID uuid.UUID
+}
+
+type ThreadArchivedEvent struct {
+	ThreadID  uuid.UUID
+	ChannelID uuid.UUID
+}
+
+type ThreadUnarchivedEvent struct {
+	ThreadID  uuid.UUID
+	ChannelID uuid.UUID
+}
+
+type ThreadDeletedEvent struct {
+	ThreadID  uuid.UUID
+	ChannelID uuid.UUID
+}
+
+type ThreadMessageCreatedEvent struct {
+	Message  *models.ThreadMessage
+	ThreadID uuid.UUID
+}
+
+type ThreadNotificationUpdatedEvent struct {
+	ThreadID uuid.UUID
+	UserID   uuid.UUID
+	Level    models.ThreadNotificationLevel
+}
+
+type ThreadPresenceUpdateEvent struct {
+	ThreadID    uuid.UUID
+	ActiveUsers []models.ThreadPresenceUser
+}
