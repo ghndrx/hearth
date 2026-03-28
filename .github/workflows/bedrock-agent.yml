@@ -50,7 +50,7 @@ jobs:
           TASK: ${{ github.event.inputs.task }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 -c "
+          python3 << 'EOF'
           import boto3
           import json
           import os
@@ -70,26 +70,22 @@ jobs:
           except:
               diff_stat = 'Unable to fetch diff'
           
-          prompt = 'Task: ' + task + '''
-          
-          Review the recent commits and changes below and provide specific, actionable recommendations.
-          
-          Recent commits:
-          ''' + git_log + '''
-          
-          Recent changes:
-          ''' + diff_stat + '''
-          
-          Format your response as markdown with specific file paths and line numbers where applicable.'''
-          
-          messages = [{\"role\": \"user\", \"content\": [{\"text\": prompt}]}]
+          prompt = (
+              "Task: " + task + "\n\n"
+              "Review the recent commits and changes below and provide specific, actionable recommendations.\n\n"
+              "Recent commits:\n" + git_log + "\n\n"
+              "Recent changes:\n" + diff_stat + "\n\n"
+              "Format your response as markdown with specific file paths and line numbers where applicable."
+          )
+
+          messages = [{"role": "user", "content": [{"text": prompt}]}]
           
           response = bedrock.converse(
               modelId='us.amazon.nova-lite-v1:0',
               messages=messages,
               inferenceConfig={
-                  \"maxTokens\": 4096,
-                  \"temperature\": 0.7
+                  "maxTokens": 4096,
+                  "temperature": 0.7
               }
           )
           
@@ -97,8 +93,8 @@ jobs:
           print(output)
           
           with open('agent_output.md', 'w') as f:
-              f.write('## 🤖 AI Agent Analysis\\n\\n' + output + '\\n\\n---\\n*Generated via AWS Bedrock Kimi*')
-          "
+              f.write(f"## 🤖 AI Agent Analysis\n\n{output}\n\n---\n*Generated via AWS Bedrock Kimi*")
+          EOF
           
       - name: Upload results
         uses: actions/upload-artifact@v4
