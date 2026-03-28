@@ -152,6 +152,8 @@ jobs:
         if: hashFiles('backend/**/*.go')
         uses: golangci/golangci-lint-action@v4
         with:
+          version: v2.11.4
+          install-mode: binary
           working-directory: ./backend
 
       - name: ESLint
