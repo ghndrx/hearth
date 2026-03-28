@@ -81,8 +81,6 @@ jobs:
   sast-go:
     name: SAST (Go)
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -109,7 +107,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload gosec results
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v3
         if: always() && hashFiles('gosec-results.sarif') != ''
         with:
           sarif_file: gosec-results.sarif
@@ -152,12 +150,9 @@ jobs:
 
       - name: Go linter
         if: hashFiles('backend/**/*.go')
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v4
         with:
-          version: v2.11.4
-          install-mode: binary
           working-directory: ./backend
-          args: --config=../.golangci.yml
 
       - name: ESLint
         if: hashFiles('frontend/**/*.ts')
