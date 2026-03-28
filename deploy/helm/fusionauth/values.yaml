@@ -1,0 +1,158 @@
+# FusionAuth Helm Values
+# Optional SSO identity provider for Hearth deployments
+
+# =============================================================================
+# REPLICAS & IMAGE
+# =============================================================================
+
+replicaCount: 1
+
+image:
+  repository: fusionauth/fusionauth-app
+  pullPolicy: IfNotPresent
+  tag: ""  # Defaults to appVersion in Chart.yaml
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# =============================================================================
+# FUSIONAUTH CONFIGURATION
+# =============================================================================
+
+config:
+  # FusionAuth runtime mode: development or production
+  runtimeMode: development
+
+  # Application port
+  port: 9011
+
+  # Memory settings
+  memory: 512M
+
+  # Additional fusionauth.properties entries
+  additionalProperties: {}
+    # fusionauth-app.kickstart.file: /kickstart/kickstart.json
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+
+database:
+  # Use Hearth's PostgreSQL or a separate instance
+  host: hearth-postgresql
+  port: 5432
+  name: fusionauth
+  user: fusionauth
+  # Password is stored in the secret
+  existingSecret: ""
+  # Key in the secret containing the database password
+  secretKey: database-password
+  # Root database credentials for initial setup
+  root:
+    user: postgres
+    existingSecret: ""
+    secretKey: database-root-password
+
+# =============================================================================
+# SEARCH (Elasticsearch/OpenSearch - optional)
+# =============================================================================
+
+search:
+  # FusionAuth can run without a search engine (database search mode)
+  engine: database
+  # Set to "elasticsearch" and provide host to use Elasticsearch
+  # host: elasticsearch:9200
+
+# =============================================================================
+# SERVICE
+# =============================================================================
+
+service:
+  type: ClusterIP
+  port: 9011
+
+# =============================================================================
+# INGRESS
+# =============================================================================
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: auth.hearth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: fusionauth-tls
+      hosts:
+        - auth.hearth.example.com
+
+# =============================================================================
+# PERSISTENCE
+# =============================================================================
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 2Gi
+
+# =============================================================================
+# RESOURCES
+# =============================================================================
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# =============================================================================
+# PROBES
+# =============================================================================
+
+livenessProbe:
+  httpGet:
+    path: /api/status
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+readinessProbe:
+  httpGet:
+    path: /api/status
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# =============================================================================
+# SECURITY
+# =============================================================================
+
+podSecurityContext:
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# =============================================================================
+# SCHEDULING
+# =============================================================================
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

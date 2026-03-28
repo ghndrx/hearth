@@ -1,0 +1,756 @@
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+
+	"hearth/internal/models"
+	"hearth/internal/services"
+)
+
+type mockDiscoveryService struct {
+	getFeaturedServersFunc    func(ctx context.Context, limit int) ([]*models.DiscoveryListing, error)
+	getCategoriesFunc         func(ctx context.Context) ([]*models.DiscoveryCategory, error)
+	searchServersFunc         func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.DiscoveryListing, int, error)
+	getRecommendationsFunc    func(ctx context.Context, userID uuid.UUID, limit int) ([]*models.DiscoveryListing, error)
+	getServersByCategoryFunc  func(ctx context.Context, category string, limit, offset int) ([]*models.DiscoveryListing, int, error)
+	getListingWithDetailsFunc func(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
+	submitForDiscoveryFunc    func(ctx context.Context, serverID, userID uuid.UUID, req *models.SubmitDiscoveryRequest) error
+	updateListingFunc         func(ctx context.Context, serverID, userID uuid.UUID, req *models.UpdateDiscoveryRequest) error
+	reportServerFunc          func(ctx context.Context, serverID, userID uuid.UUID, req *models.ReportServerRequest) error
+	approveListingFunc        func(ctx context.Context, listingID, adminID uuid.UUID) error
+	rejectListingFunc         func(ctx context.Context, listingID, adminID uuid.UUID, reason string) error
+	setFeaturedFunc           func(ctx context.Context, listingID uuid.UUID, featured bool) error
+}
+
+func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
+	app := fiber.New()
+
+	app.Use(func(c *fiber.Ctx) error {
+		userIDStr := c.Get("X-Test-User-ID")
+		if userIDStr != "" {
+			uid, err := uuid.Parse(userIDStr)
+			if err != nil {
+				c.Locals("userID", userIDStr)
+			} else {
+				c.Locals("userID", uid)
+			}
+		}
+		return c.Next()
+	})
+
+	app.Get("/discovery/featured", func(c *fiber.Ctx) error {
+		limit := c.QueryInt("limit", 10)
+		servers, err := mock.getFeaturedServersFunc(c.Context(), limit)
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"servers": servers})
+	})
+
+	app.Get("/discovery/categories", func(c *fiber.Ctx) error {
+		categories, err := mock.getCategoriesFunc(c.Context())
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"categories": categories})
+	})
+
+	app.Get("/discovery/search", func(c *fiber.Ctx) error {
+		limit := c.QueryInt("limit", 20)
+		offset := c.QueryInt("offset", 0)
+		filters := &models.DiscoveryFilters{
+			Query:     c.Query("q"),
+			Category:  models.ServerCategory(c.Query("category")),
+			Region:    c.Query("region"),
+			Language:  c.Query("language"),
+			SortBy:    c.Query("sort"),
+			SortOrder: c.Query("order"),
+			Limit:     limit,
+			Offset:    offset,
+		}
+		servers, total, err := mock.searchServersFunc(c.Context(), filters)
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"servers": servers, "total": total, "limit": limit, "offset": offset})
+	})
+
+	app.Get("/discovery/recommendations", func(c *fiber.Ctx) error {
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		limit := c.QueryInt("limit", 10)
+		servers, err := mock.getRecommendationsFunc(c.Context(), userID, limit)
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"servers": servers})
+	})
+
+	app.Get("/discovery/categories/:slug", func(c *fiber.Ctx) error {
+		slug := c.Params("slug")
+		limit := c.QueryInt("limit", 20)
+		offset := c.QueryInt("offset", 0)
+		servers, total, err := mock.getServersByCategoryFunc(c.Context(), slug, limit, offset)
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"servers": servers, "total": total, "limit": limit, "offset": offset})
+	})
+
+	app.Get("/discovery/servers/:serverId", func(c *fiber.Ctx) error {
+		serverID, err := uuid.Parse(c.Params("serverId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid server ID"})
+		}
+		listing, err := mock.getListingWithDetailsFunc(c.Context(), serverID)
+		if err != nil {
+			if err == services.ErrDiscoveryListingNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "listing not found"})
+			}
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(listing)
+	})
+
+	app.Post("/servers/:serverId/listing", func(c *fiber.Ctx) error {
+		serverID, err := uuid.Parse(c.Params("serverId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid server ID"})
+		}
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		var req models.SubmitDiscoveryRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		if req.ShortDescription == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "short description is required"})
+		}
+		if len(req.Categories) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "at least one category is required"})
+		}
+		err = mock.submitForDiscoveryFunc(c.Context(), serverID, userID, &req)
+		if err != nil {
+			switch err {
+			case services.ErrServerNotFound:
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "server not found"})
+			case services.ErrDiscoveryNotOwner:
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "not the server owner"})
+			case services.ErrDiscoveryListingExists:
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "listing already exists"})
+			case services.ErrInvalidCategory:
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid category"})
+			default:
+				return HandleServiceError(c, err)
+			}
+		}
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "submitted for discovery"})
+	})
+
+	app.Patch("/servers/:serverId/listing", func(c *fiber.Ctx) error {
+		serverID, err := uuid.Parse(c.Params("serverId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid server ID"})
+		}
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		var req models.UpdateDiscoveryRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		err = mock.updateListingFunc(c.Context(), serverID, userID, &req)
+		if err != nil {
+			switch err {
+			case services.ErrServerNotFound:
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "server not found"})
+			case services.ErrDiscoveryNotOwner:
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "not the server owner"})
+			case services.ErrDiscoveryListingNotFound:
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "listing not found"})
+			default:
+				return HandleServiceError(c, err)
+			}
+		}
+		return c.JSON(fiber.Map{"message": "listing updated"})
+	})
+
+	app.Post("/discovery/report", func(c *fiber.Ctx) error {
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		var body struct {
+			ServerID uuid.UUID `json:"server_id"`
+			Reason   string    `json:"reason"`
+			Details  string    `json:"details"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		if body.Reason == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "reason is required"})
+		}
+		req := &models.ReportServerRequest{Reason: body.Reason, Details: body.Details}
+		err := mock.reportServerFunc(c.Context(), body.ServerID, userID, req)
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"message": "report submitted"})
+	})
+
+	app.Post("/admin/discovery/:listingId/approve", func(c *fiber.Ctx) error {
+		listingID, err := uuid.Parse(c.Params("listingId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid listing ID"})
+		}
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		err = mock.approveListingFunc(c.Context(), listingID, userID)
+		if err != nil {
+			if err == services.ErrDiscoveryListingNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "listing not found"})
+			}
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"message": "listing approved"})
+	})
+
+	app.Post("/admin/discovery/:listingId/reject", func(c *fiber.Ctx) error {
+		listingID, err := uuid.Parse(c.Params("listingId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid listing ID"})
+		}
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		err = mock.rejectListingFunc(c.Context(), listingID, userID, body.Reason)
+		if err != nil {
+			if err == services.ErrDiscoveryListingNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "listing not found"})
+			}
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"message": "listing rejected"})
+	})
+
+	app.Post("/admin/discovery/:listingId/featured", func(c *fiber.Ctx) error {
+		listingID, err := uuid.Parse(c.Params("listingId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid listing ID"})
+		}
+		var body struct {
+			Featured bool `json:"featured"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		}
+		err = mock.setFeaturedFunc(c.Context(), listingID, body.Featured)
+		if err != nil {
+			if err == services.ErrDiscoveryListingNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "listing not found"})
+			}
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"message": "featured status updated"})
+	})
+
+	return app
+}
+
+func TestGetFeaturedServers_Success(t *testing.T) {
+	mock := &mockDiscoveryService{
+		getFeaturedServersFunc: func(ctx context.Context, limit int) ([]*models.DiscoveryListing, error) {
+			assert.Equal(t, 10, limit)
+			return []*models.DiscoveryListing{}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/featured?limit=10", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["servers"])
+}
+
+func TestGetCategories_Success(t *testing.T) {
+	mock := &mockDiscoveryService{
+		getCategoriesFunc: func(ctx context.Context) ([]*models.DiscoveryCategory, error) {
+			return []*models.DiscoveryCategory{}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/categories", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["categories"])
+}
+
+func TestSearchServers_Success(t *testing.T) {
+	mock := &mockDiscoveryService{
+		searchServersFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.DiscoveryListing, int, error) {
+			assert.Equal(t, "gaming", filters.Query)
+			assert.Equal(t, 10, filters.Limit)
+			assert.Equal(t, 0, filters.Offset)
+			return []*models.DiscoveryListing{}, 50, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/search?q=gaming&limit=10&offset=0", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["servers"])
+	assert.Equal(t, float64(50), result["total"])
+	assert.Equal(t, float64(10), result["limit"])
+	assert.Equal(t, float64(0), result["offset"])
+}
+
+func TestGetRecommendations_Success(t *testing.T) {
+	userID := uuid.New()
+	mock := &mockDiscoveryService{
+		getRecommendationsFunc: func(ctx context.Context, uID uuid.UUID, limit int) ([]*models.DiscoveryListing, error) {
+			assert.Equal(t, userID, uID)
+			assert.Equal(t, 10, limit)
+			return []*models.DiscoveryListing{}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/recommendations?limit=10", nil)
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["servers"])
+}
+
+func TestGetServersByCategory_Success(t *testing.T) {
+	mock := &mockDiscoveryService{
+		getServersByCategoryFunc: func(ctx context.Context, category string, limit, offset int) ([]*models.DiscoveryListing, int, error) {
+			assert.Equal(t, "gaming", category)
+			assert.Equal(t, 20, limit)
+			assert.Equal(t, 0, offset)
+			return []*models.DiscoveryListing{}, 30, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/categories/gaming?limit=20&offset=0", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["servers"])
+	assert.Equal(t, float64(30), result["total"])
+}
+
+func TestGetServerListing_Success(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getListingWithDetailsFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			assert.Equal(t, serverID, sID)
+			return &models.DiscoveryListing{}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetServerListing_NotFound(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getListingWithDetailsFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			return nil, services.ErrDiscoveryListingNotFound
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetServerListing_InvalidID(t *testing.T) {
+	mock := &mockDiscoveryService{}
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/discovery/servers/invalid", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestSubmitForDiscovery_Success(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{
+		submitForDiscoveryFunc: func(ctx context.Context, sID, uID uuid.UUID, req *models.SubmitDiscoveryRequest) error {
+			assert.Equal(t, serverID, sID)
+			assert.Equal(t, userID, uID)
+			assert.Equal(t, "A great server", req.ShortDescription)
+			assert.Len(t, req.Categories, 1)
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"short_description":"A great server","categories":["gaming"]}`
+	req := httptest.NewRequest(http.MethodPost, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+}
+
+func TestSubmitForDiscovery_MissingDescription(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"categories":["gaming"]}`
+	req := httptest.NewRequest(http.MethodPost, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestSubmitForDiscovery_MissingCategories(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"short_description":"A great server","categories":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestSubmitForDiscovery_NotOwner(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{
+		submitForDiscoveryFunc: func(ctx context.Context, sID, uID uuid.UUID, req *models.SubmitDiscoveryRequest) error {
+			return services.ErrDiscoveryNotOwner
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"short_description":"A great server","categories":["gaming"]}`
+	req := httptest.NewRequest(http.MethodPost, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+func TestSubmitForDiscovery_AlreadyExists(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{
+		submitForDiscoveryFunc: func(ctx context.Context, sID, uID uuid.UUID, req *models.SubmitDiscoveryRequest) error {
+			return services.ErrDiscoveryListingExists
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"short_description":"A great server","categories":["gaming"]}`
+	req := httptest.NewRequest(http.MethodPost, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+}
+
+func TestUpdateListing_Success(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{
+		updateListingFunc: func(ctx context.Context, sID, uID uuid.UUID, req *models.UpdateDiscoveryRequest) error {
+			assert.Equal(t, serverID, sID)
+			assert.Equal(t, userID, uID)
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"short_description":"Updated description"}`
+	req := httptest.NewRequest(http.MethodPatch, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestUpdateListing_NotFound(t *testing.T) {
+	serverID := uuid.New()
+	userID := uuid.New()
+	mock := &mockDiscoveryService{
+		updateListingFunc: func(ctx context.Context, sID, uID uuid.UUID, req *models.UpdateDiscoveryRequest) error {
+			return services.ErrDiscoveryListingNotFound
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"short_description":"Updated description"}`
+	req := httptest.NewRequest(http.MethodPatch, "/servers/"+serverID.String()+"/listing", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestReportServer_Success(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		reportServerFunc: func(ctx context.Context, sID, uID uuid.UUID, req *models.ReportServerRequest) error {
+			assert.Equal(t, serverID, sID)
+			assert.Equal(t, userID, uID)
+			assert.Equal(t, "spam", req.Reason)
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"server_id":"` + serverID.String() + `","reason":"spam","details":"lots of spam"}`
+	req := httptest.NewRequest(http.MethodPost, "/discovery/report", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestReportServer_MissingReason(t *testing.T) {
+	userID := uuid.New()
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"server_id":"` + serverID.String() + `","reason":"","details":"some details"}`
+	req := httptest.NewRequest(http.MethodPost, "/discovery/report", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestApproveListing_Success(t *testing.T) {
+	listingID := uuid.New()
+	adminID := uuid.New()
+	mock := &mockDiscoveryService{
+		approveListingFunc: func(ctx context.Context, lID, aID uuid.UUID) error {
+			assert.Equal(t, listingID, lID)
+			assert.Equal(t, adminID, aID)
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/approve", nil)
+	req.Header.Set("X-Test-User-ID", adminID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestApproveListing_NotFound(t *testing.T) {
+	listingID := uuid.New()
+	adminID := uuid.New()
+	mock := &mockDiscoveryService{
+		approveListingFunc: func(ctx context.Context, lID, aID uuid.UUID) error {
+			return services.ErrDiscoveryListingNotFound
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/approve", nil)
+	req.Header.Set("X-Test-User-ID", adminID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestRejectListing_Success(t *testing.T) {
+	listingID := uuid.New()
+	adminID := uuid.New()
+	mock := &mockDiscoveryService{
+		rejectListingFunc: func(ctx context.Context, lID, aID uuid.UUID, reason string) error {
+			assert.Equal(t, listingID, lID)
+			assert.Equal(t, adminID, aID)
+			assert.Equal(t, "inappropriate content", reason)
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"reason":"inappropriate content"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/reject", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", adminID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestSetFeatured_Success(t *testing.T) {
+	listingID := uuid.New()
+	mock := &mockDiscoveryService{
+		setFeaturedFunc: func(ctx context.Context, lID uuid.UUID, featured bool) error {
+			assert.Equal(t, listingID, lID)
+			assert.True(t, featured)
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"featured":true}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/featured", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestSetFeatured_NotFound(t *testing.T) {
+	listingID := uuid.New()
+	mock := &mockDiscoveryService{
+		setFeaturedFunc: func(ctx context.Context, lID uuid.UUID, featured bool) error {
+			return services.ErrDiscoveryListingNotFound
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"featured":true}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/featured", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+// Ensure services import is used
+var _ = services.ErrDiscoveryListingNotFound

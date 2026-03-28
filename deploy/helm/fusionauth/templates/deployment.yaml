@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fusionauth.fullname" . }}
+  labels:
+    {{- include "fusionauth.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fusionauth.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "fusionauth.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: fusionauth
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.port }}
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              value: "jdbc:postgresql://{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}"
+            - name: DATABASE_ROOT_USERNAME
+              value: {{ .Values.database.root.user | quote }}
+            - name: DATABASE_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fusionauth.rootSecretName" . }}
+                  key: {{ .Values.database.root.secretKey }}
+            - name: DATABASE_USERNAME
+              value: {{ .Values.database.user | quote }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fusionauth.secretName" . }}
+                  key: {{ .Values.database.secretKey }}
+            - name: FUSIONAUTH_APP_MEMORY
+              value: {{ .Values.config.memory | quote }}
+            - name: FUSIONAUTH_APP_RUNTIME_MODE
+              value: {{ .Values.config.runtimeMode | quote }}
+            - name: SEARCH_TYPE
+              value: {{ .Values.search.engine | quote }}
+            {{- if and (eq .Values.search.engine "elasticsearch") .Values.search.host }}
+            - name: SEARCH_SERVERS
+              value: {{ .Values.search.host | quote }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "fusionauth.fullname" . }}-config
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: fusionauth-data
+              mountPath: /usr/local/fusionauth/data
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: fusionauth-data
+          persistentVolumeClaim:
+            claimName: {{ include "fusionauth.fullname" . }}-data
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

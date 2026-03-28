@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hearth.fullname" . }}
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "hearth.selectorLabels" . | nindent 4 }}
+---
+{{- if and .Values.voice.enabled .Values.service.voice.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hearth.fullname" . }}-voice
+  labels:
+    {{- include "hearth.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.voice.type }}
+  ports:
+    - port: {{ .Values.service.voice.port }}
+      targetPort: turn
+      {{- if .Values.service.voice.nodePort }}
+      nodePort: {{ .Values.service.voice.nodePort }}
+      {{- end }}
+      protocol: UDP
+      name: turn
+  selector:
+    {{- include "hearth.selectorLabels" . | nindent 4 }}
+{{- end }}

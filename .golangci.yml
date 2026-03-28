@@ -1,0 +1,12 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - govet
+
+issues:
+  exclude-files:
+    - ".*_test\\.go$"

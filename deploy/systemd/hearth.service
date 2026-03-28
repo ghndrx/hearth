@@ -1,0 +1,43 @@
+[Unit]
+Description=Hearth - Self-hosted Discord alternative
+Documentation=https://github.com/ghndrx/hearth
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=hearth
+Group=hearth
+WorkingDirectory=/opt/hearth
+ExecStart=/opt/hearth/hearth serve --config /opt/hearth/config.yaml
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Environment
+Environment=LOG_LEVEL=info
+EnvironmentFile=-/opt/hearth/.env
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hearth
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+# Resource limits
+LimitNOFILE=65535
+MemoryMax=2G
+TasksMax=4096
+
+[Install]
+WantedBy=multi-user.target

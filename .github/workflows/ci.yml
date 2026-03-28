@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop]
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+
+      - name: Go Build
+        working-directory: backend
+        run: go build ./...
+
+      - name: Go Vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Go Test
+        working-directory: backend
+        run: go test ./... -count=1 -timeout 120s
+
+      - name: Golangci-Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend
+          args: --config=../.golangci.yml
+
+  frontend-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install deps
+        working-directory: frontend
+        run: bun install
+
+      - name: Type Check
+        working-directory: frontend
+        run: bun run check
+
+      - name: Sync SvelteKit
+        working-directory: frontend
+        run: bun run svelte-kit sync
+
+      - name: Lint
+        working-directory: frontend
+        run: bun run lint
+
+      - name: Build
+        working-directory: frontend
+        run: bun run build

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: fusionauth
+description: FusionAuth identity platform for Hearth SSO deployments
+type: application
+version: 1.0.0
+appVersion: "1.53.3"
+keywords:
+  - fusionauth
+  - identity
+  - sso
+  - oauth
+  - authentication
+maintainers:
+  - name: Greg Hendrickson
+    email: greg@hearth.dev
+home: https://fusionauth.io
+sources:
+  - https://github.com/FusionAuth/fusionauth-containers

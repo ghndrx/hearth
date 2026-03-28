@@ -1,0 +1,31 @@
+# LiveKit Server Configuration for Hearth
+# See https://docs.livekit.io/realtime/self-hosting/config/
+
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+  enable_loopback_candidate: false
+
+redis:
+  address: redis:6379
+
+keys:
+  APIcKPP67nS9WWXH9mWx3XGc: 8fDdP39mJYSBcW4w2hDFP8pUB0WYR0tvbVZ0tFSdHXTzDPap
+
+logging:
+  level: info
+
+room:
+  # Max room duration (empty after last participant leaves)
+  empty_timeout: 300s
+  # Max number of participants per room (0 = unlimited)
+  max_participants: 100
+
+turn:
+  enabled: true
+  domain: hearth.gregh.dev
+  tls_port: 5349
+  udp_port: 3478

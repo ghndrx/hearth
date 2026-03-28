@@ -1,0 +1,99 @@
+version: '3.8'
+
+# FusionAuth SSO Stack for Hearth
+# Run alongside main hearth docker-compose
+#
+# Usage:
+#   cp .env.fusionauth.example .env
+#   docker compose -f docker-compose.fusionauth.yml up -d
+
+services:
+  fusionauth:
+    image: fusionauth/fusionauth-app:latest
+    container_name: hearth-fusionauth
+    restart: unless-stopped
+    ports:
+      - "${FUSIONAUTH_PORT:-9011}:9011"
+    environment:
+      DATABASE_URL: jdbc:postgresql://fusionauth-db:5432/${FUSIONAUTH_DB_NAME:-fusionauth}
+      DATABASE_ROOT_USERNAME: ${FUSIONAUTH_DB_USER:-fusionauth}
+      DATABASE_ROOT_PASSWORD: ${FUSIONAUTH_DB_PASSWORD:?FUSIONAUTH_DB_PASSWORD is required}
+      DATABASE_USERNAME: ${FUSIONAUTH_DB_USER:-fusionauth}
+      DATABASE_PASSWORD: ${FUSIONAUTH_DB_PASSWORD:?FUSIONAUTH_DB_PASSWORD is required}
+      FUSIONAUTH_APP_MEMORY: ${FUSIONAUTH_APP_MEMORY:-512M}
+      FUSIONAUTH_APP_RUNTIME_MODE: ${FUSIONAUTH_RUNTIME_MODE:-development}
+      FUSIONAUTH_APP_URL: http://fusionauth:9011
+      FUSIONAUTH_APP_KICKSTART_FILE: ""
+      SEARCH_TYPE: ${FUSIONAUTH_SEARCH_TYPE:-database}
+      SEARCH_SERVERS: ${FUSIONAUTH_SEARCH_SERVERS:-http://fusionauth-es:9200}
+    volumes:
+      - fusionauth-config:/usr/local/fusionauth/config
+    depends_on:
+      fusionauth-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9011/api/status"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - hearth-network
+      - fusionauth-internal
+
+  fusionauth-db:
+    image: postgres:16-alpine
+    container_name: hearth-fusionauth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FUSIONAUTH_DB_USER:-fusionauth}
+      POSTGRES_PASSWORD: ${FUSIONAUTH_DB_PASSWORD:?FUSIONAUTH_DB_PASSWORD is required}
+      POSTGRES_DB: ${FUSIONAUTH_DB_NAME:-fusionauth}
+    volumes:
+      - fusionauth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FUSIONAUTH_DB_USER:-fusionauth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fusionauth-internal
+
+  # Elasticsearch (optional - set FUSIONAUTH_SEARCH_TYPE=elasticsearch to enable)
+  # Provides advanced user search capabilities in FusionAuth admin UI
+  fusionauth-es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.22
+    container_name: hearth-fusionauth-es
+    profiles:
+      - search
+    restart: unless-stopped
+    environment:
+      cluster.name: fusionauth
+      bootstrap.memory_lock: "true"
+      discovery.type: single-node
+      ES_JAVA_OPTS: ${FUSIONAUTH_ES_JAVA_OPTS:--Xms256m -Xmx256m}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - fusionauth-es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - fusionauth-internal
+
+networks:
+  hearth-network:
+    external: true
+  fusionauth-internal:
+    driver: bridge
+
+volumes:
+  fusionauth-config:
+  fusionauth-db-data:
+  fusionauth-es-data:

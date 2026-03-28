@@ -1,0 +1,87 @@
+name: E2E Message Flow Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Base URL to test against'
+        required: false
+        default: 'https://hearth.gregh.dev'
+  push:
+    branches: [develop, main]
+    paths:
+      - 'backend/internal/api/handlers/messages.go'
+      - 'frontend/src/lib/components/Message*.svelte'
+      - 'frontend/src/lib/stores/messages.ts'
+      - 'frontend/tests/e2e/message-flow.spec.ts'
+
+jobs:
+  message-flow-test:
+    name: Message Flow E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: bun install
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: bunx playwright install chromium --with-deps
+
+      - name: Wait for site to be ready
+        run: |
+          BASE_URL="${{ github.event.inputs.base_url || 'https://hearth.gregh.dev' }}"
+          echo "Testing against: $BASE_URL"
+          
+          # Wait up to 2 minutes for site to be ready
+          for i in {1..24}; do
+            if curl -sf "$BASE_URL" > /dev/null 2>&1; then
+              echo "Site is ready!"
+              break
+            fi
+            echo "Waiting for site... (attempt $i/24)"
+            sleep 5
+          done
+
+      - name: Run Message Flow Tests
+        working-directory: frontend
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://hearth.gregh.dev' }}
+        run: |
+          bunx playwright test tests/e2e/message-flow.spec.ts --reporter=list
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: message-flow-test-results
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          retention-days: 7
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Message Flow E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ All message flow tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed. Check artifacts for details." >> $GITHUB_STEP_SUMMARY
+          fi

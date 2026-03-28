@@ -1,0 +1,494 @@
+# Hearth Helm Values - Comprehensive Configuration
+# https://github.com/ghndrx/hearth
+
+# =============================================================================
+# REPLICAS & IMAGES
+# =============================================================================
+
+replicaCount: 2
+
+image:
+  backend:
+    repository: ghndrx/hearth-backend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  frontend:
+    repository: ghndrx/hearth-frontend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+imagePullSecrets: []
+# - name: ghcr-secret
+
+# =============================================================================
+# NAMESPACE
+# =============================================================================
+
+namespace: hearth
+
+# =============================================================================
+# BACKEND CONFIGURATION
+# =============================================================================
+
+backend:
+  fullnameOverride: hearth-backend
+
+  replicaCount: 2
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+  service:
+    type: ClusterIP
+    port: 8080
+    
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-write-timeout: "3600"
+      nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    hosts:
+      - host: api.hearth.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: hearth-backend-tls
+        hosts:
+          - api.hearth.example.com
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  env:
+    - name: PORT
+      value: "8080"
+    - name: LOG_LEVEL
+      value: "info"
+    # Database URL is set via secret below
+
+  secretName: hearth-secrets
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# =============================================================================
+# FRONTEND CONFIGURATION
+# =============================================================================
+
+frontend:
+  fullnameOverride: hearth-frontend
+
+  replicaCount: 2
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: hearth.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: hearth-frontend-tls
+        hosts:
+          - hearth.example.com
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  env:
+    - name: API_URL
+      value: "https://api.hearth.example.com"
+    - name: WS_URL
+      value: "wss://api.hearth.example.com/ws"
+
+# =============================================================================
+# POSTGRESQL (embedded, optional)
+# =============================================================================
+
+postgresql:
+  enabled: false  # Set to true for dev/small deployments
+
+  auth:
+    database: hearth
+    username: hearth
+    passwordSecret: hearth-postgres-secret
+
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: standard-ssd
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  # For production, use external PostgreSQL:
+  # externalDatabase:
+  #   host: postgres.example.com
+  #   port: 5432
+  #   database: hearth
+  #   username: hearth
+  #   existingSecret: hearth-postgres-secret
+
+# =============================================================================
+# REDIS (embedded, optional)
+# =============================================================================
+
+redis:
+  enabled: false  # Set to true for dev/small deployments
+
+  auth:
+    enabled: true
+    passwordSecret: hearth-redis-secret
+
+  commonConfiguration: |
+    maxmemory=512mb
+    maxmemory-policy=allkeys-lru
+    save=900 1
+    save=300 10
+    save=60 10000
+
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 2Gi
+
+  # For production, use external Redis:
+  # Use external Redis with password in secrets
+
+# =============================================================================
+# MINIO (S3-compatible storage, optional)
+# =============================================================================
+
+minio:
+  enabled: false  # Set to true for dev/small deployments
+
+  auth:
+    rootUser: hearth
+    existingSecret: hearth-minio-secret
+
+  persistence:
+    enabled: true
+    size: 50Gi
+
+  apiIngress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: s3.hearth.example.com
+
+  consoleIngress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: console.hearth.example.com
+
+# =============================================================================
+# FUSIONAUTH (optional SSO identity provider)
+# =============================================================================
+
+fusionauth:
+  enabled: false  # Set to true to deploy FusionAuth for SSO
+
+  image:
+    repository: fusionauth/fusionauth-app
+    tag: ""
+
+  config:
+    runtimeMode: development
+    port: 9011
+    memory: 512M
+
+  database:
+    host: hearth-postgresql
+    port: 5432
+    name: fusionauth
+    user: fusionauth
+    existingSecret: ""
+
+  service:
+    type: ClusterIP
+    port: 9011
+
+  ingress:
+    enabled: false
+    className: nginx
+    hosts:
+      - host: auth.hearth.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: fusionauth-tls
+        hosts:
+          - auth.hearth.example.com
+
+  persistence:
+    enabled: true
+    size: 2Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# =============================================================================
+# SECRETS (required - create manually or via external secrets)
+# =============================================================================
+
+# Create secrets manually:
+# kubectl create secret generic hearth-secrets \
+#   --from-literal=database-url="postgres://..." \
+#   --from-literal=redis-url="redis://..." \
+#   --from-literal=jwt-secret="..."
+
+# Or use External Secrets Operator with your secrets manager (AWS Secrets Manager, GCP Secret Manager, etc.)
+
+# =============================================================================
+# CERTIFICATE (cert-manager)
+# =============================================================================
+
+cert-manager:
+  enabled: true  # Requires cert-manager to be installed
+  
+  clusterIssuer: letsencrypt-prod
+
+# =============================================================================
+# MONITORING
+# =============================================================================
+
+monitoring:
+  enabled: true
+
+  prometheus:
+    enabled: true
+    retention: 30d
+    storageSize: 10Gi
+
+  grafana:
+    enabled: true
+    adminPassword: ""  # Set via grafana-secret
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        folder: /tmp/dashboards
+        searchNamespace: hearth
+      alerts:
+        enabled: true
+        label: grafana_alert
+        searchNamespace: hearth
+
+  # ServiceMonitor for Prometheus scraping
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+    port: http
+
+# =============================================================================
+# Ingress (NGINX)
+# =============================================================================
+
+ingress-nginx:
+  enabled: true  # Installs nginx-ingress controller
+
+  controller:
+    replicaCount: 2
+    
+    service:
+      type: LoadBalancer  # Use LoadBalancer for cloud, NodePort for on-prem
+      
+      annotations:
+        # AWS:
+        service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+        service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:..."
+        
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+  tcp:
+    # For non-HTTP services (SMTP, etc.)
+    passLowercaseServerName: on
+
+# =============================================================================
+# NETWORK POLICIES
+# =============================================================================
+
+networkPolicy:
+  enabled: true
+  
+  # Allow only necessary traffic
+  backendEgress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+# =============================================================================
+# PERSISTENCE
+# =============================================================================
+
+persistence:
+  enabled: true
+  storageClass: standard-ssd  # Change based on your cluster
+
+# =============================================================================
+# NODE SELECTORS & TOLERATIONS
+# =============================================================================
+
+# For specific node pools
+nodeSelector: {}
+#  node.kubernetes.io/workload: hearth
+
+tolerations: []
+#  - key: "dedicated"
+#    operator: "Equal"
+#    value: "hearth"
+
+# =============================================================================
+# TOPOLOGY SPREAD (high availability)
+# =============================================================================
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: hearth
+
+# =============================================================================
+# SECURITY
+# =============================================================================
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false  # Set to true and use tmpfs for better security
+  capabilities:
+    drop:
+      - ALL
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# =============================================================================
+# SERVICE ACCOUNTS
+# =============================================================================
+
+serviceAccount:
+  create: true
+  name: hearth
+  annotations:
+    # For AWS IRSA (IAM Roles for Service Accounts)
+    # eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/hearth-role
+
+# =============================================================================
+# RBAC
+# =============================================================================
+
+rbac:
+  create: true
+
+# =============================================================================
+# AFFINITY (advanced HA)
+# =============================================================================
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: hearth
+          topologyKey: kubernetes.io/hostname

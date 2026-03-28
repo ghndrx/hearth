@@ -1,0 +1,228 @@
+name: DevSecOps
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+
+# Allow concurrent runs but cancel old ones on new push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Prevent secrets in commits ───
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_LICENSE_TYPE: mit
+
+  # ─── Dependency vulnerabilities ───
+  dependency-scan:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - ecosystem: go
+            path: backend
+            lock: backend/go.sum
+            go-version: '1.24'
+          - ecosystem: npm
+            path: frontend
+            lock: frontend/package-lock.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        if: matrix.ecosystem == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache-dependency-path: ${{ matrix.lock }}
+
+      - name: Setup Node
+        if: matrix.ecosystem == 'npm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.lock }}
+
+      - name: Go vulnerability scan
+        if: matrix.ecosystem == 'go'
+        working-directory: ./backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Build the binary first (source-mode govulncheck ./... fails with
+          # "internal error: package golang.org/x/sys/unix without types" due to
+          # cgo compatibility in Go 1.24+ toolchain). Binary mode is used as
+          # a workaround that still provides accurate vulnerability detection.
+          go build -o hearth ./cmd/hearth
+          govulncheck -mode=binary hearth
+
+      - name: Npm audit
+        if: matrix.ecosystem == 'npm'
+        working-directory: ./frontend
+        run: npm audit --audit-level=high
+
+  # ─── SAST - Go ───
+  sast-go:
+    name: SAST (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: |
+            p/security-audit
+            p/secrets
+            p/golang-audit
+          upload: 'on'
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec
+        run: gosec -fmt json -out gosec-results.json ./backend/...
+        continue-on-error: true
+
+      - name: Upload gosec results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('gosec-results.json') != ''
+        with:
+          sarif_file: gosec-results.json
+
+  # ─── SAST - Frontend ───
+  sast-frontend:
+    name: SAST (Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run Semgrep on JS/TS
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: |
+            p/security-audit
+            p/secrets
+            p/javascript-audit
+            p/typescript-audit
+          paths: frontend/src
+        continue-on-error: true
+
+  # ─── Code quality (non-blocking) ───
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Go linter
+        if: hashFiles('backend/**/*.go')
+        uses: golangci/golangci-lint-action@v4
+        with:
+          working-directory: ./backend
+
+      - name: ESLint
+        if: hashFiles('frontend/**/*.ts')
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npx svelte-kit sync
+          npm run lint
+
+  # ─── License compliance ───
+  license-check:
+    name: License Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check prohibited licenses
+        run: |
+          # Block known-vulnerable licenses
+          forbidden=("GPL-3.0" "AGPL-3.0" "LGPL-2.1")
+          for f in $(find backend frontend -name "go.mod" -o -name "package.json" 2>/dev/null); do
+            dir=$(dirname "$f")
+            if [ -f "$dir/LICENSE" ]; then
+              for lic in "${forbidden[@]}"; do
+                if grep -q "$lic" "$dir/LICENSE" 2>/dev/null; then
+                  echo "⚠️  Prohibited license $lic in $dir"
+                fi
+              done
+            fi
+          done
+
+  # ─── Build test (non-blocking) ───
+  build:
+    name: Build Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Go build
+        if: hashFiles('backend/**/*.go')
+        run: cd backend && go build -v ./...
+
+      - name: Setup Node
+        if: hashFiles('frontend/**/*')
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend build
+        if: hashFiles('frontend/**/*')
+        run: |
+          npm ci
+          npm run build
+        working-directory: frontend
+        continue-on-error: true
+
+  # ─── Quality gate ───
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [secret-scan, dependency-scan]
+    if: always()
+    steps:
+      - name: Check blockers
+        run: |
+          BLOCKERS=$(jq -r 'to_entries | map(select(.value == "failure")) | length' <<< '${{ toJSON(needs) }}')
+          if [ "$BLOCKERS" -gt 0 ]; then
+            echo "❌ Security blockers detected. Fix before merging."
+            exit 1
+          fi
+          echo "✅ All security checks passed"
