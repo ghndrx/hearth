@@ -293,7 +293,7 @@ How did you test this?
 
 **DO NOT** open public issues for security vulnerabilities.
 
-Email: security@hearth.chat (or maintainer directly)
+Email: security@gregh.dev (or maintainer directly)
 
 ### Security Checklist
 

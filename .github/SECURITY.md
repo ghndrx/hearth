@@ -15,7 +15,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 **DO NOT** open a public GitHub issue for security vulnerabilities.
 
-Instead, please email: **security@hearth.chat** (or the maintainer's email until this is set up)
+Instead, please email: **security@gregh.dev** (or the maintainer's email until this is set up)
 
 Include:
 1. Description of the vulnerability
