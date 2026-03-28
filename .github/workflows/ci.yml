@@ -39,6 +39,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v2.11.4
+          install-mode: fromsource
           working-directory: backend
           args: --config=../.golangci.yml
 
