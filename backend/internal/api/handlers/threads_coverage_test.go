@@ -23,23 +23,23 @@ import (
 // --- mockThreadServiceForCoverage implements ThreadServiceInterface for coverage tests ---
 
 type mockThreadServiceForCoverage struct {
-	createThreadFunc               func(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID) (*models.Thread, error)
-	updateThreadFunc               func(ctx context.Context, threadID, requesterID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error)
-	getThreadFunc                  func(ctx context.Context, threadID uuid.UUID) (*models.Thread, error)
-	getThreadMessagesFunc          func(ctx context.Context, threadID, requesterID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
-	sendThreadMessageFunc          func(ctx context.Context, threadID, authorID uuid.UUID, content string) (*models.ThreadMessage, error)
-	archiveThreadFunc              func(ctx context.Context, threadID, requesterID uuid.UUID) error
-	unarchiveThreadFunc            func(ctx context.Context, threadID, requesterID uuid.UUID) error
-	getChannelThreadsFunc          func(ctx context.Context, channelID, requesterID uuid.UUID, includeArchived bool) ([]*models.Thread, error)
-	joinThreadFunc                 func(ctx context.Context, threadID, userID uuid.UUID) error
-	leaveThreadFunc                func(ctx context.Context, threadID, userID uuid.UUID) error
-	deleteThreadFunc               func(ctx context.Context, threadID, requesterID uuid.UUID) error
-	getNotificationPreferenceFunc   func(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error)
-	setNotificationPreferenceFunc  func(ctx context.Context, threadID, userID uuid.UUID, level models.ThreadNotificationLevel) error
-	enterThreadFunc                func(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadPresenceResponse, error)
-	exitThreadFunc                 func(ctx context.Context, threadID, userID uuid.UUID) error
-	getActiveViewersFunc           func(ctx context.Context, threadID uuid.UUID) (*models.ThreadPresenceResponse, error)
-	heartbeatPresenceFunc          func(ctx context.Context, threadID, userID uuid.UUID) error
+	createThreadFunc              func(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID) (*models.Thread, error)
+	updateThreadFunc              func(ctx context.Context, threadID, requesterID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error)
+	getThreadFunc                 func(ctx context.Context, threadID uuid.UUID) (*models.Thread, error)
+	getThreadMessagesFunc         func(ctx context.Context, threadID, requesterID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
+	sendThreadMessageFunc         func(ctx context.Context, threadID, authorID uuid.UUID, content string) (*models.ThreadMessage, error)
+	archiveThreadFunc             func(ctx context.Context, threadID, requesterID uuid.UUID) error
+	unarchiveThreadFunc           func(ctx context.Context, threadID, requesterID uuid.UUID) error
+	getChannelThreadsFunc         func(ctx context.Context, channelID, requesterID uuid.UUID, includeArchived bool) ([]*models.Thread, error)
+	joinThreadFunc                func(ctx context.Context, threadID, userID uuid.UUID) error
+	leaveThreadFunc               func(ctx context.Context, threadID, userID uuid.UUID) error
+	deleteThreadFunc              func(ctx context.Context, threadID, requesterID uuid.UUID) error
+	getNotificationPreferenceFunc func(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadNotificationPreference, error)
+	setNotificationPreferenceFunc func(ctx context.Context, threadID, userID uuid.UUID, level models.ThreadNotificationLevel) error
+	enterThreadFunc               func(ctx context.Context, threadID, userID uuid.UUID) (*models.ThreadPresenceResponse, error)
+	exitThreadFunc                func(ctx context.Context, threadID, userID uuid.UUID) error
+	getActiveViewersFunc          func(ctx context.Context, threadID uuid.UUID) (*models.ThreadPresenceResponse, error)
+	heartbeatPresenceFunc         func(ctx context.Context, threadID, userID uuid.UUID) error
 }
 
 func (m *mockThreadServiceForCoverage) CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID) (*models.Thread, error) {
@@ -485,7 +485,7 @@ func TestThreadHandler_SendThreadMessage(t *testing.T) {
 		{
 			name:          "thread not found",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"content": "Hello"},
+			body:          map[string]interface{}{"content": "Hello"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.sendThreadMessageFunc = func(ctx context.Context, tID, aID uuid.UUID, content string) (*models.ThreadMessage, error) {
 					return nil, services.ErrThreadNotFound
@@ -496,7 +496,7 @@ func TestThreadHandler_SendThreadMessage(t *testing.T) {
 		{
 			name:          "thread archived",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"content": "Hello"},
+			body:          map[string]interface{}{"content": "Hello"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.sendThreadMessageFunc = func(ctx context.Context, tID, aID uuid.UUID, content string) (*models.ThreadMessage, error) {
 					return nil, services.ErrThreadArchived
@@ -507,7 +507,7 @@ func TestThreadHandler_SendThreadMessage(t *testing.T) {
 		{
 			name:          "thread locked",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"content": "Hello"},
+			body:          map[string]interface{}{"content": "Hello"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.sendThreadMessageFunc = func(ctx context.Context, tID, aID uuid.UUID, content string) (*models.ThreadMessage, error) {
 					return nil, services.ErrThreadLocked
@@ -518,7 +518,7 @@ func TestThreadHandler_SendThreadMessage(t *testing.T) {
 		{
 			name:          "not server member",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"content": "Hello"},
+			body:          map[string]interface{}{"content": "Hello"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.sendThreadMessageFunc = func(ctx context.Context, tID, aID uuid.UUID, content string) (*models.ThreadMessage, error) {
 					return nil, services.ErrNotServerMember
@@ -1049,7 +1049,7 @@ func TestThreadHandler_UpdateThread(t *testing.T) {
 		{
 			name:          "thread not found",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"name": name},
+			body:          map[string]interface{}{"name": name},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.updateThreadFunc = func(ctx context.Context, tID, rID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error) {
 					return nil, services.ErrThreadNotFound
@@ -1060,7 +1060,7 @@ func TestThreadHandler_UpdateThread(t *testing.T) {
 		{
 			name:          "not thread owner",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"name": name},
+			body:          map[string]interface{}{"name": name},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.updateThreadFunc = func(ctx context.Context, tID, rID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error) {
 					return nil, services.ErrNotThreadOwner
@@ -1071,7 +1071,7 @@ func TestThreadHandler_UpdateThread(t *testing.T) {
 		{
 			name:          "not server member",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"name": name},
+			body:          map[string]interface{}{"name": name},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.updateThreadFunc = func(ctx context.Context, tID, rID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error) {
 					return nil, services.ErrNotServerMember
@@ -1082,7 +1082,7 @@ func TestThreadHandler_UpdateThread(t *testing.T) {
 		{
 			name:          "invalid auto archive",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"auto_archive": 9999},
+			body:          map[string]interface{}{"auto_archive": 9999},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.updateThreadFunc = func(ctx context.Context, tID, rID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error) {
 					return nil, services.ErrInvalidAutoArchive
@@ -1257,7 +1257,7 @@ func TestThreadHandler_SetNotificationPreference(t *testing.T) {
 		{
 			name:          "thread not found",
 			threadIDParam: threadID.String(),
-			body:         map[string]interface{}{"level": "all"},
+			body:          map[string]interface{}{"level": "all"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
 				m.setNotificationPreferenceFunc = func(ctx context.Context, tID, uID uuid.UUID, level models.ThreadNotificationLevel) error {
 					return services.ErrThreadNotFound
