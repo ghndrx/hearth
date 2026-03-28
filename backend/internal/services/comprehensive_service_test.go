@@ -286,6 +286,38 @@ func TestComprehensiveService_SendMessage(t *testing.T) {
 		assert.Equal(t, ErrInvalidInput, err)
 		assert.Nil(t, msg)
 	})
+
+	t.Run("Channel Not Found", func(t *testing.T) {
+		userID := uuid.New()
+		channelID := uuid.New()
+
+		mockRepo.On("GetChannelByID", ctx, channelID).Return(nil, ErrChannelNotFound).Once()
+
+		msg, err := service.SendMessage(ctx, channelID, userID, "Hello")
+
+		assert.Error(t, err)
+		assert.Nil(t, msg)
+		assert.Equal(t, ErrChannelNotFound, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Create Message Error", func(t *testing.T) {
+		userID := uuid.New()
+		serverID := uuid.New()
+		channelID := uuid.New()
+
+		mockChannel := &models.Channel{ID: channelID, ServerID: &serverID}
+
+		mockRepo.On("GetChannelByID", ctx, channelID).Return(mockChannel, nil).Once()
+		mockRepo.On("IsServerMember", ctx, serverID, userID).Return(true, nil).Once()
+		mockRepo.On("CreateMessage", ctx, mock.AnythingOfType("*models.Message")).Return(assert.AnError).Once()
+
+		msg, err := service.SendMessage(ctx, channelID, userID, "Hello")
+
+		assert.Error(t, err)
+		assert.Nil(t, msg)
+		mockRepo.AssertExpectations(t)
+	})
 }
 
 func TestComprehensiveService_JoinServer(t *testing.T) {
@@ -326,6 +358,32 @@ func TestComprehensiveService_JoinServer(t *testing.T) {
 		assert.Equal(t, ErrAlreadyMember, err)
 		mockRepo.AssertExpectations(t)
 	})
+
+	t.Run("User Not Found", func(t *testing.T) {
+		userID := uuid.New()
+		serverID := uuid.New()
+
+		mockRepo.On("GetUserByID", ctx, userID).Return(nil, ErrUserNotFound).Once()
+
+		err := service.JoinServer(ctx, serverID, userID)
+		assert.Error(t, err)
+		assert.Equal(t, ErrUserNotFound, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Server Not Found", func(t *testing.T) {
+		userID := uuid.New()
+		serverID := uuid.New()
+
+		mockUser := &models.User{ID: userID}
+		mockRepo.On("GetUserByID", ctx, userID).Return(mockUser, nil).Once()
+		mockRepo.On("GetServerByID", ctx, serverID).Return(nil, ErrServerNotFound).Once()
+
+		err := service.JoinServer(ctx, serverID, userID)
+		assert.Error(t, err)
+		assert.Equal(t, ErrServerNotFound, err)
+		mockRepo.AssertExpectations(t)
+	})
 }
 
 func TestComprehensiveService_CreateChannel(t *testing.T) {
@@ -362,19 +420,33 @@ func TestComprehensiveService_CreateChannel(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, channel)
 		assert.Equal(t, ErrServerNotFound, err)
+		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("Invalid Input", func(t *testing.T) {
 		serverID := uuid.New()
-		mockServer := &models.Server{ID: serverID}
 
-		mockRepo.On("GetServerByID", ctx, serverID).Return(mockServer, nil).Once()
+		// Empty name returns early - GetServerByID not called
 
 		channel, err := service.CreateChannel(ctx, serverID, "", "text")
 
 		assert.Error(t, err)
 		assert.Nil(t, channel)
 		assert.Equal(t, ErrInvalidInput, err)
+	})
+
+	t.Run("Repository Error", func(t *testing.T) {
+		serverID := uuid.New()
+		mockServer := &models.Server{ID: serverID}
+
+		mockRepo.On("GetServerByID", ctx, serverID).Return(mockServer, nil).Once()
+		mockRepo.On("CreateChannel", ctx, mock.AnythingOfType("*models.Channel")).Return(assert.AnError).Once()
+
+		channel, err := service.CreateChannel(ctx, serverID, "general", "text")
+
+		assert.Error(t, err)
+		assert.Nil(t, channel)
+		mockRepo.AssertExpectations(t)
 	})
 }
 
@@ -396,6 +468,18 @@ func TestComprehensiveService_GetChannels(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, channels, 2)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Repository Error", func(t *testing.T) {
+		serverID := uuid.New()
+
+		mockRepo.On("GetChannelsByServer", ctx, serverID).Return(nil, assert.AnError).Once()
+
+		channels, err := service.GetChannels(ctx, serverID)
+
+		assert.Error(t, err)
+		assert.Nil(t, channels)
 		mockRepo.AssertExpectations(t)
 	})
 }
