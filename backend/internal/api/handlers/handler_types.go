@@ -57,12 +57,13 @@ func jsonResponse(w http.ResponseWriter, v interface{}, status int) {
 }
 
 // userFromRequest extracts a minimal user from the request context.
-// TODO: implement proper user extraction from auth middleware context.
 type minimalUser struct {
 	ID string
 }
 
 func getUser(r *http.Request) *minimalUser {
-	// Stub: in production this would extract user from auth context
-	return &minimalUser{ID: uuid.New().String()}
+	if userID, ok := r.Context().Value("userID").(string); ok {
+		return &minimalUser{ID: userID}
+	}
+	return &minimalUser{}
 }
