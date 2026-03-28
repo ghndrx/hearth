@@ -1,16 +1,19 @@
 name: AI Agent - AWS Bedrock
 on:
-  # Manual trigger only - prevents noise on every push
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
   workflow_dispatch:
     inputs:
       task:
-        description: 'Task for the agent (e.g. "review recent commits and suggest improvements")'
+        description: 'Task for the agent'
         required: true
         default: 'review recent commits and suggest improvements'
       branch:
         description: 'Branch to review'
         required: false
-        default: 'develop'
+        default: ''
 
 env:
   AWS_REGION: us-west-2
@@ -28,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.branch || 'develop' }}
+          ref: ${{ github.event.inputs.branch || github.ref }}
           
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -47,7 +50,8 @@ jobs:
       - name: Run Kimi Agent
         id: agent
         env:
-          TASK: ${{ github.event.inputs.task }}
+          TASK: ${{ github.event.inputs.task || 'review recent commits and suggest improvements' }}
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 << 'EOF'
@@ -59,6 +63,9 @@ jobs:
           bedrock = boto3.client('bedrock-runtime', region_name='us-west-2')
           
           task = os.environ.get('TASK', 'review code')
+          repo = os.environ.get('GITHUB_REPOSITORY', 'unknown')
+          ref = os.environ.get('GITHUB_REF', 'unknown')
+          github_token = os.environ.get('GITHUB_TOKEN', '')
           
           try:
               git_log = subprocess.check_output(['git', 'log', '--oneline', '-20'], text=True)
@@ -70,13 +77,18 @@ jobs:
           except:
               diff_stat = 'Unable to fetch diff'
           
-          prompt = (
-              "Task: " + task + "\n\n"
-              "Review the recent commits and changes below and provide specific, actionable recommendations.\n\n"
-              "Recent commits:\n" + git_log + "\n\n"
-              "Recent changes:\n" + diff_stat + "\n\n"
-              "Format your response as markdown with specific file paths and line numbers where applicable."
-          )
+          prompt = f"""Task: {task}
+
+Repository: {repo}
+Branch/Ref: {ref}
+
+Recent commits:
+{git_log}
+
+Recent changes:
+{diff_stat}
+
+Please analyze and provide specific, actionable recommendations. Format your response as markdown."""
 
           messages = [{"role": "user", "content": [{"text": prompt}]}]
           
@@ -102,7 +114,7 @@ jobs:
           name: agent-analysis
           path: agent_output.md
           
-      - name: Post comment on PR
+      - name: Comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
