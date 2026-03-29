@@ -85,6 +85,8 @@ type ChannelRepository interface {
 
 	// Permission overrides
 	GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error)
+	UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error
+	DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error
 }
 
 // RoleRepository defines role data access
