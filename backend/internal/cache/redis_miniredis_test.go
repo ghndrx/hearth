@@ -519,8 +519,8 @@ func TestRedisCache_PresenceStreamingStatus(t *testing.T) {
 	now := time.Now()
 
 	presence := &models.Presence{
-		UserID:   userID,
-		Status:   models.StatusOnline,
+		UserID: userID,
+		Status: models.StatusOnline,
 		Activities: []models.Activity{
 			{
 				Name:      "Hearth",
