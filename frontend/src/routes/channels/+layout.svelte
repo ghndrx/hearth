@@ -13,6 +13,7 @@
 	import { pinnedMessagesStore, pinnedMessagesOpen } from '$lib/stores/pinnedMessages';
 	import { searchStore, isSearchOpen } from '$lib/stores/search';
 	import { splitViewStore, splitViewEnabled, canAddSplitPanel } from '$lib/stores/splitView';
+	import { jumpToMessage } from '$lib/stores/messages';
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import MemberList from '$lib/components/MemberList.svelte';
@@ -173,10 +174,8 @@
 		// Close the pinned messages panel
 		pinnedMessagesStore.close();
 		
-		// TODO: Scroll to message in MessageList
-		// For now, we just close the panel - scrolling to message would require
-		// additional coordination with the MessageList component
-		console.log('Jump to message:', event.detail.messageId);
+		// Scroll to message in MessageList via the jumpToMessage store
+		jumpToMessage.jump(event.detail.channelId, event.detail.messageId);
 	}
 </script>
 
