@@ -23,3 +23,6 @@
 - [ ] **[P0]** Feature: Enhanced Server Discovery — Public server directory with search, categories, and recommendations for user acquisition
 - [ ] **[P0]** Feature: Scheduled Events — RSVP system, calendar integration, and event notifications for community building
 - [ ] **[P1]** Feature: Comprehensive Sticker System — Custom stickers, animated stickers, and premium sticker packs for engagement and monetization
+- [ ] **[P0]** Feature: Server Boosts & Premium Features — Subscription tiers with enhanced capabilities for monetization and sustainability
+- [ ] **[P0]** Feature: Stage Channels — Live audio broadcasts for large audiences with speaker management and community building
+- [ ] **[P1]** Feature: Advanced Message Search — Full-text search with filters for knowledge management in large communities
