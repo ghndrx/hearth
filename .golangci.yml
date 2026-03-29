@@ -17,6 +17,4 @@ formatters:
   enable:
     - gofmt
 
-issues:
-  exclude:
-    - ".*_test\\.go$"
+
