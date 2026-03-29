@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,13 +11,24 @@ import (
 	"hearth/internal/services"
 )
 
+// AnalyticsServiceInterface defines the methods needed from AnalyticsService
+type AnalyticsServiceInterface interface {
+	GetSummary(ctx context.Context, serverID, requesterID uuid.UUID) (*models.ServerInsightsResponse, error)
+	GetMemberGrowth(ctx context.Context, serverID, requesterID uuid.UUID, days int) (*models.MemberGrowthResponse, error)
+	GetMessageActivity(ctx context.Context, serverID, requesterID uuid.UUID, days int) (*models.ActivityHeatmapResponse, error)
+	GetTopChannels(ctx context.Context, serverID, requesterID uuid.UUID, days, limit int) (*models.TopChannelsResponse, error)
+	GetRetention(ctx context.Context, serverID, requesterID uuid.UUID, days int) (*models.RetentionResponse, error)
+	GetMostActiveUsers(ctx context.Context, serverID, requesterID uuid.UUID, days, limit int) ([]*models.ActiveUserStat, error)
+	InvalidateCache(ctx context.Context, serverID uuid.UUID) error
+}
+
 // AnalyticsHandler handles server analytics API requests
 type AnalyticsHandler struct {
-	analyticsService *services.AnalyticsService
+	analyticsService AnalyticsServiceInterface
 }
 
 // NewAnalyticsHandler creates a new analytics handler
-func NewAnalyticsHandler(analyticsService *services.AnalyticsService) *AnalyticsHandler {
+func NewAnalyticsHandler(analyticsService AnalyticsServiceInterface) *AnalyticsHandler {
 	return &AnalyticsHandler{
 		analyticsService: analyticsService,
 	}
