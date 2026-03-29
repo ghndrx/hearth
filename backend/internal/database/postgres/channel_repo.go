@@ -85,7 +85,7 @@ func (r *ChannelRepository) Update(ctx context.Context, channel *models.Channel)
 	query := `
 		UPDATE channels SET
 			name = $2, topic = $3, position = $4, parent_id = $5,
-			slowmode = $6, nsfw = $7, e2ee_enabled = $8
+			slowmode_seconds = $6, nsfw = $7, e2ee_enabled = $8
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
@@ -329,10 +329,31 @@ func (r *ChannelRepository) BulkUpdatePositions(ctx context.Context, entries []m
 // GetPermissionOverrides returns all permission overrides for a channel
 func (r *ChannelRepository) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) {
 	var overrides []models.PermissionOverride
-	query := `SELECT channel_id, target_type, target_id, allow, deny FROM permission_overrides WHERE channel_id = $1`
+	query := `SELECT channel_id, target_type, target_id, allow, deny FROM channel_overrides WHERE channel_id = $1`
 	err := r.db.SelectContext(ctx, &overrides, query, channelID)
 	if err != nil {
 		return nil, err
 	}
 	return overrides, nil
+}
+
+// UpsertPermissionOverride creates or updates a permission override for a channel
+func (r *ChannelRepository) UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error {
+	query := `
+		INSERT INTO channel_overrides (channel_id, target_type, target_id, allow, deny)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (channel_id, target_type, target_id)
+		DO UPDATE SET allow = $4, deny = $5
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		override.ChannelID, override.TargetType, override.TargetID, override.Allow, override.Deny,
+	)
+	return err
+}
+
+// DeletePermissionOverride removes a permission override from a channel
+func (r *ChannelRepository) DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error {
+	query := `DELETE FROM channel_overrides WHERE channel_id = $1 AND target_type = $2 AND target_id = $3`
+	_, err := r.db.ExecContext(ctx, query, channelID, targetType, targetID)
+	return err
 }

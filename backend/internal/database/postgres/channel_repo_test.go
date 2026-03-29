@@ -633,7 +633,7 @@ func TestChannelRepository_GetPermissionOverrides(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"channel_id", "target_type", "target_id", "allow", "deny"}).
 		AddRow(channelID, "role", targetID, int64(1024), int64(0))
 
-	mock.ExpectQuery("SELECT channel_id, target_type, target_id, allow, deny FROM permission_overrides WHERE channel_id = \\$1").
+	mock.ExpectQuery("SELECT channel_id, target_type, target_id, allow, deny FROM channel_overrides WHERE channel_id = \\$1").
 		WithArgs(channelID).
 		WillReturnRows(rows)
 

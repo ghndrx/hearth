@@ -223,6 +223,14 @@ func (m *mockChannelRepoForThread) GetPermissionOverrides(ctx context.Context, c
 	return nil, nil
 }
 
+func (m *mockChannelRepoForThread) UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error {
+	return nil
+}
+
+func (m *mockChannelRepoForThread) DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error {
+	return nil
+}
+
 func (m *mockChannelRepoForThread) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
 	return nil
 }
