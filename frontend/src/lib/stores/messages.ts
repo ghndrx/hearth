@@ -557,3 +557,34 @@ function getCurrentUserId(): string {
 		return '';
 	}
 }
+
+// Jump to message store - holds the target message to scroll to
+interface JumpToMessageState {
+	channelId: string | null;
+	messageId: string | null;
+}
+
+function createJumpToMessageStore() {
+	const { subscribe, set } = writable<JumpToMessageState>({
+		channelId: null,
+		messageId: null
+	});
+
+	return {
+		subscribe,
+		/**
+		 * Jump to a specific message in a channel
+		 */
+		jump(channelId: string, messageId: string) {
+			set({ channelId, messageId });
+		},
+		/**
+		 * Clear the jump target
+		 */
+		clear() {
+			set({ channelId: null, messageId: null });
+		}
+	};
+}
+
+export const jumpToMessage = createJumpToMessageStore();
