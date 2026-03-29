@@ -88,7 +88,8 @@
     try {
       const parsed = new URL(url);
       return ['http:', 'https:'].includes(parsed.protocol);
-    } catch {
+    } catch (err) {
+      console.error('[MarkdownRenderer] URL validation error:', err);
       return false;
     }
   }
