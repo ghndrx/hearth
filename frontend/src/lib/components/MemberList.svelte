@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { currentServer } from '$lib/stores/servers';
 	import { members, roles, loadServerMembers, loadServerRoles } from '$lib/stores/members';
 	import { presenceStore, type PresenceStatus, type Activity, getActivityLabel } from '$lib/stores/presence';
 	import { popoutStore } from '$lib/stores/popout';
 	import { handleListKeyboard } from '$lib/utils/keyboard';
+	import { createDM } from '$lib/stores/channels';
 	import Avatar from './Avatar.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import ContextMenuItem from './ContextMenuItem.svelte';
@@ -271,17 +273,21 @@
 		handleMemberClick(fakeEvent, contextMenuMember);
 	}
 
-	function handleSendMessage() {
+	async function handleSendMessage() {
 		if (!contextMenuMember) return;
 		showContextMenu = false;
-		// TODO: Navigate to DM with this user
-		console.log('Send message to:', contextMenuMember.user.username);
+		try {
+			const dmChannel = await createDM(contextMenuMember.user.id);
+			goto(`/channels/@me/${dmChannel.id}`);
+		} catch (err) {
+			console.error('Failed to open DM:', err);
+		}
 	}
 
 	function handleMentionUser() {
 		if (!contextMenuMember) return;
 		showContextMenu = false;
-		// TODO: Insert @mention in message input
+		// Copy @mention to clipboard for easy pasting into message input
 		const mention = `<@${contextMenuMember.user.id}>`;
 		navigator.clipboard.writeText(mention);
 	}
