@@ -2,67 +2,6 @@
 
 All notable changes to Hearth will be documented in this file.
 
-## [2026-03-31](https://github.com/ghndrx/hearth/compare/2026-03-30...HEAD)
-
-### Features
-* feature/message file preview (#33)
-
-### Bug Fixes
-* fix(frontend): resolve TypeScript type errors in role-service-permission-checks
-* fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
-* fix(a11y): add tabindex to soundboard picker dialog (#34)
-* fix(frontend): resolve TypeScript error in EventDetail.svelte (#32)
-* fix: add MANAGE_EVENTS permission check for event management (#31)
-* fix(discovery): link server verification from discoverable_servers table (#29)
-* fix(frontend): resolve TypeScript null type errors in discovery components (#30)
-
-### Other Changes
-* chore: update TASK_QUEUE.md with 2026-03-31 GitHub issues analysis
-* chore(frontend): regenerate package-lock.json for npm ci compatibility
-* fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
-
-### Miscellaneous
-  (none)
-
-## [2026-03-30](https://github.com/ghndrx/hearth/compare/2026-03-29...HEAD)
-
-### Features
-* feat: add enhanced server discovery with public directory
-* feat(frontend): implement jump-to-message scroll from pinned/search results (#25)
-* feat(MemberList): implement Send Message to DM navigation (#19)
-* feature/cache redis miniredis coverage (#5)
-
-### Bug Fixes
-* fix(templates): capture server settings when serializing to template (#23)
-* fix: resolve conflicts and add public server directory test mocks/routes (#22)
-* fix(frontend): add error logging to 13 empty catch blocks (#20)
-* fix: correct golangci-lint v2.11.4 config format
-* fix: upgrade golangci-lint-action to v7 and use binary install mode for v2.x compatibility
-* fix: add version field for golangci-lint v2.x compatibility
-
-### Other Changes
-* test(coverage): add discovery handler httptest coverage (#24)
-* fix: resolve conflicts and add public server directory test mocks/routes (#22)
-* docs: auto-generate changelog for 2026-03-29
-* Add comprehensive tests for template handler endpoints (#21)
-* test(coverage): add follow and reminders handler tests (#18)
-* test(coverage): add notification repository test coverage (#17)
-* test(coverage): add pins handler tests with httptest (#15)
-* test(coverage): improve analytics handler test coverage with httptest (#14)
-* test(coverage): add analytics repository test coverage (#13)
-* test(coverage): add storage repository tests (#11)
-* chore: address critical event management permission bypass (#12)
-* test(coverage): add webhook repository test coverage (#9)
-* test(coverage): improve cache test coverage with miniredis (#8)
-* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
-
-### Miscellaneous
-* Add comprehensive tests for template handler endpoints (#21)
-* ci: fix CodeQL SARIF upload permissions in DevSecOps workflow (#16)
-* security: bump Go version to 1.25.8 in Dockerfiles (GO-2026-4601/4602/4603) (#10)
-* security: upgrade Go to 1.25.8 (fixes GO-2026-4601, GO-2026-4602, GO-2026-4603) (#7)
-* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
-
 ## [2026-03-29](https://github.com/ghndrx/hearth/compare/2026-03-28...HEAD)
 
 ### Features
