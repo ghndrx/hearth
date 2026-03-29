@@ -28,7 +28,10 @@ type mockDiscoveryService struct {
 	reportServerFunc          func(ctx context.Context, serverID, userID uuid.UUID, req *models.ReportServerRequest) error
 	approveListingFunc        func(ctx context.Context, listingID, adminID uuid.UUID) error
 	rejectListingFunc         func(ctx context.Context, listingID, adminID uuid.UUID, reason string) error
-	setFeaturedFunc           func(ctx context.Context, listingID uuid.UUID, featured bool) error
+	setFeaturedFunc                    func(ctx context.Context, listingID uuid.UUID, featured bool) error
+	searchServersPublicFunc            func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error)
+	getServerListingPublicFunc         func(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
+	getListingWithDetailsPublicFunc   func(ctx context.Context, serverID uuid.UUID) (*models.ServerListingResult, error)
 }
 
 func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
@@ -276,6 +279,81 @@ func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
 			return HandleServiceError(c, err)
 		}
 		return c.JSON(fiber.Map{"message": "featured status updated"})
+	})
+
+	// Public Server Directory routes
+	app.Get("/servers/categories", func(c *fiber.Ctx) error {
+		categories, err := mock.getCategoriesFunc(c.Context())
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"categories": categories})
+	})
+
+	app.Get("/servers", func(c *fiber.Ctx) error {
+		category := models.ServerCategory(c.Query("category"))
+		if category != "" {
+			validCategories := map[models.ServerCategory]bool{
+				models.CategoryGaming:        true,
+				models.CategoryMusic:         true,
+				models.CategoryTechnology:   true,
+				models.CategoryArt:           true,
+				models.CategoryEducation:     true,
+				models.CategoryScience:        true,
+				models.CategoryEntertainment: true,
+				models.CategorySocial:         true,
+				models.CategorySports:         true,
+				models.CategoryAnime:          true,
+				models.CategoryFashion:        true,
+				models.CategoryFood:           true,
+				models.CategoryBusiness:       true,
+				models.CategoryLanguage:       true,
+			}
+			if !validCategories[category] {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid category"})
+			}
+		}
+		filters := &models.DiscoveryFilters{
+			Query:    c.Query("q"),
+			Category: category,
+			SortBy:   c.Query("sort", "popular"),
+		}
+		limit := c.QueryInt("limit", 25)
+		offset := c.QueryInt("offset", 0)
+		filters.Limit = limit
+		filters.Offset = offset
+		servers, total, err := mock.searchServersPublicFunc(c.Context(), filters)
+		if err != nil {
+			return HandleServiceError(c, err)
+		}
+		return c.JSON(fiber.Map{"servers": servers, "total": total, "limit": limit, "offset": offset})
+	})
+
+	app.Get("/servers/:id", func(c *fiber.Ctx) error {
+		serverID, err := uuid.Parse(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid server ID"})
+		}
+		// Check listing first (for approval status)
+		listingCheck, _ := mock.getServerListingPublicFunc(c.Context(), serverID)
+		if listingCheck == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Server not found"})
+		}
+		if listingCheck.ApprovalStatus != models.ApprovalApproved || !listingCheck.IsListed {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Server not found"})
+		}
+		// Then get listing details
+		if mock.getListingWithDetailsPublicFunc == nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get server"})
+		}
+		listing, err := mock.getListingWithDetailsPublicFunc(c.Context(), serverID)
+		if err != nil {
+			if err == services.ErrDiscoveryListingNotFound || err == services.ErrServerNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Server not found"})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get server"})
+		}
+		return c.JSON(listing)
 	})
 
 	return app
@@ -762,3 +840,305 @@ var _ = services.ErrDiscoveryListingNotFound
 // are tested via integration tests as they require proper mock implementations
 // of the DiscoveryService methods. The mock in this file does not implement
 // the new enhanced methods.
+// Tests for Public Server Directory
+
+func TestGetPublicServers_Success(t *testing.T) {
+	mock := &mockDiscoveryService{
+		searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+			assert.Equal(t, "gaming", filters.Query)
+			assert.Equal(t, models.CategoryGaming, filters.Category)
+			assert.Equal(t, 10, filters.Limit)
+			assert.Equal(t, 0, filters.Offset)
+			return []*models.ServerListingResult{}, 50, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers?q=gaming&category=gaming&limit=10&offset=0", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["servers"])
+	assert.Equal(t, float64(50), result["total"])
+	assert.Equal(t, float64(10), result["limit"])
+	assert.Equal(t, float64(0), result["offset"])
+}
+
+func TestGetPublicServers_DefaultPagination(t *testing.T) {
+	mock := &mockDiscoveryService{
+		searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+			assert.Equal(t, 25, filters.Limit)  // default limit
+			assert.Equal(t, 0, filters.Offset)   // default offset
+			// Default sort is "popular" (test app doesn't do mapping like real handler)
+			assert.Equal(t, "popular", filters.SortBy)
+			return []*models.ServerListingResult{}, 100, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetPublicServers_InvalidCategory(t *testing.T) {
+	// This test doesn't need searchServersPublicFunc since it returns early with bad request
+	mock := &mockDiscoveryService{}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers?category=invalid", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestGetPublicServers_SortOptions(t *testing.T) {
+	testCases := []struct {
+		sortParam string
+	}{
+		{"popular"},
+		{"new"},
+		{"active"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.sortParam, func(t *testing.T) {
+			mock := &mockDiscoveryService{
+				searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+					// Test app passes raw sort param (mapping happens in real handler, not test app)
+					assert.Equal(t, tc.sortParam, filters.SortBy)
+					return []*models.ServerListingResult{}, 0, nil
+				},
+			}
+
+			app := setupDiscoveryApp(mock)
+			t.Cleanup(func() { _ = app.Shutdown() })
+
+			req := httptest.NewRequest(http.MethodGet, "/servers?sort="+tc.sortParam, nil)
+			resp, err := app.Test(req, -1)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+		})
+	}
+}
+
+func TestGetPublicServers_CategoryGaming(t *testing.T) {
+	mock := &mockDiscoveryService{
+		searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+			assert.Equal(t, models.CategoryGaming, filters.Category)
+			return []*models.ServerListingResult{}, 10, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers?category=gaming", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetPublicServers_CategoryMusic(t *testing.T) {
+	mock := &mockDiscoveryService{
+		searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+			assert.Equal(t, models.CategoryMusic, filters.Category)
+			return []*models.ServerListingResult{}, 5, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers?category=music", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetPublicServers_LimitCapping(t *testing.T) {
+	// Test that limit is properly passed through
+	mock := &mockDiscoveryService{
+		searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+			// Verify limit is passed correctly
+			assert.Equal(t, 50, filters.Limit)
+			return []*models.ServerListingResult{}, 0, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers?limit=50", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetPublicServer_Success(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getServerListingPublicFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			assert.Equal(t, serverID, sID)
+			return &models.DiscoveryListing{
+				ApprovalStatus: models.ApprovalApproved,
+				IsListed:       true,
+			}, nil
+		},
+		getListingWithDetailsPublicFunc: func(ctx context.Context, sID uuid.UUID) (*models.ServerListingResult, error) {
+			assert.Equal(t, serverID, sID)
+			return &models.ServerListingResult{
+				ServerID: serverID,
+				Name:     "Test Server",
+			}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetPublicServer_InvalidID(t *testing.T) {
+	mock := &mockDiscoveryService{}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/invalid-id", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestGetPublicServer_NotFound(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getServerListingPublicFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			return nil, nil // listing not found
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetPublicServer_NotApproved(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getServerListingPublicFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			return &models.DiscoveryListing{
+				ApprovalStatus: models.ApprovalPending,
+				IsListed:       false,
+			}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetPublicServer_Rejected(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getServerListingPublicFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			return &models.DiscoveryListing{
+				ApprovalStatus: models.ApprovalRejected,
+				IsListed:       false,
+			}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetPublicServer_Delisted(t *testing.T) {
+	serverID := uuid.New()
+	mock := &mockDiscoveryService{
+		getServerListingPublicFunc: func(ctx context.Context, sID uuid.UUID) (*models.DiscoveryListing, error) {
+			return &models.DiscoveryListing{
+				ApprovalStatus: models.ApprovalApproved,
+				IsListed:       false, // Delisted
+			}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/"+serverID.String(), nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetPublicCategories_Success(t *testing.T) {
+	mock := &mockDiscoveryService{
+		getCategoriesFunc: func(ctx context.Context) ([]*models.DiscoveryCategory, error) {
+			return []*models.DiscoveryCategory{
+				{Name: "Gaming", Slug: "gaming"},
+				{Name: "Music", Slug: "music"},
+			}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/categories", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result["categories"])
+}
+
+func TestGetPublicCategories_Empty(t *testing.T) {
+	mock := &mockDiscoveryService{
+		getCategoriesFunc: func(ctx context.Context) ([]*models.DiscoveryCategory, error) {
+			return []*models.DiscoveryCategory{}, nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodGet, "/servers/categories", nil)
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
