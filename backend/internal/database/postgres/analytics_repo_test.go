@@ -228,7 +228,7 @@ func TestAnalyticsRepo_GetRetentionMetrics_Success(t *testing.T) {
 	assert.Len(t, result.DailyActiveUsers, 2)
 	assert.Equal(t, 150, result.MAU)
 	assert.Equal(t, 500, result.TotalMembers)
-	assert.Equal(t, 55.0, result.AverageDAU) // (50+60)/2
+	assert.Equal(t, 55.0, result.AverageDAU)          // (50+60)/2
 	assert.InDelta(t, 0.367, result.Stickiness, 0.01) // 55/150
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
