@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http/httptest"
@@ -16,44 +17,12 @@ import (
 	"hearth/internal/services"
 )
 
-// MockAnalyticsService is a mock for the analytics service
+// MockAnalyticsService mocks the AnalyticsService for handler tests
 type MockAnalyticsService struct {
 	mock.Mock
 }
 
-func (m *MockAnalyticsService) GetMemberGrowth(ctx interface{}, serverID, requesterID uuid.UUID, days int) (*models.MemberGrowthResponse, error) {
-	args := m.Called(ctx, serverID, requesterID, days)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.MemberGrowthResponse), args.Error(1)
-}
-
-func (m *MockAnalyticsService) GetMessageActivity(ctx interface{}, serverID, requesterID uuid.UUID, days int) (*models.ActivityHeatmapResponse, error) {
-	args := m.Called(ctx, serverID, requesterID, days)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.ActivityHeatmapResponse), args.Error(1)
-}
-
-func (m *MockAnalyticsService) GetTopChannels(ctx interface{}, serverID, requesterID uuid.UUID, days, limit int) (*models.TopChannelsResponse, error) {
-	args := m.Called(ctx, serverID, requesterID, days, limit)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.TopChannelsResponse), args.Error(1)
-}
-
-func (m *MockAnalyticsService) GetRetention(ctx interface{}, serverID, requesterID uuid.UUID, days int) (*models.RetentionResponse, error) {
-	args := m.Called(ctx, serverID, requesterID, days)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.RetentionResponse), args.Error(1)
-}
-
-func (m *MockAnalyticsService) GetSummary(ctx interface{}, serverID, requesterID uuid.UUID) (*models.ServerInsightsResponse, error) {
+func (m *MockAnalyticsService) GetSummary(ctx context.Context, serverID, requesterID uuid.UUID) (*models.ServerInsightsResponse, error) {
 	args := m.Called(ctx, serverID, requesterID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -61,7 +30,39 @@ func (m *MockAnalyticsService) GetSummary(ctx interface{}, serverID, requesterID
 	return args.Get(0).(*models.ServerInsightsResponse), args.Error(1)
 }
 
-func (m *MockAnalyticsService) GetMostActiveUsers(ctx interface{}, serverID, requesterID uuid.UUID, days, limit int) ([]*models.ActiveUserStat, error) {
+func (m *MockAnalyticsService) GetMemberGrowth(ctx context.Context, serverID, requesterID uuid.UUID, days int) (*models.MemberGrowthResponse, error) {
+	args := m.Called(ctx, serverID, requesterID, days)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.MemberGrowthResponse), args.Error(1)
+}
+
+func (m *MockAnalyticsService) GetMessageActivity(ctx context.Context, serverID, requesterID uuid.UUID, days int) (*models.ActivityHeatmapResponse, error) {
+	args := m.Called(ctx, serverID, requesterID, days)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.ActivityHeatmapResponse), args.Error(1)
+}
+
+func (m *MockAnalyticsService) GetTopChannels(ctx context.Context, serverID, requesterID uuid.UUID, days, limit int) (*models.TopChannelsResponse, error) {
+	args := m.Called(ctx, serverID, requesterID, days, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.TopChannelsResponse), args.Error(1)
+}
+
+func (m *MockAnalyticsService) GetRetention(ctx context.Context, serverID, requesterID uuid.UUID, days int) (*models.RetentionResponse, error) {
+	args := m.Called(ctx, serverID, requesterID, days)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.RetentionResponse), args.Error(1)
+}
+
+func (m *MockAnalyticsService) GetMostActiveUsers(ctx context.Context, serverID, requesterID uuid.UUID, days, limit int) ([]*models.ActiveUserStat, error) {
 	args := m.Called(ctx, serverID, requesterID, days, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -69,26 +70,26 @@ func (m *MockAnalyticsService) GetMostActiveUsers(ctx interface{}, serverID, req
 	return args.Get(0).([]*models.ActiveUserStat), args.Error(1)
 }
 
-func (m *MockAnalyticsService) InvalidateCache(ctx interface{}, serverID uuid.UUID) error {
+func (m *MockAnalyticsService) InvalidateCache(ctx context.Context, serverID uuid.UUID) error {
 	args := m.Called(ctx, serverID)
 	return args.Error(0)
 }
 
-//lint:ignore U1000 test helper for future auth-context tests
-func setupTestAppWithAuth(t *testing.T, handler *AnalyticsHandler, userID uuid.UUID) *fiber.App {
-	t.Helper()
+// setupAnalyticsTestApp creates a Fiber app with the analytics handler and auth middleware
+func setupAnalyticsTestApp(handler *AnalyticsHandler, userID uuid.UUID) *fiber.App {
 	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
+	api := app.Group("/api/v1")
+	servers := api.Group("/servers")
 
-	// Auth middleware that sets userID
+	// Auth middleware
 	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("userID", userID)
+		if userID != uuid.Nil {
+			c.Locals("userID", userID)
+		}
 		return c.Next()
 	})
 
-	// Register routes
-	api := app.Group("/api/v1")
-	servers := api.Group("/servers")
+	// Register routes matching actual API structure
 	servers.Get("/:id/insights", handler.GetSummary)
 	servers.Get("/:id/insights/growth", handler.GetMemberGrowth)
 	servers.Get("/:id/insights/activity", handler.GetMessageActivity)
@@ -100,33 +101,428 @@ func setupTestAppWithAuth(t *testing.T, handler *AnalyticsHandler, userID uuid.U
 	return app
 }
 
-func TestAnalyticsHandler_GetSummary(t *testing.T) {
+// --- GetSummary tests ---
+
+func TestAnalyticsHandler_GetSummary_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
 	serverID := uuid.New()
+
+	expectedResp := &models.ServerInsightsResponse{
+		ServerID: serverID,
+		Period:   "7d",
+		Summary: &models.AnalyticsSummary{
+			MessagesToday:    100,
+			ActiveUsersToday: 20,
+			TotalMembers:     500,
+		},
+	}
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	var result models.ServerInsightsResponse
+	json.Unmarshal(body, &result)
+	assert.Equal(t, serverID, result.ServerID)
+	assert.Equal(t, "7d", result.Period)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetSummary_Unauthorized(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+
+	// No userID set (uuid.Nil)
+	app := setupAnalyticsTestApp(handler, uuid.Nil)
+	serverID := uuid.New()
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_GetSummary_InvalidServerID(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
 	userID := uuid.New()
 
-	_ = new(MockAnalyticsService)
-	_ = &AnalyticsHandler{analyticsService: &services.AnalyticsService{}}
-
-	// We need to use a real service here since mock doesn't match interface exactly
-	// For now, test the handler parsing logic
-	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
-	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("userID", userID)
-		return c.Next()
-	})
-
-	// Simple route that tests parsing
-	app.Get("/servers/:id/insights", func(c *fiber.Ctx) error {
-		id, err := uuid.Parse(c.Params("id"))
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "invalid server id"})
-		}
-		return c.JSON(fiber.Map{"server_id": id.String()})
-	})
-
-	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/insights", nil)
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/not-a-uuid/insights", nil)
 	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_GetSummary_ServerNotFound(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(nil, services.ErrServerNotFound)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_GetSummary_NotServerMember(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(nil, services.ErrNotServerMember)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_GetSummary_MissingPermission(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(nil, services.ErrMissingPermission)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_GetSummary_InternalError(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(nil, assert.AnError)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+}
+
+// --- GetMemberGrowth tests ---
+
+func TestAnalyticsHandler_GetMemberGrowth_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	now := time.Now()
+	expectedResp := &models.MemberGrowthResponse{
+		ServerID: serverID.String(),
+		Period:   "30d",
+		Data: []*models.MemberGrowthPoint{
+			{Date: now, Count: 100, Change: 5},
+		},
+	}
+
+	mockSvc.On("GetMemberGrowth", mock.Anything, serverID, userID, 30).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/growth?days=30", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	var result models.MemberGrowthResponse
+	json.Unmarshal(body, &result)
+	assert.Equal(t, "30d", result.Period)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetMemberGrowth_DefaultDays(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedResp := &models.MemberGrowthResponse{
+		ServerID: serverID.String(),
+		Period:   "7d",
+		Data:     []*models.MemberGrowthPoint{},
+	}
+
+	// Default days=7 when not specified
+	mockSvc.On("GetMemberGrowth", mock.Anything, serverID, userID, 7).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/growth", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetMemberGrowth_DaysCapped(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedResp := &models.MemberGrowthResponse{
+		ServerID: serverID.String(),
+		Period:   "90d",
+		Data:     []*models.MemberGrowthPoint{},
+	}
+
+	// Days capped at 90
+	mockSvc.On("GetMemberGrowth", mock.Anything, serverID, userID, 90).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/growth?days=200", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetMemberGrowth_Unauthorized(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+
+	app := setupAnalyticsTestApp(handler, uuid.Nil)
+	serverID := uuid.New()
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/growth", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+}
+
+// --- GetMessageActivity tests ---
+
+func TestAnalyticsHandler_GetMessageActivity_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedResp := &models.ActivityHeatmapResponse{
+		ServerID: serverID.String(),
+		Period:   "7d",
+		Data:     []*models.ActivityHourStat{},
+		PeakHours: []*models.PeakHour{
+			{Hour: 14, MessageCount: 100},
+		},
+	}
+
+	mockSvc.On("GetMessageActivity", mock.Anything, serverID, userID, 7).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/activity", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetMessageActivity_ServiceError(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetMessageActivity", mock.Anything, serverID, userID, 7).Return(nil, services.ErrServerNotFound)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/activity", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+}
+
+// --- GetTopChannels tests ---
+
+func TestAnalyticsHandler_GetTopChannels_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	now := time.Now()
+	expectedResp := &models.TopChannelsResponse{
+		ServerID: serverID.String(),
+		Period:   "7d",
+		Data: []*models.TopChannelStat{
+			{
+				ChannelID:     uuid.New(),
+				ChannelName:   "general",
+				ChannelType:   "text",
+				MessageCount:  500,
+				UniqueAuthors: 45,
+				LastActivity:  &now,
+			},
+		},
+	}
+
+	mockSvc.On("GetTopChannels", mock.Anything, serverID, userID, 7, 10).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/channels", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetTopChannels_WithDaysAndLimit(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedResp := &models.TopChannelsResponse{
+		ServerID: serverID.String(),
+		Period:   "14d",
+		Data:     []*models.TopChannelStat{},
+	}
+
+	mockSvc.On("GetTopChannels", mock.Anything, serverID, userID, 14, 25).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/channels?days=14&limit=25", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetTopChannels_LimitCapped(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedResp := &models.TopChannelsResponse{
+		ServerID: serverID.String(),
+		Period:   "7d",
+		Data:     []*models.TopChannelStat{},
+	}
+
+	// limit capped at 50
+	mockSvc.On("GetTopChannels", mock.Anything, serverID, userID, 7, 50).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/channels?limit=200", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+// --- GetRetention tests ---
+
+func TestAnalyticsHandler_GetRetention_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	now := time.Now()
+	expectedResp := &models.RetentionResponse{
+		ServerID: serverID.String(),
+		Period:   "30d",
+		Data: &models.RetentionMetrics{
+			MAU:          150,
+			TotalMembers: 500,
+			AverageDAU:   48.5,
+			Stickiness:   0.323,
+			DailyActiveUsers: []*models.DailyActiveUserPoint{
+				{Date: now, Count: 50},
+			},
+		},
+	}
+
+	mockSvc.On("GetRetention", mock.Anything, serverID, userID, 30).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/retention?days=30", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_GetRetention_DefaultDays(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedResp := &models.RetentionResponse{
+		ServerID: serverID.String(),
+		Period:   "30d",
+		Data:     &models.RetentionMetrics{},
+	}
+
+	// Default days=30 for retention endpoint
+	mockSvc.On("GetRetention", mock.Anything, serverID, userID, 30).Return(expectedResp, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/retention", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+// --- GetMostActiveUsers tests ---
+
+func TestAnalyticsHandler_GetMostActiveUsers_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	expectedUsers := []*models.ActiveUserStat{
+		{UserID: uuid.New(), MessageCount: 500, DaysActive: 5},
+	}
+
+	mockSvc.On("GetMostActiveUsers", mock.Anything, serverID, userID, 7, 10).Return(expectedUsers, nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/users", nil)
+	resp, err := app.Test(req)
+
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
@@ -134,31 +530,107 @@ func TestAnalyticsHandler_GetSummary(t *testing.T) {
 	var result map[string]interface{}
 	json.Unmarshal(body, &result)
 	assert.Equal(t, serverID.String(), result["server_id"])
+	assert.Equal(t, "7d", result["period"])
+	mockSvc.AssertExpectations(t)
 }
 
-func TestAnalyticsHandler_InvalidServerID(t *testing.T) {
+func TestAnalyticsHandler_GetMostActiveUsers_WithDaysAndLimit(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
 	userID := uuid.New()
+	serverID := uuid.New()
 
-	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
-	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("userID", userID)
-		return c.Next()
-	})
+	mockSvc.On("GetMostActiveUsers", mock.Anything, serverID, userID, 14, 25).Return([]*models.ActiveUserStat{}, nil)
 
-	app.Get("/servers/:id/insights", func(c *fiber.Ctx) error {
-		_, err := uuid.Parse(c.Params("id"))
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "invalid server id"})
-		}
-		return c.JSON(fiber.Map{})
-	})
-
-	req := httptest.NewRequest("GET", "/servers/not-a-uuid/insights", nil)
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("GET", "/api/v1/servers/"+serverID.String()+"/insights/users?days=14&limit=25", nil)
 	resp, err := app.Test(req)
+
 	assert.NoError(t, err)
-	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, 200, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
 }
+
+// --- InvalidateCache tests ---
+
+func TestAnalyticsHandler_InvalidateCache_Success(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	// GetSummary succeeds (permission check passes)
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(&models.ServerInsightsResponse{
+		ServerID: serverID,
+		Period:   "7d",
+	}, nil)
+	mockSvc.On("InvalidateCache", mock.Anything, serverID).Return(nil)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("POST", "/api/v1/servers/"+serverID.String()+"/insights/invalidate", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	json.Unmarshal(body, &result)
+	assert.Equal(t, true, result["success"])
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_InvalidateCache_Unauthorized(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+
+	app := setupAnalyticsTestApp(handler, uuid.Nil)
+	serverID := uuid.New()
+	req := httptest.NewRequest("POST", "/api/v1/servers/"+serverID.String()+"/insights/invalidate", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_InvalidateCache_GetSummaryFails(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(nil, services.ErrNotServerMember)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("POST", "/api/v1/servers/"+serverID.String()+"/insights/invalidate", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestAnalyticsHandler_InvalidateCache_InvalidateFails(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	mockSvc.On("GetSummary", mock.Anything, serverID, userID).Return(&models.ServerInsightsResponse{
+		ServerID: serverID,
+	}, nil)
+	mockSvc.On("InvalidateCache", mock.Anything, serverID).Return(assert.AnError)
+
+	app := setupAnalyticsTestApp(handler, userID)
+	req := httptest.NewRequest("POST", "/api/v1/servers/"+serverID.String()+"/insights/invalidate", nil)
+	resp, err := app.Test(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+	mockSvc.AssertExpectations(t)
+}
+
+// --- Parsing helper tests ---
 
 func TestAnalyticsHandler_ParseDays(t *testing.T) {
 	handler := &AnalyticsHandler{}
@@ -200,217 +672,78 @@ func TestAnalyticsHandler_ParseLimit(t *testing.T) {
 	assert.Equal(t, 50, handler.parseLimit("1000"))
 }
 
-func TestAnalyticsHandler_GetGrowth_QueryParams(t *testing.T) {
-	userID := uuid.New()
-	serverID := uuid.New()
+// --- handleError tests ---
 
-	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
-	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("userID", userID)
-		return c.Next()
-	})
-
-	handler := &AnalyticsHandler{}
-
-	app.Get("/servers/:id/insights/growth", func(c *fiber.Ctx) error {
-		_, err := uuid.Parse(c.Params("id"))
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "invalid server id"})
-		}
-		days := handler.parseDays(c.Query("days", "7"))
-		return c.JSON(fiber.Map{"days": days})
-	})
-
-	// Test with days=30
-	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/insights/growth?days=30", nil)
-	resp, err := app.Test(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-
-	body, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
-	json.Unmarshal(body, &result)
-	assert.Equal(t, float64(30), result["days"])
-}
-
-func TestAnalyticsHandler_GetTopChannels_QueryParams(t *testing.T) {
-	userID := uuid.New()
-	serverID := uuid.New()
-
-	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
-	app.Use(func(c *fiber.Ctx) error {
-		c.Locals("userID", userID)
-		return c.Next()
-	})
-
-	handler := &AnalyticsHandler{}
-
-	app.Get("/servers/:id/insights/channels", func(c *fiber.Ctx) error {
-		_, err := uuid.Parse(c.Params("id"))
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "invalid server id"})
-		}
-		days := handler.parseDays(c.Query("days", "7"))
-		limit := handler.parseLimit(c.Query("limit", "10"))
-		return c.JSON(fiber.Map{"days": days, "limit": limit})
-	})
-
-	// Test with days=14 and limit=25
-	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/insights/channels?days=14&limit=25", nil)
-	resp, err := app.Test(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-
-	body, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
-	json.Unmarshal(body, &result)
-	assert.Equal(t, float64(14), result["days"])
-	assert.Equal(t, float64(25), result["limit"])
-}
-
-func TestAnalyticsHandler_UnauthorizedAccess(t *testing.T) {
-	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
-	// No auth middleware - userID not set
-
-	app.Get("/servers/:id/insights", func(c *fiber.Ctx) error {
-		userIDVal := c.Locals("userID")
-		if userIDVal == nil {
-			return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
-		}
-		return c.JSON(fiber.Map{})
-	})
-
-	serverID := uuid.New()
-	req := httptest.NewRequest("GET", "/servers/"+serverID.String()+"/insights", nil)
-	resp, err := app.Test(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 401, resp.StatusCode)
-}
-
-func TestAnalyticsHandler_HandleError(t *testing.T) {
+func TestAnalyticsHandler_HandleError_ServerNotFound(t *testing.T) {
 	handler := &AnalyticsHandler{}
 
 	app := fiber.New()
-	t.Cleanup(func() { app.Shutdown() })
-	app.Get("/test/not-found", func(c *fiber.Ctx) error {
+	app.Get("/test", func(c *fiber.Ctx) error {
 		return handler.handleError(c, services.ErrServerNotFound)
 	})
-	app.Get("/test/not-member", func(c *fiber.Ctx) error {
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+}
+
+func TestAnalyticsHandler_HandleError_NotServerMember(t *testing.T) {
+	handler := &AnalyticsHandler{}
+
+	app := fiber.New()
+	app.Get("/test", func(c *fiber.Ctx) error {
 		return handler.handleError(c, services.ErrNotServerMember)
 	})
 
-	// Test server not found
-	req := httptest.NewRequest("GET", "/test/not-found", nil)
+	req := httptest.NewRequest("GET", "/test", nil)
 	resp, _ := app.Test(req)
-	assert.Equal(t, 404, resp.StatusCode)
-
-	// Test not a member
-	req = httptest.NewRequest("GET", "/test/not-member", nil)
-	resp, _ = app.Test(req)
-	assert.Equal(t, 403, resp.StatusCode)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }
 
-func TestAnalyticsSummaryResponse_Struct(t *testing.T) {
-	// Test response structure
-	summary := &models.AnalyticsSummary{
-		MessagesToday:        150,
-		ActiveUsersToday:     25,
-		MessagesWeek:         1200,
-		ActiveUsersWeek:      75,
-		TotalMembers:         500,
-		NewMembersWeek:       12,
-		MemberChangeWeek:     10,
-		MessageChangePercent: 15.5,
-	}
+func TestAnalyticsHandler_HandleError_MissingPermission(t *testing.T) {
+	handler := &AnalyticsHandler{}
 
-	response := &models.ServerInsightsResponse{
-		ServerID: uuid.New(),
-		Period:   "7d",
-		Summary:  summary,
-	}
+	app := fiber.New()
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return handler.handleError(c, services.ErrMissingPermission)
+	})
 
-	assert.Equal(t, "7d", response.Period)
-	assert.Equal(t, 150, response.Summary.MessagesToday)
-	assert.Equal(t, 15.5, response.Summary.MessageChangePercent)
+	req := httptest.NewRequest("GET", "/test", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }
 
-func TestMemberGrowthResponse_Struct(t *testing.T) {
-	now := time.Now()
-	response := &models.MemberGrowthResponse{
-		ServerID: uuid.New().String(),
-		Period:   "30d",
-		Data: []*models.MemberGrowthPoint{
-			{Date: now.AddDate(0, 0, -1), Count: 100, Change: 0},
-			{Date: now, Count: 105, Change: 5},
-		},
-	}
+func TestAnalyticsHandler_HandleError_PermissionString(t *testing.T) {
+	handler := &AnalyticsHandler{}
 
-	assert.Equal(t, "30d", response.Period)
-	assert.Len(t, response.Data, 2)
-	assert.Equal(t, 5, response.Data[1].Change)
+	app := fiber.New()
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return handler.handleError(c, fiber.NewError(fiber.StatusForbidden, "missing permission: MANAGE_SERVER"))
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }
 
-func TestActivityHeatmapResponse_Struct(t *testing.T) {
-	response := &models.ActivityHeatmapResponse{
-		ServerID: uuid.New().String(),
-		Period:   "7d",
-		Data: []*models.ActivityHourStat{
-			{DayOfWeek: 1, Hour: 14, MessageCount: 50, UniqueUsers: 10},
-		},
-		PeakHours: []*models.PeakHour{
-			{Hour: 14, MessageCount: 50},
-		},
-	}
-	response.TotalStats.TotalMessages = 50
-	response.TotalStats.AvgPerHour = 50.0
+func TestAnalyticsHandler_HandleError_InternalError(t *testing.T) {
+	handler := &AnalyticsHandler{}
 
-	assert.Equal(t, "7d", response.Period)
-	assert.Len(t, response.Data, 1)
-	assert.Equal(t, 50, response.TotalStats.TotalMessages)
+	app := fiber.New()
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return handler.handleError(c, assert.AnError)
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
 }
 
-func TestTopChannelsResponse_Struct(t *testing.T) {
-	now := time.Now()
-	response := &models.TopChannelsResponse{
-		ServerID: uuid.New().String(),
-		Period:   "7d",
-		Data: []*models.TopChannelStat{
-			{
-				ChannelID:     uuid.New(),
-				ChannelName:   "general",
-				ChannelType:   "text",
-				MessageCount:  500,
-				UniqueAuthors: 45,
-				LastActivity:  &now,
-			},
-		},
-	}
+// --- NewAnalyticsHandler tests ---
 
-	assert.Equal(t, "7d", response.Period)
-	assert.Len(t, response.Data, 1)
-	assert.Equal(t, "general", response.Data[0].ChannelName)
-}
-
-func TestRetentionResponse_Struct(t *testing.T) {
-	now := time.Now()
-	response := &models.RetentionResponse{
-		ServerID: uuid.New().String(),
-		Period:   "30d",
-		Data: &models.RetentionMetrics{
-			DailyActiveUsers: []*models.DailyActiveUserPoint{
-				{Date: now, Count: 50},
-			},
-			MAU:          150,
-			TotalMembers: 500,
-			AverageDAU:   48.5,
-			Stickiness:   0.323,
-		},
-	}
-
-	assert.Equal(t, "30d", response.Period)
-	assert.Equal(t, 150, response.Data.MAU)
-	assert.Equal(t, 0.323, response.Data.Stickiness)
+func TestNewAnalyticsHandler(t *testing.T) {
+	mockSvc := new(MockAnalyticsService)
+	handler := NewAnalyticsHandler(mockSvc)
+	assert.NotNil(t, handler)
+	assert.Equal(t, mockSvc, handler.analyticsService)
 }
