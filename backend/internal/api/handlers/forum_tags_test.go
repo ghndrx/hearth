@@ -542,15 +542,15 @@ func TestListPosts_Success(t *testing.T) {
 			assert.Equal(t, 25, limit)
 			assert.Equal(t, 0, offset)
 			return []*models.Thread{
-				{
-					ID:              threadID,
-					ParentChannelID: channelID,
-					Name:            "Test Thread",
-					AppliedTags:     []uuid.UUID{tagID},
-				},
-			}, []*models.ForumTag{
-				{ID: tagID, Name: "help"},
-			}, 1, nil
+					{
+						ID:              threadID,
+						ParentChannelID: channelID,
+						Name:            "Test Thread",
+						AppliedTags:     []uuid.UUID{tagID},
+					},
+				}, []*models.ForumTag{
+					{ID: tagID, Name: "help"},
+				}, 1, nil
 		},
 	}
 
