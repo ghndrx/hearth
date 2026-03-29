@@ -1,12 +1,10 @@
 package api
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 
 	"hearth/internal/api/handlers"
 	"hearth/internal/api/middleware"
@@ -33,18 +31,6 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		Limit:          600,
 		Window:         time.Second,
 		AuthMultiplier: 1.0,
-	})
-	// Invites: 5 per hour per user per channel (prevent invite spam / abuse)
-	inviteRateLimit := m.RateLimitWithConfig(middleware.RateLimitConfig{
-		Limit:  5,
-		Window: time.Hour,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			channelID := c.Params("id")
-			if userID, ok := c.Locals("userID").(uuid.UUID); ok {
-				return fmt.Sprintf("invite:user:%s:channel:%s", userID.String(), channelID)
-			}
-			return fmt.Sprintf("invite:ip:%s:channel:%s", c.IP(), channelID)
-		},
 	})
 
 	// API v1
@@ -89,33 +75,6 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		publicServers.Get("/", h.Discovery.GetPublicServers)
 		publicServers.Get("/categories", h.Discovery.GetPublicCategories)
 		publicServers.Get("/:id", h.Discovery.GetPublicServer)
-	}
-
-	// Enhanced Public Server Discovery (new endpoints)
-	if h.DiscoverableServer != nil {
-		discoverServers := v1.Group("/servers")
-		discoverServers.Get("/discover", h.DiscoverableServer.GetDiscoverableServers)
-		discoverServers.Get("/discover/featured", h.DiscoverableServer.GetFeaturedServers)
-		discoverServers.Get("/discover/trending", h.DiscoverableServer.GetTrendingServers)
-		discoverServers.Get("/discover/recommended", h.DiscoverableServer.GetRecommendedServers)
-		discoverServers.Get("/discover/search", h.DiscoverableServer.SearchServersEnhanced)
-		discoverServers.Get("/discover/home", h.DiscoverableServer.GetDiscoveryHomePage)
-		discoverServers.Get("/discover/categories/stats", h.DiscoverableServer.GetCategoriesWithStats)
-		discoverServers.Get("/discover/tags", h.DiscoverableServer.GetPopularTags)
-		discoverServers.Get("/discover/stats", h.DiscoverableServer.GetDiscoveryStats)
-		discoverServers.Get("/discover/suggestions", h.DiscoverableServer.GetSearchSuggestions)
-		discoverServers.Get("/categories", h.DiscoverableServer.GetCategories)
-		discoverServers.Get("/:id", h.DiscoverableServer.GetServerDetail)
-
-		// Public Discovery API (GET /discovery/servers, GET /discovery/categories)
-		discoveryPublic := v1.Group("/discovery")
-		discoveryPublic.Get("/servers", h.DiscoverableServer.GetDiscoverableServers)
-		discoveryPublic.Get("/categories", h.DiscoverableServer.GetCategories)
-		discoveryPublic.Get("/servers/search", h.DiscoverableServer.SearchServersEnhanced)
-		discoveryPublic.Get("/servers/featured", h.DiscoverableServer.GetFeaturedServers)
-		discoveryPublic.Get("/servers/trending", h.DiscoverableServer.GetTrendingServers)
-		discoveryPublic.Get("/servers/tags", h.DiscoverableServer.GetPopularTags)
-		discoveryPublic.Get("/servers/:id", h.DiscoverableServer.GetServerDetail)
 	}
 
 	// Protected routes
@@ -222,14 +181,6 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	servers.Patch("/:id", h.Servers.Update)
 	servers.Delete("/:id", h.Servers.Delete)
 	servers.Post("/:id/transfer-ownership", h.Servers.TransferOwnership)
-	servers.Post("/:id/join", h.DiscoverableServer.JoinServer)
-
-	// Server discovery registration (auth-protected, server owner only)
-	if h.DiscoverableServer != nil {
-		servers.Post("/:serverId/discover", h.DiscoverableServer.RegisterServer)
-		servers.Patch("/discover/:id", h.DiscoverableServer.UpdateRegisteredServer)
-		servers.Delete("/discover/:id", h.DiscoverableServer.DeleteRegisteredServer)
-	}
 
 	// Server members
 	servers.Get("/:id/members", h.Servers.GetMembers)
@@ -350,22 +301,6 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	threads.Get("/:id/tags", h.ForumTags.GetThreadTags)
 	threads.Put("/:id/pin", h.ForumTags.PinThread)
 
-	// Thread auto-archive
-	if h.ThreadAutoArchive != nil {
-		// Thread-level auto-archive status
-		threads.Get("/:id/auto-archive", h.ThreadAutoArchive.GetThreadAutoArchiveStatus)
-
-		// Channel-level auto-archive override
-		channels.Get("/:id/auto-archive", h.ThreadAutoArchive.GetChannelAutoArchiveOverride)
-		channels.Put("/:id/auto-archive", h.ThreadAutoArchive.SetChannelAutoArchiveOverride)
-		channels.Delete("/:id/auto-archive", h.ThreadAutoArchive.DeleteChannelAutoArchiveOverride)
-
-		// Server-level auto-archive settings
-		servers.Get("/:id/auto-archive", h.ThreadAutoArchive.GetServerAutoArchiveSettings)
-		servers.Patch("/:id/auto-archive", h.ThreadAutoArchive.UpdateServerAutoArchiveSettings)
-		servers.Get("/:id/auto-archive/stats", h.ThreadAutoArchive.GetServerAutoArchiveStats)
-	}
-
 	// Forum channel tags
 	channels.Get("/:id/tags", h.ForumTags.ListTags)
 	channels.Post("/:id/tags", h.ForumTags.CreateTag)
@@ -423,12 +358,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	}
 
 	// Channel invites
-	channels.Post("/:id/invites", inviteRateLimit, h.Channels.CreateInvite)
-
-	// Permission overrides
-	channels.Get("/:id/permission-overwrites", h.Channels.GetPermissionOverrides)
-	channels.Put("/:id/permission-overwrites", h.Channels.SetPermissionOverride)
-	channels.Delete("/:id/permission-overwrites/:targetType/:targetId", h.Channels.DeletePermissionOverride)
+	channels.Post("/:id/invites", h.Channels.CreateInvite)
 
 	// Permission overrides
 	channels.Get("/:id/permission-overwrites", h.Channels.GetPermissionOverrides)
