@@ -46,7 +46,8 @@
 			if (stored) {
 				recentStickers = JSON.parse(stored);
 			}
-		} catch {
+		} catch (err) {
+			console.error('[StickerPicker] Failed to load recent stickers:', err);
 			recentStickers = [];
 		}
 	}
@@ -55,8 +56,8 @@
 	function saveRecentStickers() {
 		try {
 			localStorage.setItem(RECENT_STICKERS_KEY, JSON.stringify(recentStickers));
-		} catch {
-			// Ignore localStorage errors
+		} catch (err) {
+			console.error('[StickerPicker] Failed to save recent stickers:', err);
 		}
 	}
 
@@ -89,8 +90,8 @@
 				try {
 					const serverResponse = await api.get<Sticker[]>(`/servers/${$currentServer.id}/stickers`);
 					serverStickers = serverResponse || [];
-				} catch {
-					// Server might not have stickers or user might not have access
+				} catch (err) {
+					console.error('[StickerPicker] Failed to load server stickers:', err);
 					serverStickers = [];
 				}
 			}
