@@ -754,3 +754,11 @@ func TestSetFeatured_NotFound(t *testing.T) {
 
 // Ensure services import is used
 var _ = services.ErrDiscoveryListingNotFound
+
+// Tests for enhanced discovery features
+
+
+// Note: Enhanced discovery features (trending, stats, tags, page, enhanced search)
+// are tested via integration tests as they require proper mock implementations
+// of the DiscoveryService methods. The mock in this file does not implement
+// the new enhanced methods.
