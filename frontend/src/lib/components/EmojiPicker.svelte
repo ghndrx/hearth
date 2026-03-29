@@ -132,7 +132,8 @@
         recentEmojis = JSON.parse(stored);
         categories[0].emojis = recentEmojis;
       }
-    } catch {
+    } catch (err) {
+      console.error('[EmojiPicker] Failed to load recent emojis:', err);
       recentEmojis = [];
     }
   }
@@ -141,8 +142,8 @@
   function saveRecentEmojis() {
     try {
       localStorage.setItem(RECENT_EMOJIS_KEY, JSON.stringify(recentEmojis));
-    } catch {
-      // Ignore localStorage errors
+    } catch (err) {
+      console.error('[EmojiPicker] Failed to save recent emojis:', err);
     }
   }
 

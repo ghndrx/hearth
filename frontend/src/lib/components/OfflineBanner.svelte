@@ -59,7 +59,8 @@
         // Still offline - show feedback
         reconnecting = false;
       }
-    } catch {
+    } catch (err) {
+      console.error('[OfflineBanner] Connectivity check failed:', err);
       reconnecting = false;
     }
   }

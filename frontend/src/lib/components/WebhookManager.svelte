@@ -46,8 +46,8 @@
 				try {
 					const channelWebhooks = await api.get<Webhook[]>(`/channels/${channel.id}/webhooks`);
 					allWebhooks.push(...channelWebhooks);
-				} catch {
-					// Skip channels we can't access
+				} catch (err) {
+					console.error('[WebhookManager] Failed to load webhooks for channel:', channel.id, err);
 				}
 			}
 			webhooks = allWebhooks;
