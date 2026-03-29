@@ -920,3 +920,191 @@ func (h *ChannelHandler) CreateInvite(c *fiber.Ctx) error {
 		"created_at":  invite.CreatedAt,
 	})
 }
+
+// GetPermissionOverrides returns all permission overrides for a channel
+// @Summary Get permission overrides
+// @Description Retrieves all permission overrides for a channel
+// @Tags Channels
+// @Produce json
+// @Param id path string true "Channel ID"
+// @Success 200 {array} models.PermissionOverride "List of permission overrides"
+// @Failure 400 {object} fiber.Map "Invalid channel ID"
+// @Failure 403 {object} fiber.Map "Access denied"
+// @Failure 404 {object} fiber.Map "Channel not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /channels/{id}/permission-overwrites [get]
+func (h *ChannelHandler) GetPermissionOverrides(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	overrides, err := h.channelService.GetPermissionOverrides(c.Context(), channelID, userID)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		case services.ErrMissingManageChannels:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "missing permissions",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get permission overrides",
+			})
+		}
+	}
+
+	return c.JSON(overrides)
+}
+
+// SetPermissionOverride creates or updates a permission override for a channel
+// @Summary Set permission override
+// @Description Creates or updates a permission override for a user or role in a channel
+// @Tags Channels
+// @Accept json
+// @Produce json
+// @Param id path string true "Channel ID"
+// @Param body body struct{TargetType string `json:"target_type"`; TargetID string `json:"target_id"`; Allow int64 `json:"allow"`; Deny int64 `json:"deny"`} true "Permission override data"
+// @Success 200 {object} models.PermissionOverride "Permission override updated"
+// @Failure 400 {object} fiber.Map "Invalid channel ID or request body"
+// @Failure 403 {object} fiber.Map "Access denied"
+// @Failure 404 {object} fiber.Map "Channel not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /channels/{id}/permission-overwrites [put]
+func (h *ChannelHandler) SetPermissionOverride(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	var req struct {
+		TargetType string `json:"target_type"` // "role" or "user"
+		TargetID   string `json:"target_id"`
+		Allow      int64  `json:"allow"`
+		Deny       int64  `json:"deny"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.TargetType != "role" && req.TargetType != "user" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "target_type must be 'role' or 'user'",
+		})
+	}
+
+	targetID, err := uuid.Parse(req.TargetID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid target_id",
+		})
+	}
+
+	override, err := h.channelService.SetPermissionOverride(c.Context(), channelID, targetID, req.TargetType, req.Allow, req.Deny, userID)
+	if err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		case services.ErrMissingManageChannels:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "missing permissions",
+			})
+		case services.ErrCannotDeleteDM:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "cannot set permissions on DM channel",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to set permission override",
+			})
+		}
+	}
+
+	return c.JSON(override)
+}
+
+// DeletePermissionOverride removes a permission override from a channel
+// @Summary Delete permission override
+// @Description Removes a permission override from a channel
+// @Tags Channels
+// @Param id path string true "Channel ID"
+// @Param targetType path string true "Target type (role or user)"
+// @Param targetId path string true "Target ID"
+// @Success 204 "Permission override deleted successfully"
+// @Failure 400 {object} fiber.Map "Invalid channel ID or target"
+// @Failure 403 {object} fiber.Map "Access denied"
+// @Failure 404 {object} fiber.Map "Channel not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /channels/{id}/permission-overwrites/{targetType}/{targetId} [delete]
+func (h *ChannelHandler) DeletePermissionOverride(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	targetType := c.Params("targetType")
+	if targetType != "role" && targetType != "user" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "target_type must be 'role' or 'user'",
+		})
+	}
+
+	targetID, err := uuid.Parse(c.Params("targetId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid target_id",
+		})
+	}
+
+	if err := h.channelService.DeletePermissionOverride(c.Context(), channelID, targetID, targetType, userID); err != nil {
+		switch err {
+		case services.ErrChannelNotFound:
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "channel not found",
+			})
+		case services.ErrNotServerMember:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "not a server member",
+			})
+		case services.ErrMissingManageChannels:
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "missing permissions",
+			})
+		case services.ErrCannotDeleteDM:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "cannot delete permissions on DM channel",
+			})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to delete permission override",
+			})
+		}
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
