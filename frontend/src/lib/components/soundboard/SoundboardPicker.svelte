@@ -50,7 +50,8 @@
 			if (stored) {
 				recentSounds = JSON.parse(stored);
 			}
-		} catch {
+		} catch (err) {
+			console.error('[SoundboardPicker] Failed to load recent sounds:', err);
 			recentSounds = [];
 		}
 	}
@@ -59,8 +60,8 @@
 	function saveRecentSounds() {
 		try {
 			localStorage.setItem(RECENT_SOUNDS_KEY, JSON.stringify(recentSounds));
-		} catch {
-			// Ignore localStorage errors
+		} catch (err) {
+			console.error('[SoundboardPicker] Failed to save recent sounds:', err);
 		}
 	}
 
@@ -93,8 +94,8 @@
 				try {
 					const serverResponse = await api.get<Sound[]>(`/servers/${$currentServer.id}/soundboard`);
 					serverSounds = serverResponse || [];
-				} catch {
-					// Server might not have sounds or user might not have access
+				} catch (err) {
+					console.error('[SoundboardPicker] Failed to load server sounds:', err);
 					serverSounds = [];
 				}
 			}

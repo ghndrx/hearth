@@ -65,8 +65,8 @@
 				const { x, y } = JSON.parse(savedPosition);
 				positionX = x;
 				positionY = y;
-			} catch {
-				// Ignore parse errors
+			} catch (err) {
+				console.error('[VoiceCallOverlay] Failed to load saved position:', err);
 			}
 		}
 

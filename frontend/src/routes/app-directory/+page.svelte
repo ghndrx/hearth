@@ -151,7 +151,8 @@
 			userReview = { rating: review.rating, review_text: review.review_text };
 			reviewText = review.review_text || '';
 			reviewRating = review.rating;
-		} catch {
+		} catch (err) {
+			console.error('[AppDirectory] Failed to load user review:', err);
 			userReview = null;
 		}
 	}
