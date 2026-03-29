@@ -508,81 +508,7 @@ func (h *DiscoveryHandler) GetServersByTags(c *fiber.Ctx) error {
 	})
 }
 
-// GetPublicServers returns public server directory with search, category filter, and pagination
-// GET /api/v1/servers (public - no auth required)
-func (h *DiscoveryHandler) GetPublicServers(c *fiber.Ctx) error {
-	filters := &models.DiscoveryFilters{
-		Query:     c.Query("q"),
-		Category:  models.ServerCategory(c.Query("category")),
-		SortBy:    c.Query("sort", "popular"), // popular, new, active
-		SortOrder: c.Query("order", "desc"),
-	}
-
-	// Parse pagination
-	limit, _ := strconv.Atoi(c.Query("limit", "25"))
-	if limit <= 0 || limit > 100 {
-		limit = 25
-	}
-	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-	if offset < 0 {
-		offset = 0
-	}
-	filters.Limit = limit
-	filters.Offset = offset
-
-	// Validate sort parameter - map to internal sort values
-	switch filters.SortBy {
-	case "popular":
-		filters.SortBy = "members" // Sort by member count
-	case "new":
-		filters.SortBy = "newest" // Sort by creation date
-	case "active":
-		filters.SortBy = "engagement" // Sort by engagement score
-	default:
-		filters.SortBy = "members"
-	}
-
-	// Validate category if provided
-	if filters.Category != "" {
-		validCategories := map[models.ServerCategory]bool{
-			models.CategoryGaming:        true,
-			models.CategoryMusic:         true,
-			models.CategoryTechnology:   true,
-			models.CategoryArt:           true,
-			models.CategoryEducation:     true,
-			models.CategoryScience:        true,
-			models.CategoryEntertainment: true,
-			models.CategorySocial:         true,
-			models.CategorySports:         true,
-			models.CategoryAnime:          true,
-			models.CategoryFashion:        true,
-			models.CategoryFood:           true,
-			models.CategoryBusiness:       true,
-			models.CategoryLanguage:       true,
-		}
-		if !validCategories[filters.Category] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid category",
-			})
-		}
-	}
-
-	servers, total, err := h.discovery.SearchServers(c.Context(), filters)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to get servers",
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"servers": servers,
-		"total":   total,
-		"limit":   limit,
-		"offset":  offset,
-	})
-}
-
-// GetPublicServer returns a single server from the public directory
+// GetDiscoveryPage returns the full discovery page data
 // GET /api/v1/discovery/page
 func (h *DiscoveryHandler) GetDiscoveryPage(c *fiber.Ctx) error {
 	featuredLimit, _ := strconv.Atoi(c.Query("featured_limit", "5"))
@@ -657,56 +583,5 @@ func (h *DiscoveryHandler) SearchServersEnhanced(c *fiber.Ctx) error {
 		"total":   total,
 		"limit":   filters.Limit,
 		"offset":  filters.Offset,
-	})
-}
-// GET /api/v1/servers/:id (public - no auth required)
-func (h *DiscoveryHandler) GetPublicServer(c *fiber.Ctx) error {
-	serverID, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid server ID",
-		})
-	}
-
-	listing, err := h.discovery.GetDiscoveryListingWithDetails(c.Context(), serverID)
-	if err != nil {
-		if err == services.ErrDiscoveryListingNotFound || err == services.ErrServerNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Server not found",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to get server",
-		})
-	}
-
-	// Check if listing is approved and visible
-	listingCheck, listingErr := h.discovery.GetServerListing(c.Context(), serverID)
-	if listingErr != nil || listingCheck == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Server not found",
-		})
-	}
-	if listingCheck.ApprovalStatus != models.ApprovalApproved || !listingCheck.IsListed {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Server not found",
-		})
-	}
-
-	return c.JSON(listing)
-}
-
-// GetPublicCategories returns all public discovery categories
-// GET /api/v1/servers/categories (public - no auth required)
-func (h *DiscoveryHandler) GetPublicCategories(c *fiber.Ctx) error {
-	categories, err := h.discovery.GetCategories(c.Context())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to get categories",
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"categories": categories,
 	})
 }
