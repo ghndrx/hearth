@@ -2,7 +2,7 @@
 # Multi-stage build for minimal, secure production image
 # Security best practices applied throughout
 
-ARG GO_VERSION=1.22
+ARG GO_VERSION=1.25.8
 ARG NODE_VERSION=22
 ARG ALPINE_VERSION=3.20
 
