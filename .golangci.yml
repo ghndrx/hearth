@@ -16,3 +16,5 @@ linters:
 formatters:
   enable:
     - gofmt
+
+
