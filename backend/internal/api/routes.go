@@ -69,6 +69,14 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		authProtected.Delete("/sessions/:id", h.Sessions.RevokeSession)
 	}
 
+	// Public Server Directory (no auth required)
+	if h.Discovery != nil {
+		publicServers := v1.Group("/servers")
+		publicServers.Get("/", h.Discovery.GetPublicServers)
+		publicServers.Get("/categories", h.Discovery.GetPublicCategories)
+		publicServers.Get("/:id", h.Discovery.GetPublicServer)
+	}
+
 	// Protected routes
 	api := v1.Group("", m.RequireAuth)
 
