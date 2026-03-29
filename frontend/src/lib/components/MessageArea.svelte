@@ -110,21 +110,25 @@
 	}
 
 	async function handleSendMessage() {
-		if (!messageInput.trim() || !$activeChannel) return;
+		if ((!messageInput.trim() && pendingFiles.length === 0) || !$activeChannel) return;
 
 		const content = messageInput.trim();
 		const replyToId = replyingTo?.id;
+		const filesToSend = [...pendingFiles];
 		
-		console.log('[MessageArea] Sending message to channel:', $activeChannel.id, 'content:', content);
+		console.log('[MessageArea] Sending message to channel:', $activeChannel.id, 'content:', content, 'files:', filesToSend.length);
 		
 		messageInput = '';
 		replyingTo = null;
+		pendingFiles = [];
 		
 		try {
-			const result = await sendMessageFn($activeChannel.id, content, [], replyToId);
+			const result = await sendMessageFn($activeChannel.id, content, filesToSend, replyToId);
 			console.log('[MessageArea] Message sent successfully:', result);
 		} catch (error) {
 			console.error('[MessageArea] Failed to send message:', error);
+			// Restore pending files on error
+			pendingFiles = filesToSend;
 		}
 	}
 	
@@ -499,7 +503,33 @@
 				aria-hidden="true"
 			/>
 			
-			<div class="bg-dark-600 flex items-end" class:rounded-lg={!replyingTo} class:rounded-b-lg={replyingTo} role="group" aria-label="Message composition">
+			<!-- Attachments Preview -->
+			{#if pendingFiles.length > 0}
+				<div class="attachments-preview" role="list" aria-label="Attached files">
+					{#each pendingFiles as file, i (i)}
+						<div class="attachment-preview" role="listitem">
+							{#if file.type.startsWith('image/')}
+								<img src={URL.createObjectURL(file)} alt="Attachment: {file.name}" />
+							{:else}
+								<div class="file-preview">
+									<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+										<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+									</svg>
+									<span>{file.name}</span>
+								</div>
+							{/if}
+							<button class="remove-attachment" on:click={() => removeFile(i)} aria-label="Remove {file.name}" type="button">
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+									<line x1="18" y1="6" x2="6" y2="18" />
+									<line x1="6" y1="6" x2="18" y2="18" />
+								</svg>
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			
+			<div class="bg-dark-600 flex items-end" class:rounded-lg={!replyingTo && pendingFiles.length === 0} class:rounded-t-lg={pendingFiles.length > 0} class:rounded-b-lg={replyingTo && pendingFiles.length === 0} role="group" aria-label="Message composition">
 				<button class="p-3 text-gray-400 hover:text-gray-200" aria-label="Upload file" type="button" on:click={openFilePicker}>
 					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -590,5 +620,64 @@
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	/* Attachment preview styles */
+	.attachments-preview {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		padding: 8px 16px;
+		background: var(--bg-secondary, #2b2d31);
+		border-radius: 0;
+	}
+
+	.attachment-preview {
+		position: relative;
+		max-width: 200px;
+	}
+
+	.attachment-preview img {
+		max-width: 200px;
+		max-height: 150px;
+		border-radius: 4px;
+	}
+
+	.file-preview {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		background: var(--bg-tertiary, #1e1f22);
+		border-radius: 4px;
+		color: #d3d6db;
+		font-size: 13px;
+		max-width: 200px;
+	}
+
+	.file-preview span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.remove-attachment {
+		position: absolute;
+		top: -8px;
+		right: -8px;
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: var(--status-danger, #f23f43);
+		border: none;
+		color: white;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.remove-attachment:hover {
+		background: var(--status-danger-hover, #c73c3f);
 	}
 </style>
