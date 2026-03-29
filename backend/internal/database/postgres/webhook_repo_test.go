@@ -58,19 +58,18 @@ func TestWebhookRepository_Create_WithOptionalFields(t *testing.T) {
 	creatorID := uuid.New()
 	avatar := "default avatar"
 	webhook := &models.Webhook{
-<<<<<<< HEAD
-		ID:             uuid.New(),
-		Type:           models.WebhookTypeIncoming,
-		ServerID:       &serverID,
-		ChannelID:      uuid.New(),
-		CreatorID:      &creatorID,
-		Name:           "test-webhook",
-		Avatar:         &avatar,
-		Token:          "test-token",
-		ApplicationID:  nil,
-		SourceServerID: nil,
+		ID:              uuid.New(),
+		Type:            models.WebhookTypeIncoming,
+		ServerID:        &serverID,
+		ChannelID:       uuid.New(),
+		CreatorID:       &creatorID,
+		Name:            "test-webhook",
+		Avatar:          &avatar,
+		Token:           "test-token",
+		ApplicationID:   nil,
+		SourceServerID:  nil,
 		SourceChannelID: nil,
-		CreatedAt:      time.Now(),
+		CreatedAt:       time.Now(),
 	}
 
 	mock.ExpectExec("INSERT INTO webhooks").
