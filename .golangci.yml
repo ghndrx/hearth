@@ -7,14 +7,3 @@ linters:
   default: none
   enable:
     - govet
-  exclusions:
-    rules:
-      - path: _test\.go
-        linters:
-          - govet
-
-formatters:
-  enable:
-    - gofmt
-
-
