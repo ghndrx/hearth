@@ -150,9 +150,12 @@ jobs:
 
       - name: Go linter
         if: hashFiles('backend/**/*.go')
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v7
         with:
+          version: v2.11.4
+          install-mode: binary
           working-directory: ./backend
+          args: --config=../.golangci.yml
 
       - name: ESLint
         if: hashFiles('frontend/**/*.ts')
