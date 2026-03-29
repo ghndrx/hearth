@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, afterUpdate } from 'svelte';
-	import { messages, loadMessages, toggleReaction, addReaction } from '$lib/stores/messages';
+	import { messages, loadMessages, toggleReaction, addReaction, jumpToMessage } from '$lib/stores/messages';
 	import { currentChannel } from '$lib/stores/channels';
 	import { user } from '$lib/stores/auth';
 	import { currentServer } from '$lib/stores/servers';
@@ -47,6 +47,25 @@
 			messageContainer.scrollTop = messageContainer.scrollHeight;
 		}
 	});
+
+	// Handle jump to message from pinned panel or search results
+	function scrollToMessage(messageId: string) {
+		if (!messageContainer) return;
+		const el = messageContainer.querySelector(`[data-message-id="${messageId}"]`);
+		if (el) {
+			el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			// Flash highlight
+			el.classList.add('message-highlight');
+			setTimeout(() => el.classList.remove('message-highlight'), 1500);
+			// Clear the jump target after scrolling
+			jumpToMessage.clear();
+		}
+	}
+
+	// React to jumpToMessage store changes
+	$: if ($jumpToMessage.messageId && $jumpToMessage.channelId === $currentChannel?.id) {
+		scrollToMessage($jumpToMessage.messageId);
+	}
 
 	function formatDate(date: string) {
 		const d = new Date(date);
@@ -234,5 +253,15 @@
 
 	.message-list-container::-webkit-scrollbar-thumb:hover {
 		background: #232428;
+	}
+
+	/* Highlight animation for jump-to-message */
+	.message-highlight {
+		animation: highlight-flash 1.5s ease-out;
+	}
+	
+	@keyframes highlight-flash {
+		0% { background-color: rgba(239, 68, 68, 0.3); }
+		100% { background-color: transparent; }
 	}
 </style>
