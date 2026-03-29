@@ -59,6 +59,7 @@ export const PERMISSIONS = {
 	MOVE_MEMBERS: { name: 'Move Members', description: 'Allows moving members between voice channels' },
 	USE_VAD: { name: 'Use Voice Activity', description: 'Allows using voice activity detection' },
 	PRIORITY_SPEAKER: { name: 'Priority Speaker', description: 'Allows being heard more easily in voice channels' },
+	MANAGE_EVENTS: { name: 'Manage Events', description: 'Allows creating, editing, and managing server events' },
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
