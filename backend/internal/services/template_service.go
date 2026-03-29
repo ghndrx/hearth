@@ -132,6 +132,12 @@ func (s *TemplateService) CreateTemplate(
 
 // serializeServer captures the current structure of a server for templating
 func (s *TemplateService) serializeServer(ctx context.Context, serverID uuid.UUID) (*models.TemplateSerializedData, error) {
+	// Get server settings first
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get channels
 	channels, err := s.channelRepo.GetByServerID(ctx, serverID)
 	if err != nil {
@@ -201,7 +207,12 @@ func (s *TemplateService) serializeServer(ctx context.Context, serverID uuid.UUI
 	return &models.TemplateSerializedData{
 		Channels: templateChannels,
 		Roles:    templateRoles,
-		Settings: models.TemplateSettings{}, // TODO: add server settings to model if needed
+		Settings: models.TemplateSettings{
+			VerificationLevel:     server.VerificationLevel,
+			ExplicitContentFilter: server.ExplicitContentFilter,
+			DefaultNotifications:  server.DefaultNotifications,
+			AFKTimeout:            server.AFKTimeout,
+		},
 	}, nil
 }
 
