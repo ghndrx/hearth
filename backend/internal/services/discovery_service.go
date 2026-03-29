@@ -24,6 +24,7 @@ var (
 type DiscoveryRepo interface {
 	GetFeaturedServers(ctx context.Context, limit int) ([]*models.FeaturedServer, error)
 	SearchServers(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error)
+	SearchServersEnhanced(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error)
 	GetServersByCategory(ctx context.Context, categorySlug string, limit, offset int) ([]*models.ServerListingResult, int, error)
 	GetCategories(ctx context.Context) ([]*models.DiscoveryCategory, error)
 	GetServerListing(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
@@ -38,6 +39,10 @@ type DiscoveryRepo interface {
 	GetCategoriesBySlug(ctx context.Context, slugs []string) ([]uuid.UUID, error)
 	CreateReport(ctx context.Context, report *models.DiscoveryReport) error
 	GetRecommendedServers(ctx context.Context, userID uuid.UUID, limit int) ([]*models.ServerListingResult, error)
+	GetTrendingServers(ctx context.Context, limit int) ([]*models.TrendingServer, error)
+	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryStats, error)
+	GetPopularTags(ctx context.Context, limit int) ([]*models.DiscoveryTag, error)
+	GetServersByTags(ctx context.Context, tags []string, limit, offset int) ([]*models.ServerListingResult, int, error)
 }
 
 // DiscoveryServerRepo for discovery (subset interface)
@@ -363,6 +368,83 @@ func (s *DiscoveryService) GetDiscoveryListingWithDetails(ctx context.Context, s
 	}
 
 	return result, nil
+}
+
+// GetTrendingServers returns trending servers based on growth and engagement
+func (s *DiscoveryService) GetTrendingServers(ctx context.Context, limit int) ([]*models.TrendingServer, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	return s.repo.GetTrendingServers(ctx, limit)
+}
+
+// GetDiscoveryStats returns overall discovery statistics
+func (s *DiscoveryService) GetDiscoveryStats(ctx context.Context) (*models.DiscoveryStats, error) {
+	return s.repo.GetDiscoveryStats(ctx)
+}
+
+// GetPopularTags returns the most popular discovery tags
+func (s *DiscoveryService) GetPopularTags(ctx context.Context, limit int) ([]*models.DiscoveryTag, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	return s.repo.GetPopularTags(ctx, limit)
+}
+
+// GetServersByTags returns servers matching the given tags
+func (s *DiscoveryService) GetServersByTags(ctx context.Context, tags []string, limit, offset int) ([]*models.ServerListingResult, int, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	return s.repo.GetServersByTags(ctx, tags, limit, offset)
+}
+
+// SearchServersEnhanced searches servers with enhanced filters
+func (s *DiscoveryService) SearchServersEnhanced(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
+	return s.repo.SearchServersEnhanced(ctx, filters)
+}
+
+// GetDiscoveryPage returns the full discovery page data
+func (s *DiscoveryService) GetDiscoveryPage(ctx context.Context, userID uuid.UUID, featuredLimit, trendingLimit int) (*models.DiscoveryPage, error) {
+	if featuredLimit <= 0 || featuredLimit > 20 {
+		featuredLimit = 5
+	}
+	if trendingLimit <= 0 || trendingLimit > 20 {
+		trendingLimit = 10
+	}
+
+	featured, err := s.GetFeaturedServers(ctx, featuredLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	trending, err := s.GetTrendingServers(ctx, trendingLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	categories, err := s.GetCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stats, err := s.GetDiscoveryStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert FeaturedServer to ServerListingResult for featured field
+	featuredResults := make([]*models.ServerListingResult, len(featured))
+	for i, f := range featured {
+		featuredResults[i] = &f.ServerListingResult
+	}
+
+	return &models.DiscoveryPage{
+		Featured:    featured,
+		Trending:    trending,
+		Categories:  categories,
+		Stats:       stats,
+	}, nil
 }
 
 // Helper to convert category slice
