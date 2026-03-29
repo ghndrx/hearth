@@ -36,7 +36,7 @@ PROJECT_STATUS.md
 .secret_key
 *.swo
 *.swp
-TASK_QUEUE.md
+# TASK_QUEUE.md - Now tracked for competitive intelligence
 temp/
 # Temporary
 # Test coverage
@@ -62,7 +62,7 @@ AI_CHAT_FEATURE.md
 SECURITY_AUDIT.md
 AUDIT_REPORT.md
 AUDIT_REPORT_*.md
-TASK_QUEUE.md
+# TASK_QUEUE.md - Now tracked for competitive intelligence
 TODO_*.md
 *_REPORT_*.md
 *_AUDIT_*.md
@@ -100,7 +100,7 @@ TIER2_REVIEW_REPORT*.md
 SECURITY_AUDIT.md
 
 # PRD and documentation (local planning)
-PRDs/
+# PRDs/ - Now tracked for competitive intelligence
 docs/
 RESEARCH_*.md
 ARCHITECTURE_OVERVIEW.md
@@ -108,7 +108,7 @@ MULTI_AGENT_WORKFLOW.md
 MULTI_AGENT*.md
 
 # Task tracking
-TASK_QUEUE.md
+# TASK_QUEUE.md - Now tracked for competitive intelligence
 opencode-task.md
 
 # Local build artifacts
