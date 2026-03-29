@@ -164,6 +164,16 @@ func (m *MockChannelRepositoryForScreenShare) GetPermissionOverrides(ctx context
 	return args.Get(0).([]models.PermissionOverride), args.Error(1)
 }
 
+func (m *MockChannelRepositoryForScreenShare) UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error {
+	args := m.Called(ctx, override)
+	return args.Error(0)
+}
+
+func (m *MockChannelRepositoryForScreenShare) DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error {
+	args := m.Called(ctx, channelID, targetID, targetType)
+	return args.Error(0)
+}
+
 func (m *MockChannelRepositoryForScreenShare) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
 	args := m.Called(ctx, channelID, userID)
 	return args.Error(0)

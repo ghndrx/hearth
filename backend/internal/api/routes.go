@@ -352,6 +352,11 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	// Channel invites
 	channels.Post("/:id/invites", h.Channels.CreateInvite)
 
+	// Permission overrides
+	channels.Get("/:id/permission-overwrites", h.Channels.GetPermissionOverrides)
+	channels.Put("/:id/permission-overwrites", h.Channels.SetPermissionOverride)
+	channels.Delete("/:id/permission-overwrites/:targetType/:targetId", h.Channels.DeletePermissionOverride)
+
 	// Channel polls
 	if h.Polls != nil {
 		channels.Get("/:id/polls", h.Polls.GetChannelPolls)

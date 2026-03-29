@@ -436,3 +436,156 @@ func (s *ChannelService) GetSharedChannelsWithServerNames(ctx context.Context, u
 	// Fallback: return empty
 	return []SharedChannelInfo{}, 0, nil
 }
+
+// GetPermissionOverrides returns all permission overrides for a channel
+func (s *ChannelService) GetPermissionOverrides(ctx context.Context, channelID, requesterID uuid.UUID) ([]models.PermissionOverride, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// For server channels, check permissions
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+		if s.permService != nil {
+			if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageChannels); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return s.channelRepo.GetPermissionOverrides(ctx, channelID)
+}
+
+// SetPermissionOverride creates or updates a permission override for a channel
+func (s *ChannelService) SetPermissionOverride(
+	ctx context.Context,
+	channelID, targetID uuid.UUID,
+	targetType string,
+	allow, deny int64,
+	requesterID uuid.UUID,
+) (*models.PermissionOverride, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Can't set permissions on DM channels
+	if channel.ServerID == nil {
+		return nil, ErrCannotDeleteDM
+	}
+
+	// Check MANAGE_CHANNELS permission
+	member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageChannels); err != nil {
+			return nil, err
+		}
+	}
+
+	override := &models.PermissionOverride{
+		ChannelID:  channelID,
+		TargetType: targetType,
+		TargetID:   targetID,
+		Allow:      allow,
+		Deny:       deny,
+	}
+
+	if err := s.channelRepo.UpsertPermissionOverride(ctx, override); err != nil {
+		return nil, err
+	}
+
+	// Invalidate cache for the channel
+	if s.cache != nil {
+		_ = s.cache.DeleteChannel(ctx, channelID)
+	}
+
+	// Publish event
+	s.eventBus.Publish("channel.permission_override_updated", &ChannelPermissionOverrideEvent{
+		ChannelID:  channelID,
+		TargetType: targetType,
+		TargetID:   targetID,
+		Allow:      allow,
+		Deny:       deny,
+	})
+
+	return override, nil
+}
+
+// DeletePermissionOverride removes a permission override from a channel
+func (s *ChannelService) DeletePermissionOverride(
+	ctx context.Context,
+	channelID, targetID uuid.UUID,
+	targetType string,
+	requesterID uuid.UUID,
+) error {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return err
+	}
+	if channel == nil {
+		return ErrChannelNotFound
+	}
+
+	// Can't delete permissions on DM channels
+	if channel.ServerID == nil {
+		return ErrCannotDeleteDM
+	}
+
+	// Check MANAGE_CHANNELS permission
+	member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageChannels); err != nil {
+			return err
+		}
+	}
+
+	if err := s.channelRepo.DeletePermissionOverride(ctx, channelID, targetID, targetType); err != nil {
+		return err
+	}
+
+	// Invalidate cache for the channel
+	if s.cache != nil {
+		_ = s.cache.DeleteChannel(ctx, channelID)
+	}
+
+	// Publish event
+	s.eventBus.Publish("channel.permission_override_deleted", &ChannelPermissionOverrideDeletedEvent{
+		ChannelID:  channelID,
+		TargetType: targetType,
+		TargetID:   targetID,
+	})
+
+	return nil
+}
+
+// ChannelPermissionOverrideEvent is published when a permission override is updated
+type ChannelPermissionOverrideEvent struct {
+	ChannelID  uuid.UUID
+	TargetType string
+	TargetID   uuid.UUID
+	Allow      int64
+	Deny       int64
+}
+
+// ChannelPermissionOverrideDeletedEvent is published when a permission override is deleted
+type ChannelPermissionOverrideDeletedEvent struct {
+	ChannelID  uuid.UUID
+	TargetType string
+	TargetID   uuid.UUID
+}
