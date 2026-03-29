@@ -2,6 +2,51 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-03-29](https://github.com/ghndrx/hearth/compare/2026-03-28...HEAD)
+
+### Features
+* feat(MemberList): implement Send Message to DM navigation (#19)
+* feature/cache redis miniredis coverage (#5)
+* feat(app-directory): comprehensive app directory and bot store implementation (#123)
+* feat(app-directory): comprehensive app directory and bot store implementation (#123)
+
+### Bug Fixes
+* fix(frontend): add error logging to 13 empty catch blocks (#20)
+* fix: correct golangci-lint v2.11.4 config format
+* fix: upgrade golangci-lint-action to v7 and use binary install mode for v2.x compatibility
+* fix: add version field for golangci-lint v2.x compatibility
+* fix(handlers): properly extract user from request context in getUser stub (#3)
+* fix: resolve YAML syntax error in bedrock-agent workflow (#2)
+* fix: correct test handler to avoid double-response in TestHandleServiceError (#65)
+* fix: resolve WebSocket authentication failures (#31)
+* fix(websocket): return early when no auth token provided to prevent ValidateAccessToken("") failures (#20)
+
+### Other Changes
+* test(coverage): add follow and reminders handler tests (#18)
+* test(coverage): add notification repository test coverage (#17)
+* test(coverage): add pins handler tests with httptest (#15)
+* test(coverage): improve analytics handler test coverage with httptest (#14)
+* test(coverage): add analytics repository test coverage (#13)
+* test(coverage): add storage repository tests (#11)
+* chore: address critical event management permission bypass (#12)
+* test(coverage): add webhook repository test coverage (#9)
+* test(coverage): improve cache test coverage with miniredis (#8)
+* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
+* style: apply gofmt to threads_coverage_test.go
+* test(handlers): add httptest coverage for VoiceHandler and GatewayHandler (#97)
+* fix: correct test handler to avoid double-response in TestHandleServiceError (#65)
+* test(coverage): improve metrics package test coverage (#56)
+* test(coverage): improve comprehensive service test coverage (#1)
+* chore: remove bedrock-agent workflow - not needed
+* chore: remove internal agent guidelines file
+
+### Miscellaneous
+* ci: fix CodeQL SARIF upload permissions in DevSecOps workflow (#16)
+* security: bump Go version to 1.25.8 in Dockerfiles (GO-2026-4601/4602/4603) (#10)
+* security: upgrade Go to 1.25.8 (fixes GO-2026-4601, GO-2026-4602, GO-2026-4603) (#7)
+* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
+* style: apply gofmt to threads_coverage_test.go
+
 ## [2026-03-28](https://github.com/ghndrx/hearth/compare/2026-03-27...HEAD)
 
 ### Features
