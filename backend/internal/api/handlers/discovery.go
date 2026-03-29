@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -421,5 +422,166 @@ func (h *DiscoveryHandler) SetFeatured(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message":     "Featured status updated",
 		"is_featured": body.Featured,
+	})
+}
+
+// GetTrendingServers returns trending servers
+// GET /api/v1/discovery/trending
+func (h *DiscoveryHandler) GetTrendingServers(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "10"))
+
+	servers, err := h.discovery.GetTrendingServers(c.Context(), limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get trending servers",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"servers": servers,
+		"limit":   limit,
+	})
+}
+
+// GetDiscoveryStats returns discovery statistics
+// GET /api/v1/discovery/stats
+func (h *DiscoveryHandler) GetDiscoveryStats(c *fiber.Ctx) error {
+	stats, err := h.discovery.GetDiscoveryStats(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get discovery stats",
+		})
+	}
+
+	return c.JSON(stats)
+}
+
+// GetPopularTags returns popular discovery tags
+// GET /api/v1/discovery/tags
+func (h *DiscoveryHandler) GetPopularTags(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+
+	tags, err := h.discovery.GetPopularTags(c.Context(), limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get popular tags",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"tags":  tags,
+		"limit": limit,
+	})
+}
+
+// GetServersByTags returns servers matching specific tags
+// GET /api/v1/discovery/tags/servers
+func (h *DiscoveryHandler) GetServersByTags(c *fiber.Ctx) error {
+	tagsParam := c.Query("tags")
+	if tagsParam == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Tags parameter is required",
+		})
+	}
+
+	// Parse comma-separated tags
+	tags := strings.Split(tagsParam, ",")
+	for i, tag := range tags {
+		tags[i] = strings.TrimSpace(tag)
+	}
+
+	limit, _ := strconv.Atoi(c.Query("limit", "25"))
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
+
+	servers, total, err := h.discovery.GetServersByTags(c.Context(), tags, limit, offset)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get servers by tags",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"servers": servers,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}
+
+// GetDiscoveryPage returns the full discovery page data
+// GET /api/v1/discovery/page
+func (h *DiscoveryHandler) GetDiscoveryPage(c *fiber.Ctx) error {
+	featuredLimit, _ := strconv.Atoi(c.Query("featured_limit", "5"))
+	trendingLimit, _ := strconv.Atoi(c.Query("trending_limit", "10"))
+
+	var userID uuid.UUID
+	if id, ok := c.Locals("userID").(uuid.UUID); ok {
+		userID = id
+	}
+
+	page, err := h.discovery.GetDiscoveryPage(c.Context(), userID, featuredLimit, trendingLimit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get discovery page",
+		})
+	}
+
+	return c.JSON(page)
+}
+
+// SearchServersEnhanced searches servers with enhanced filters
+// GET /api/v1/discovery/search
+func (h *DiscoveryHandler) SearchServersEnhanced(c *fiber.Ctx) error {
+	filters := &models.DiscoveryFilters{
+		Query:     c.Query("q"),
+		Category:  models.ServerCategory(c.Query("category")),
+		Region:    c.Query("region"),
+		Language:  c.Query("language"),
+		SortBy:    c.Query("sort", "members"),
+		SortOrder: c.Query("order", "desc"),
+	}
+
+	if minMembers := c.Query("min_members"); minMembers != "" {
+		filters.MinMembers, _ = strconv.Atoi(minMembers)
+	}
+	if maxMembers := c.Query("max_members"); maxMembers != "" {
+		filters.MaxMembers, _ = strconv.Atoi(maxMembers)
+	}
+	if featured := c.Query("featured"); featured != "" {
+		b := featured == "true"
+		filters.Featured = &b
+	}
+	if tags := c.Query("tags"); tags != "" {
+		// Parse comma-separated tags
+		tagList := strings.Split(tags, ",")
+		for i, tag := range tagList {
+			tagList[i] = strings.TrimSpace(tag)
+		}
+		filters.Tags = tagList
+	}
+	if onlineOnly := c.Query("online_only"); onlineOnly == "true" {
+		filters.OnlineOnly = true
+	}
+	if limit := c.Query("limit"); limit != "" {
+		filters.Limit, _ = strconv.Atoi(limit)
+	} else {
+		filters.Limit = 25
+	}
+	if offset := c.Query("offset"); offset != "" {
+		filters.Offset, _ = strconv.Atoi(offset)
+	}
+
+	servers, total, err := h.discovery.SearchServersEnhanced(c.Context(), filters)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to search servers",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"servers": servers,
+		"total":   total,
+		"limit":   filters.Limit,
+		"offset":  filters.Offset,
 	})
 }
