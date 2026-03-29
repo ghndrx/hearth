@@ -1,14 +1,18 @@
-version: 2.x
+version: "2"
 
 run:
   timeout: 5m
 
 linters:
-  disable-all: true
+  default: none
+  enable:
+    - govet
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - govet
+
+formatters:
   enable:
     - gofmt
-    - govet
-
-issues:
-  exclude-files:
-    - ".*_test\\.go$"
