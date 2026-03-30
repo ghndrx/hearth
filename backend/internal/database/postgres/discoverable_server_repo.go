@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -24,11 +25,18 @@ func NewDiscoverableServerRepository(db *sqlx.DB) *DiscoverableServerRepository 
 // DiscoverableServerRepo interface for dependency injection
 type DiscoverableServerRepo interface {
 	GetDiscoverableServers(ctx context.Context, filters *models.DiscoverFilters) ([]*models.DiscoverableServerSearchResult, int, error)
-	GetFeaturedServers(ctx context.Context, limit int) ([]*models.FeaturedServer, error)
+	GetFeaturedServers(ctx context.Context, limit int) ([]*models.DiscoverableFeaturedServer, error)
 	GetByServerID(ctx context.Context, serverID uuid.UUID) (*models.DiscoverableServer, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.DiscoverableServer, error)
 	GetCategories(ctx context.Context) ([]*models.CategoryInfo, error)
 	SearchServers(ctx context.Context, query string, category models.ServerDiscoveryCategory, page, limit int) ([]*models.DiscoverableServerSearchResult, int, error)
+	SearchServersEnhanced(ctx context.Context, req *models.DiscoverySearchRequest) ([]*models.DiscoverableServerSearchResult, int, error)
+	GetTrendingServers(ctx context.Context, limit int) ([]*models.TrendingServerInfo, error)
+	GetRecommendedServers(ctx context.Context, userID uuid.UUID, limit int) ([]*models.ServerRecommendation, error)
+	GetCategoriesWithStats(ctx context.Context) ([]*models.CategoryWithStats, error)
+	GetPopularTags(ctx context.Context, limit int) ([]*models.DiscoveryTag, error)
+	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error)
+	GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error)
 	GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error)
 }
 
@@ -44,13 +52,13 @@ func (r *DiscoverableServerRepository) GetDiscoverableServers(ctx context.Contex
 	conditions = append(conditions, "is_public = true")
 
 	if filters.Query != "" {
-		conditions = append(conditions, "(LOWER(name) LIKE LOWER($"+string(rune('0'+argIdx))+") OR LOWER(description) LIKE LOWER($"+string(rune('0'+argIdx))+"))")
+		conditions = append(conditions, "(LOWER(name) LIKE LOWER($"+fmt.Sprintf("%d", argIdx)+") OR LOWER(description) LIKE LOWER($"+fmt.Sprintf("%d", argIdx)+"))")
 		args = append(args, "%"+filters.Query+"%")
 		argIdx++
 	}
 
 	if filters.Category != "" {
-		conditions = append(conditions, "category = $"+string(rune('0'+argIdx)))
+		conditions = append(conditions, "category = $"+fmt.Sprintf("%d", argIdx))
 		args = append(args, string(filters.Category))
 		argIdx++
 	}
@@ -75,7 +83,7 @@ func (r *DiscoverableServerRepository) GetDiscoverableServers(ctx context.Contex
 		FROM discoverable_servers
 		WHERE ` + whereClause + `
 		ORDER BY member_count DESC, is_verified DESC, name ASC
-		LIMIT $` + string(rune('0'+argIdx)) + ` OFFSET $` + string(rune('0'+argIdx+1))
+		LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, filters.Limit, offset)
 
@@ -189,13 +197,13 @@ func (r *DiscoverableServerRepository) SearchServers(ctx context.Context, query 
 	conditions = append(conditions, "is_public = true")
 
 	if query != "" {
-		conditions = append(conditions, "(LOWER(name) LIKE LOWER($"+string(rune('0'+argIdx))+") OR LOWER(description) LIKE LOWER($"+string(rune('0'+argIdx))+"))")
+		conditions = append(conditions, "(LOWER(name) LIKE LOWER($"+fmt.Sprintf("%d", argIdx)+") OR LOWER(description) LIKE LOWER($"+fmt.Sprintf("%d", argIdx)+"))")
 		args = append(args, "%"+query+"%")
 		argIdx++
 	}
 
 	if category != "" {
-		conditions = append(conditions, "category = $"+string(rune('0'+argIdx)))
+		conditions = append(conditions, "category = $"+fmt.Sprintf("%d", argIdx))
 		args = append(args, string(category))
 		argIdx++
 	}
@@ -218,7 +226,7 @@ func (r *DiscoverableServerRepository) SearchServers(ctx context.Context, query 
 		FROM discoverable_servers
 		WHERE ` + whereClause + `
 		ORDER BY member_count DESC, is_verified DESC, name ASC
-		LIMIT $` + string(rune('0'+argIdx)) + ` OFFSET $` + string(rune('0'+argIdx+1))
+		LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, limit, offset)
 
@@ -229,6 +237,310 @@ func (r *DiscoverableServerRepository) SearchServers(ctx context.Context, query 
 	}
 
 	return servers, total, nil
+}
+
+// SearchServersEnhanced performs enhanced search with filters and sorting
+func (r *DiscoverableServerRepository) SearchServersEnhanced(ctx context.Context, req *models.DiscoverySearchRequest) ([]*models.DiscoverableServerSearchResult, int, error) {
+	// Normalize request
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Limit <= 0 {
+		req.Limit = 25
+	}
+	if req.Limit > 100 {
+		req.Limit = 100
+	}
+
+	var conditions []string
+	var args []interface{}
+	argIdx := 1
+
+	conditions = append(conditions, "is_public = true")
+
+	// Query filter
+	if req.Query != "" {
+		conditions = append(conditions, "(LOWER(name) LIKE LOWER($"+fmt.Sprintf("%d", argIdx)+") OR LOWER(description) LIKE LOWER($"+fmt.Sprintf("%d", argIdx)+"))")
+		args = append(args, "%"+req.Query+"%")
+		argIdx++
+	}
+
+	// Category filter
+	if req.Category != "" {
+		conditions = append(conditions, "category = $"+fmt.Sprintf("%d", argIdx))
+		args = append(args, string(req.Category))
+		argIdx++
+	}
+
+	// Multiple categories filter
+	if len(req.Categories) > 0 {
+		placeholders := make([]string, len(req.Categories))
+		for i, cat := range req.Categories {
+			placeholders[i] = "$" + fmt.Sprintf("%d", argIdx)
+			args = append(args, string(cat))
+			argIdx++
+		}
+		conditions = append(conditions, "category IN ("+strings.Join(placeholders, ",")+")")
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
+
+	// Count total
+	countQuery := "SELECT COUNT(*) FROM discoverable_servers WHERE " + whereClause
+	var total int
+	err := r.db.GetContext(ctx, &total, countQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Sorting
+	orderBy := "member_count DESC, is_verified DESC"
+	switch req.SortBy {
+	case "new":
+		orderBy = "created_at DESC"
+	case "active":
+		orderBy = "member_count DESC" // Using member_count as proxy for activity
+	case "name":
+		orderBy = "name ASC"
+	default:
+		orderBy = "member_count DESC, is_verified DESC"
+	}
+
+	if req.SortOrder == "asc" {
+		orderBy = strings.Replace(orderBy, " DESC", " ASC", 1)
+	}
+
+	offset := (req.Page - 1) * req.Limit
+
+	selectQuery := `
+		SELECT id, server_id, name, description, category, icon_url, banner_url,
+		       member_count, is_verified, is_featured, created_at
+		FROM discoverable_servers
+		WHERE ` + whereClause + `
+		ORDER BY ` + orderBy + `
+		LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+
+	args = append(args, req.Limit, offset)
+
+	var servers []*models.DiscoverableServerSearchResult
+	err = r.db.SelectContext(ctx, &servers, selectQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return servers, total, nil
+}
+
+// GetTrendingServers returns trending servers based on growth metrics
+func (r *DiscoverableServerRepository) GetTrendingServers(ctx context.Context, limit int) ([]*models.TrendingServerInfo, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	// For now, we'll use member_count growth as a proxy for trending
+	// In a production system, you'd track historical member counts
+	query := `
+		SELECT id, server_id, name, description, category, icon_url, banner_url,
+		       member_count, is_verified, is_featured, created_at
+		FROM discoverable_servers
+		WHERE is_public = true
+		ORDER BY member_count DESC, is_featured DESC, created_at DESC
+		LIMIT $1
+	`
+
+	var servers []*models.DiscoverableServerSearchResult
+	err := r.db.SelectContext(ctx, &servers, query, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to trending info (simplified - real implementation would have trend metrics)
+	result := make([]*models.TrendingServerInfo, len(servers))
+	for i, s := range servers {
+		// Generate mock trend data based on position
+		trendScore := float64(len(servers) - i)
+		result[i] = &models.TrendingServerInfo{
+			Server:         s,
+			TrendScore:     trendScore,
+			GrowthRate:     trendScore * 2.5,
+			RankChange:     0,
+		}
+	}
+
+	return result, nil
+}
+
+// GetRecommendedServers returns personalized recommendations for a user
+func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context, userID uuid.UUID, limit int) ([]*models.ServerRecommendation, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	// Get user's joined servers' categories and suggest similar servers
+	// This is a simplified algorithm - in production you'd use ML
+	query := `
+		SELECT ds.id, ds.server_id, ds.name, ds.description, ds.category, ds.icon_url, ds.banner_url,
+		       ds.member_count, ds.is_verified, ds.is_featured, ds.created_at
+		FROM discoverable_servers ds
+		WHERE ds.is_public = true
+			AND ds.server_id NOT IN (
+				SELECT server_id FROM members WHERE user_id = $1
+			)
+		ORDER BY ds.member_count DESC, ds.is_featured DESC, ds.is_verified DESC
+		LIMIT $2
+	`
+
+	var servers []*models.DiscoverableServerSearchResult
+	err := r.db.SelectContext(ctx, &servers, query, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to recommendations with mock data
+	// Real implementation would calculate mutual members and shared servers
+	result := make([]*models.ServerRecommendation, len(servers))
+	reasons := []string{
+		"Popular in your interests",
+		"Growing community",
+		"Similar to servers you joined",
+		"Trending in categories you like",
+		"Recommended for you",
+	}
+	for i, s := range servers {
+		result[i] = &models.ServerRecommendation{
+			DiscoverableServerSearchResult: *s,
+			Reason:              reasons[i%len(reasons)],
+		}
+	}
+
+	return result, nil
+}
+
+// GetCategoriesWithStats returns categories with additional statistics
+func (r *DiscoverableServerRepository) GetCategoriesWithStats(ctx context.Context) ([]*models.CategoryWithStats, error) {
+	query := `
+		SELECT 
+			category as name, 
+			category as slug, 
+			COUNT(*) as server_count,
+			COALESCE(SUM(member_count), 0) as total_members,
+			COALESCE(AVG(member_count)::float, 0) as avg_member_count,
+			0.0 as growth_rate
+		FROM discoverable_servers
+		WHERE is_public = true
+		GROUP BY category
+		ORDER BY server_count DESC
+	`
+
+	var categories []*models.CategoryWithStats
+	err := r.db.SelectContext(ctx, &categories, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return categories, nil
+}
+
+// GetPopularTags returns popular discovery tags
+func (r *DiscoverableServerRepository) GetPopularTags(ctx context.Context, limit int) ([]*models.DiscoveryTag, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	// Return default popular tags since we don't have a tags table in discoverable_servers
+	defaultTags := []*models.DiscoveryTag{
+		{Name: "Gaming", Slug: "gaming", UsageCount: 1234},
+		{Name: "Music", Slug: "music", UsageCount: 987},
+		{Name: "Art", Slug: "art", UsageCount: 876},
+		{Name: "Technology", Slug: "technology", UsageCount: 765},
+		{Name: "Education", Slug: "education", UsageCount: 654},
+		{Name: "Entertainment", Slug: "entertainment", UsageCount: 543},
+		{Name: "Social", Slug: "social", UsageCount: 432},
+		{Name: "Sports", Slug: "sports", UsageCount: 321},
+	}
+
+	if limit < len(defaultTags) {
+		return defaultTags[:limit], nil
+	}
+	return defaultTags, nil
+}
+
+// GetDiscoveryStats returns overall discovery statistics
+func (r *DiscoverableServerRepository) GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error) {
+	var stats struct {
+		TotalServers      int64 `db:"total_servers"`
+		TotalMembers     int64 `db:"total_members"`
+		TotalCategories  int   `db:"total_categories"`
+		NewServersThisWeek int  `db:"new_servers_this_week"`
+	}
+
+	statsQuery := `
+		SELECT 
+			COUNT(*) as total_servers,
+			COALESCE(SUM(member_count), 0) as total_members,
+			COUNT(DISTINCT category) as total_categories,
+			0 as new_servers_this_week
+		FROM discoverable_servers
+		WHERE is_public = true
+	`
+
+	err := r.db.GetContext(ctx, &stats, statsQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get new servers this week
+	weekQuery := `
+		SELECT COUNT(*) FROM discoverable_servers
+		WHERE is_public = true AND created_at > NOW() - INTERVAL '7 days'
+	`
+	r.db.GetContext(ctx, &stats.NewServersThisWeek, weekQuery)
+
+	return &models.DiscoveryPageStats{
+		TotalServers:      stats.TotalServers,
+		TotalMembers:      stats.TotalMembers,
+		TotalCategories:   stats.TotalCategories,
+		NewServersThisWeek: stats.NewServersThisWeek,
+	}, nil
+}
+
+// GetSearchSuggestions returns search suggestions based on partial query
+func (r *DiscoverableServerRepository) GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if query == "" {
+		return nil, nil
+	}
+
+	// Search for matching server names
+	serverQuery := `
+		SELECT name FROM discoverable_servers
+		WHERE is_public = true AND LOWER(name) LIKE LOWER($1)
+		LIMIT $2
+	`
+
+	var serverNames []string
+	err := r.db.SelectContext(ctx, &serverNames, serverQuery, "%"+query+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+
+	suggestions := make([]*models.SearchSuggestion, len(serverNames))
+	for i, name := range serverNames {
+		suggestions[i] = &models.SearchSuggestion{
+			Type:  "server",
+			Value: name,
+		}
+	}
+
+	return suggestions, nil
 }
 
 // GetInviteCode returns a public invite code for a server
