@@ -24,8 +24,8 @@
 
 	const dispatch = createEventDispatcher();
 
-	function handleJoin(event: CustomEvent<string>) {
-		dispatch('join', event.detail);
+	function handleJoin(serverId: string) {
+		dispatch('join', serverId);
 	}
 
 	function formatGrowthRate(rate: number): string {
@@ -56,12 +56,12 @@
 		</div>
 	{:else}
 		<div class="trending-list">
-			{#each servers as server, index (server.server_id || server.id)}
+			{#each servers.filter(s => s.server_id || s.id) as server, index (server.server_id || server.id)}
 				<div class="trending-item">
 					<span class="rank">#{index + 1}</span>
 					<div class="server-wrapper">
 						<ServerCard
-							{server}
+							server={server as any}
 							variant="compact"
 							onJoin={handleJoin}
 							{joiningServerId}

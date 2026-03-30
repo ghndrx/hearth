@@ -25,8 +25,8 @@
 
 	const dispatch = createEventDispatcher();
 
-	function handleJoin(event: CustomEvent<string>) {
-		dispatch('join', event.detail);
+	function handleJoin(serverId: string) {
+		dispatch('join', serverId);
 	}
 </script>
 
@@ -63,7 +63,7 @@
 		</div>
 	{:else}
 		<div class="recommended-grid">
-			{#each servers as server (server.server_id || server.id)}
+			{#each servers.filter(s => s.server_id || s.id) as server (server.server_id || server.id)}
 				<div class="recommended-item">
 					{#if server.reason}
 						<div class="reason-badge">
@@ -72,7 +72,7 @@
 						</div>
 					{/if}
 					<ServerCard
-						{server}
+						server={server as any}
 						variant="featured"
 						onJoin={handleJoin}
 						{joiningServerId}

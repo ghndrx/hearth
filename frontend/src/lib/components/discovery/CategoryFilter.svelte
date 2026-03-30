@@ -12,7 +12,13 @@
 	export let selectedCategory = 'all';
 	export let showCounts = true;
 
-	const defaultCategories = [
+	const defaultCategories: Array<{
+		id: string;
+		name: string;
+		slug: string;
+		icon: string;
+		server_count?: number;
+	}> = [
 		{ id: 'all', name: 'All', slug: 'all', icon: '🏠' },
 		{ id: 'gaming', name: 'Gaming', slug: 'gaming', icon: '🎮' },
 		{ id: 'music', name: 'Music', slug: 'music', icon: '🎵' },
