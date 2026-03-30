@@ -409,3 +409,13 @@ func (s *PremiumService) GetBillingInvoices(ctx context.Context, userID uuid.UUI
 func (s *PremiumService) GetPaymentMethods(ctx context.Context, userID uuid.UUID) ([]*models.PaymentMethod, error) {
 	return s.repo.GetPaymentMethods(ctx, userID)
 }
+
+// GetBoostTiers returns information about all server boost tiers
+func (s *PremiumService) GetBoostTiers(ctx context.Context) []models.BoostTierInfo {
+	return models.GetAllBoostTiers()
+}
+
+// GetSubscriptionTiers returns information about all subscription tiers
+func (s *PremiumService) GetSubscriptionTiers(ctx context.Context) []models.SubscriptionTierInfo {
+	return models.GetAllSubscriptionTiers()
+}
