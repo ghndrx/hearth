@@ -32,7 +32,7 @@
 
 	$: isCreator = $userStore?.id === event.creator_id;
 	$: isServerOwner = $currentServer && $userStore?.id === $currentServer.owner_id;
-	$: canManage = isCreator || isServerOwner; // TODO: Also check MANAGE_EVENTS permission when user role permissions are accessible
+	$: canManage = isCreator || isServerOwner || hasPermission($currentServer?.id, 'MANAGE_EVENTS');
 
 	onMount(async () => {
 		await loadRsvps();
