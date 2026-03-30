@@ -26,3 +26,9 @@
 - [ ] **[P0]** Feature: Server Boosts & Premium Features — Subscription tiers with enhanced capabilities for monetization and sustainability
 - [ ] **[P0]** Feature: Stage Channels — Live audio broadcasts for large audiences with speaker management and community building
 - [ ] **[P1]** Feature: Advanced Message Search — Full-text search with filters for knowledge management in large communities
+
+## 2026-03-30 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Server Boosts & Premium Subscriptions — Monetization model with tiered server enhancements and sustainable revenue
+- [ ] **[P0]** Feature: Scheduled Events with RSVP — Community building through organized activities with calendar integration
+- [ ] **[P1]** Feature: Advanced Moderation Tools — Enhanced safety through automated moderation, audit logs, and mod dashboard
