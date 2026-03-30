@@ -15,7 +15,7 @@
 	} from '$lib/stores/events';
 	import { currentServer } from '$lib/stores/servers';
 	import { user as userStore } from '$lib/stores/auth';
-	import { hasPermission } from '$lib/stores/roles';
+
 
 	export let event: Event;
 
@@ -32,7 +32,7 @@
 
 	$: isCreator = $userStore?.id === event.creator_id;
 	$: isServerOwner = $currentServer && $userStore?.id === $currentServer.owner_id;
-	$: canManage = isCreator || isServerOwner || hasPermission($currentServer?.id, 'MANAGE_EVENTS');
+	$: canManage = isCreator || isServerOwner;
 
 	onMount(async () => {
 		await loadRsvps();
