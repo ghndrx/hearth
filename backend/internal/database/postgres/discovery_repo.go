@@ -202,7 +202,7 @@ func (r *DiscoveryRepository) SearchServers(ctx context.Context, filters *models
 		SELECT DISTINCT ON (l.id)
 			l.id, l.server_id, l.short_description, l.is_featured,
 			l.member_count_snapshot, l.online_count_snapshot, l.weekly_growth_rate,
-			l.engagement_score, l.region, l.language, l.created_at,
+			l.engagement_score, l.region, l.language, l.created_at, l.is_verified,
 			s.name, s.icon_url, s.banner_url, s.description,
 			c.name as category_name, c.slug as category_slug
 		FROM server_discovery_listings l
@@ -231,11 +231,12 @@ func (r *DiscoveryRepository) SearchServers(ctx context.Context, filters *models
 		var s models.Server
 		var categoryName, categorySlug sql.NullString
 		var region, iconURL, bannerURL, description sql.NullString
+		var isVerified bool
 
 		err := rows.Scan(
 			&sr.ID, &sr.ServerID, &sr.ShortDescription, &sr.IsFeatured,
 			&sr.MemberCountSnapshot, &sr.OnlineCountSnapshot, &sr.WeeklyGrowthRate,
-			&sr.EngagementScore, &region, &sr.Language, &sr.CreatedAt,
+			&sr.EngagementScore, &region, &sr.Language, &sr.CreatedAt, &isVerified,
 			&s.Name, &iconURL, &bannerURL, &description,
 			&categoryName, &categorySlug,
 		)
@@ -260,7 +261,7 @@ func (r *DiscoveryRepository) SearchServers(ctx context.Context, filters *models
 		sr.Name = s.Name
 		sr.MemberCount = sr.MemberCountSnapshot
 		sr.OnlineCount = sr.OnlineCountSnapshot
-		sr.IsVerified = false // TODO: Link to server verification
+		sr.IsVerified = isVerified
 
 		if categorySlug.Valid {
 			sr.Category = models.ServerCategory(categorySlug.String)
@@ -981,7 +982,7 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 		SELECT DISTINCT ON (l.id)
 			l.id, l.server_id, l.short_description, l.is_featured,
 			l.member_count_snapshot, l.online_count_snapshot, l.weekly_growth_rate,
-			l.engagement_score, l.region, l.language, l.created_at,
+			l.engagement_score, l.region, l.language, l.created_at, l.is_verified,
 			s.name, s.icon_url, s.banner_url, s.description,
 			c.name as category_name, c.slug as category_slug
 		FROM server_discovery_listings l
@@ -1010,11 +1011,12 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 		var s models.Server
 		var categoryName, categorySlug sql.NullString
 		var region, iconURL, bannerURL, description sql.NullString
+		var isVerified bool
 
 		err := rows.Scan(
 			&sr.ID, &sr.ServerID, &sr.ShortDescription, &sr.IsFeatured,
 			&sr.MemberCountSnapshot, &sr.OnlineCountSnapshot, &sr.WeeklyGrowthRate,
-			&sr.EngagementScore, &region, &sr.Language, &sr.CreatedAt,
+			&sr.EngagementScore, &region, &sr.Language, &sr.CreatedAt, &isVerified,
 			&s.Name, &iconURL, &bannerURL, &description,
 			&categoryName, &categorySlug,
 		)
@@ -1039,7 +1041,7 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 		sr.Name = s.Name
 		sr.MemberCount = sr.MemberCountSnapshot
 		sr.OnlineCount = sr.OnlineCountSnapshot
-		sr.IsVerified = false
+		sr.IsVerified = isVerified
 
 		if categorySlug.Valid {
 			sr.Category = models.ServerCategory(categorySlug.String)
