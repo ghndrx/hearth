@@ -10,8 +10,6 @@ const mockServer = {
 	server_id: 'server-456',
 	name: 'Test Gaming Community',
 	description: 'A great server for gaming enthusiasts',
-	icon_url: null,
-	banner_url: null,
 	member_count: 12345,
 	category: 'gaming',
 	tags: ['gaming', 'fun', 'esports'],
