@@ -200,7 +200,7 @@ func (r *DiscoveryRepository) SearchServers(ctx context.Context, filters *models
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT ON (l.id)
-			l.id, l.server_id, l.short_description, l.is_featured,
+			l.id, l.server_id, l.short_description, l.is_featured, l.is_verified,
 			l.member_count_snapshot, l.online_count_snapshot, l.weekly_growth_rate,
 			l.engagement_score, l.region, l.language, l.created_at,
 			s.name, s.icon_url, s.banner_url, s.description,
@@ -236,7 +236,7 @@ func (r *DiscoveryRepository) SearchServers(ctx context.Context, filters *models
 
 		var isVerified bool
 		err := rows.Scan(
-			&sr.ID, &sr.ServerID, &sr.ShortDescription, &sr.IsFeatured,
+			&sr.ID, &sr.ServerID, &sr.ShortDescription, &sr.IsFeatured, &sr.IsVerified,
 			&sr.MemberCountSnapshot, &sr.OnlineCountSnapshot, &sr.WeeklyGrowthRate,
 			&sr.EngagementScore, &region, &sr.Language, &sr.CreatedAt,
 			&s.Name, &iconURL, &bannerURL, &description,
@@ -982,7 +982,7 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT ON (l.id)
-			l.id, l.server_id, l.short_description, l.is_featured,
+			l.id, l.server_id, l.short_description, l.is_featured, l.is_verified,
 			l.member_count_snapshot, l.online_count_snapshot, l.weekly_growth_rate,
 			l.engagement_score, l.region, l.language, l.created_at,
 			s.name, s.icon_url, s.banner_url, s.description,
@@ -1015,7 +1015,7 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 		var region, iconURL, bannerURL, description sql.NullString
 
 		err := rows.Scan(
-			&sr.ID, &sr.ServerID, &sr.ShortDescription, &sr.IsFeatured,
+			&sr.ID, &sr.ServerID, &sr.ShortDescription, &sr.IsFeatured, &sr.IsVerified,
 			&sr.MemberCountSnapshot, &sr.OnlineCountSnapshot, &sr.WeeklyGrowthRate,
 			&sr.EngagementScore, &region, &sr.Language, &sr.CreatedAt,
 			&s.Name, &iconURL, &bannerURL, &description,
@@ -1042,7 +1042,6 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 		sr.Name = s.Name
 		sr.MemberCount = sr.MemberCountSnapshot
 		sr.OnlineCount = sr.OnlineCountSnapshot
-		sr.IsVerified = false
 
 		if categorySlug.Valid {
 			sr.Category = models.ServerCategory(categorySlug.String)
