@@ -10,8 +10,6 @@ const mockServer = {
 	server_id: 'server-456',
 	name: 'Test Gaming Community',
 	description: 'A great server for gaming enthusiasts',
-	icon_url: null,
-	banner_url: null,
 	member_count: 12345,
 	category: 'gaming',
 	tags: ['gaming', 'fun', 'esports'],
@@ -125,8 +123,7 @@ describe('CategoryFilter Component', () => {
 		render(CategoryFilter, { 
 			props: { 
 				categories: mockCategories,
-				selectedCategory: 'all',
-				on: { select: selectHandler }
+				selectedCategory: 'all'
 			} 
 		});
 		
@@ -202,10 +199,8 @@ describe('SearchBar Component', () => {
 
 	it('emits search event with debounce', async () => {
 		const searchHandler = vi.fn();
-		const { component } = render(SearchBar);
-		
-		component.$on('search', searchHandler);
-		
+		render(SearchBar);
+
 		const input = screen.getByRole('textbox') as HTMLInputElement;
 		await fireEvent.input(input, { target: { value: 'test' } });
 		

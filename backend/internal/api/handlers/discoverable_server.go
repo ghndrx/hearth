@@ -379,6 +379,127 @@ func (h *DiscoverableServerHandler) JoinServer(c *fiber.Ctx) error {
 	})
 }
 
+// RegisterServer registers a server for discovery (requires auth, server owner only)
+// POST /api/v1/servers/:serverId/discover
+func (h *DiscoverableServerHandler) RegisterServer(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required",
+		})
+	}
+
+	serverIDStr := c.Params("serverId")
+	serverID, err := uuid.Parse(serverIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid server ID",
+		})
+	}
+
+	var req models.RegisterServerRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Name is required",
+		})
+	}
+	if req.Category == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Category is required",
+		})
+	}
+
+	ds, err := h.discoverableServerService.RegisterServer(c.Context(), serverID, userID, &req)
+	if err != nil {
+		if err == services.ErrServerNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Server not found"})
+		}
+		if err == services.ErrNotServerOwner {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the server owner can register for discovery"})
+		}
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(ds)
+}
+
+// UpdateRegisteredServer updates a server's discovery listing (requires auth, server owner only)
+// PATCH /api/v1/servers/discover/:id
+func (h *DiscoverableServerHandler) UpdateRegisteredServer(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required",
+		})
+	}
+
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid ID",
+		})
+	}
+
+	var req models.UpdateDiscoverableServerRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	ds, err := h.discoverableServerService.UpdateRegisteredServer(c.Context(), id, userID, &req)
+	if err != nil {
+		if err == services.ErrDiscoverableServerNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Listing not found"})
+		}
+		if err == services.ErrNotServerOwner {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the server owner can update the listing"})
+		}
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(ds)
+}
+
+// DeleteRegisteredServer removes a server from discovery (requires auth, server owner only)
+// DELETE /api/v1/servers/discover/:id
+func (h *DiscoverableServerHandler) DeleteRegisteredServer(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required",
+		})
+	}
+
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid ID",
+		})
+	}
+
+	err = h.discoverableServerService.DeleteRegisteredServer(c.Context(), id, userID)
+	if err != nil {
+		if err == services.ErrDiscoverableServerNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Listing not found"})
+		}
+		if err == services.ErrNotServerOwner {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the server owner can remove the listing"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove listing"})
+	}
+
+	return c.Status(fiber.StatusNoContent).Send(nil)
+}
+
 // GetCategories returns all available discovery categories
 // GET /api/v1/servers/categories
 func (h *DiscoverableServerHandler) GetCategories(c *fiber.Ctx) error {
