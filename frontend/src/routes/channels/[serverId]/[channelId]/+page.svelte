@@ -7,6 +7,9 @@
 	import { sendMessage, loadMessages } from '$lib/stores/messages';
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import { fetchUnreadState, markChannelRead } from '$lib/stores/unread';
+	import { threadStore } from '$lib/stores/thread';
+	import { api } from '$lib/api';
+	import type { Thread, ThreadMessage } from '$lib/stores/thread';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
