@@ -315,7 +315,7 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 
 	// Auto-create thread when a message gets 3+ replies
 	if replyTo != nil && s.threadService != nil {
-		go s.maybeAutoCreateThread(context.Background(), channelID, *replyTo, authorID)
+		go s.maybeAutoCreateThread(ctx, channelID, *replyTo, authorID)
 	}
 
 	return message, nil
