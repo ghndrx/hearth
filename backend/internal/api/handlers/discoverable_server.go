@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -79,6 +80,203 @@ func (h *DiscoverableServerHandler) GetFeaturedServers(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"servers": servers,
+	})
+}
+
+// GetTrendingServers returns trending servers
+// GET /api/v1/servers/discover/trending
+func (h *DiscoverableServerHandler) GetTrendingServers(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", 10)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	servers, err := h.discoverableServerService.GetTrendingServers(c.Context(), limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get trending servers",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"servers": servers,
+	})
+}
+
+// GetRecommendedServers returns personalized recommendations for authenticated user
+// GET /api/v1/servers/discover/recommended
+func (h *DiscoverableServerHandler) GetRecommendedServers(c *fiber.Ctx) error {
+	// Check if user is authenticated
+	userIDValue := c.Locals("userID")
+	if userIDValue == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required for recommendations",
+		})
+	}
+
+	userID, ok := userIDValue.(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid user authentication",
+		})
+	}
+
+	limit := c.QueryInt("limit", 10)
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	servers, err := h.discoverableServerService.GetRecommendedServers(c.Context(), userID, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get recommendations",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"servers": servers,
+	})
+}
+
+// SearchServersEnhanced performs enhanced search on servers
+// GET /api/v1/servers/discover/search
+func (h *DiscoverableServerHandler) SearchServersEnhanced(c *fiber.Ctx) error {
+	req := &models.DiscoverySearchRequest{
+		Query:     c.Query("q"),
+		Category:  models.ServerDiscoveryCategory(c.Query("category")),
+		SortBy:    c.Query("sort", "popular"),
+		SortOrder: c.Query("order", "desc"),
+	}
+
+	if pageStr := c.Query("page"); pageStr != "" {
+		page, _ := strconv.Atoi(pageStr)
+		req.Page = page
+	}
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		limit, _ := strconv.Atoi(limitStr)
+		req.Limit = limit
+	}
+
+	// Parse comma-separated categories
+	if categories := c.Query("categories"); categories != "" {
+		catList := parseCommaSeparated(categories)
+		req.Categories = make([]models.ServerDiscoveryCategory, len(catList))
+		for i, cat := range catList {
+			req.Categories[i] = models.ServerDiscoveryCategory(cat)
+		}
+	}
+
+	// Parse comma-separated tags
+	if tags := c.Query("tags"); tags != "" {
+		req.Tags = parseCommaSeparated(tags)
+	}
+
+	result, err := h.discoverableServerService.SearchServersEnhanced(c.Context(), req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to search servers",
+		})
+	}
+
+	return c.JSON(result)
+}
+
+// GetDiscoveryHomePage returns the full discovery home page data
+// GET /api/v1/servers/discover/home
+func (h *DiscoverableServerHandler) GetDiscoveryHomePage(c *fiber.Ctx) error {
+	featuredLimit := c.QueryInt("featured_limit", 5)
+	trendingLimit := c.QueryInt("trending_limit", 10)
+	recommendedLimit := c.QueryInt("recommended_limit", 10)
+
+	// User is optional for home page
+	var userID uuid.UUID
+	if id, ok := c.Locals("userID").(uuid.UUID); ok {
+		userID = id
+	}
+
+	page, err := h.discoverableServerService.GetDiscoveryHomePage(c.Context(), userID, featuredLimit, trendingLimit, recommendedLimit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get discovery page",
+		})
+	}
+
+	return c.JSON(page)
+}
+
+// GetCategoriesWithStats returns categories with statistics
+// GET /api/v1/servers/discover/categories/stats
+func (h *DiscoverableServerHandler) GetCategoriesWithStats(c *fiber.Ctx) error {
+	categories, err := h.discoverableServerService.GetCategoriesWithStats(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get categories",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"categories": categories,
+	})
+}
+
+// GetPopularTags returns popular discovery tags
+// GET /api/v1/servers/discover/tags
+func (h *DiscoverableServerHandler) GetPopularTags(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", 20)
+
+	tags, err := h.discoverableServerService.GetPopularTags(c.Context(), limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get tags",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"tags": tags,
+	})
+}
+
+// GetDiscoveryStats returns overall discovery statistics
+// GET /api/v1/servers/discover/stats
+func (h *DiscoverableServerHandler) GetDiscoveryStats(c *fiber.Ctx) error {
+	stats, err := h.discoverableServerService.GetDiscoveryStats(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get stats",
+		})
+	}
+
+	return c.JSON(stats)
+}
+
+// GetSearchSuggestions returns search suggestions
+// GET /api/v1/servers/discover/suggestions
+func (h *DiscoverableServerHandler) GetSearchSuggestions(c *fiber.Ctx) error {
+	query := c.Query("q")
+	if query == "" {
+		return c.JSON(fiber.Map{
+			"suggestions": []interface{}{},
+		})
+	}
+
+	limit := c.QueryInt("limit", 10)
+
+	suggestions, err := h.discoverableServerService.GetSearchSuggestions(c.Context(), query, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get suggestions",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"suggestions": suggestions,
 	})
 }
 
@@ -176,7 +374,7 @@ func (h *DiscoverableServerHandler) JoinServer(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Successfully joined server",
+		"message":  "Successfully joined server",
 		"server_id": id,
 	})
 }
@@ -212,4 +410,20 @@ func (h *DiscoverableServerHandler) GetCategories(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"categories": categories,
 	})
+}
+
+// Helper function to parse comma-separated values
+func parseCommaSeparated(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

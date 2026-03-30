@@ -1,321 +1,375 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
-	import { onMount } from 'svelte';
+	import { onMount, createEventDispatcher } from 'svelte';
+	import { 
+		ServerCard, 
+		CategoryFilter, 
+		SearchBar, 
+		TrendingServers, 
+		RecommendedServers 
+	} from '$lib/components/discovery';
 
 	interface Category {
-		id: string;
+		id?: string;
 		name: string;
 		slug: string;
-		icon: string;
+		icon?: string;
 		server_count?: number;
+		total_members?: number;
+		avg_member_count?: number;
 	}
 
-	// Default categories (will be replaced by API data)
-	let categories: (Category & { id: string })[] = [
+	interface Server {
+		id: string;
+		server_id?: string;
+		name: string;
+		description?: string;
+		short_description?: string;
+		icon_url?: string;
+		banner_url?: string;
+		member_count: number;
+		category?: string;
+		tags?: string[];
+		is_featured?: boolean;
+		featured_at?: string;
+		is_verified?: boolean;
+		reason?: string;
+		mutual_member_count?: number;
+		trend_score?: number;
+		growth_rate?: number;
+		invite_code?: string;
+	}
+
+	// Default categories
+	const defaultCategories: Category[] = [
 		{ id: 'all', name: 'All', slug: 'all', icon: '🏠' },
 		{ id: 'gaming', name: 'Gaming', slug: 'gaming', icon: '🎮' },
 		{ id: 'music', name: 'Music', slug: 'music', icon: '🎵' },
 		{ id: 'technology', name: 'Technology', slug: 'technology', icon: '💻' },
 		{ id: 'art', name: 'Art & Design', slug: 'art', icon: '🎨' },
 		{ id: 'education', name: 'Education', slug: 'education', icon: '📚' },
-		{ id: 'science', name: 'Science', slug: 'science', icon: '🔬' },
 		{ id: 'entertainment', name: 'Entertainment', slug: 'entertainment', icon: '🎬' },
 		{ id: 'social', name: 'Social', slug: 'social', icon: '💬' },
 		{ id: 'sports', name: 'Sports', slug: 'sports', icon: '⚽' },
-		{ id: 'anime', name: 'Anime & Manga', slug: 'anime', icon: '🍜' }
+		{ id: 'anime', name: 'Anime & Manga', slug: 'anime', icon: '🍜' },
 	];
 
-	interface Guild {
-		id: string;
-		name: string;
-		description: string;
-		icon: string | null;
-		banner: string | null;
-		member_count: number;
-		category: string;
-		tags: string[];
-		is_featured?: boolean;
-	}
+	// Mock data for demo
+	const mockServers: Server[] = [
+		{
+			id: '1', name: 'Hearth Official',
+			description: 'The official Hearth community server. Get help, share feedback, and connect with other users.',
+			icon_url: null, banner_url: null, member_count: 12543, category: 'technology',
+			tags: ['open-source', 'community', 'support'], is_featured: true
+		},
+		{
+			id: '2', name: 'Pixel Warriors',
+			description: 'A friendly gaming community for casual and competitive players alike.',
+			icon_url: null, banner_url: null, member_count: 8932, category: 'gaming',
+			tags: ['gaming', 'fun', 'events'], is_featured: true
+		},
+		{
+			id: '3', name: 'Synthwave Lounge',
+			description: 'Share and discover synthwave, vaporwave, and retro music.',
+			icon_url: null, banner_url: null, member_count: 5621, category: 'music',
+			tags: ['music', 'artists', 'discovery'], is_featured: true
+		},
+		{
+			id: '4', name: 'Code Crafters',
+			description: 'Programming discussions, code reviews, and learning resources.',
+			icon_url: null, banner_url: null, member_count: 15234, category: 'technology',
+			tags: ['programming', 'learning', 'help'], is_featured: true
+		},
+		{
+			id: '5', name: 'Digital Artists Hub',
+			description: 'A creative space for digital artists to share work and get feedback.',
+			icon_url: null, banner_url: null, member_count: 3421, category: 'art',
+			tags: ['art', 'design', 'feedback'], is_featured: false
+		},
+		{
+			id: '6', name: 'Study Buddies',
+			description: 'Join study sessions, share resources, and motivate each other.',
+			icon_url: null, banner_url: null, member_count: 2156, category: 'education',
+			tags: ['study', 'motivation', 'productivity'], is_featured: false
+		},
+		{
+			id: '7', name: 'Space Explorers',
+			description: 'Discuss astronomy, space missions, and the mysteries of the universe.',
+			icon_url: null, banner_url: null, member_count: 8765, category: 'science',
+			tags: ['space', 'science', 'discussion'], is_featured: true
+		},
+		{
+			id: '8', name: 'Movie Night',
+			description: 'Watch parties, movie discussions, and recommendations.',
+			icon_url: null, banner_url: null, member_count: 4521, category: 'entertainment',
+			tags: ['movies', 'tv', 'watch-party'], is_featured: false
+		},
+		{
+			id: '9', name: 'Chill & Chat',
+			description: 'A relaxed place to hang out and make new friends.',
+			icon_url: null, banner_url: null, member_count: 9876, category: 'social',
+			tags: ['social', 'friends', 'chill'], is_featured: false
+		},
+		{
+			id: '10', name: 'Sports Central',
+			description: 'Discuss your favorite sports, teams, and athletes.',
+			icon_url: null, banner_url: null, member_count: 6789, category: 'sports',
+			tags: ['sports', 'discussion', 'news'], is_featured: false
+		},
+	];
 
+	// State
+	let categories: Category[] = defaultCategories;
 	let selectedCategory = 'all';
 	let searchQuery = '';
-	let guilds: Guild[] = [];
+	let servers: Server[] = [];
+	let featuredServers: Server[] = [];
+	let trendingServers: Server[] = [];
+	let recommendedServers: Server[] = [];
+	let suggestions: Array<{ type: string; value: string; count?: number }> = [];
+	
 	let loading = true;
+	let loadingMore = false;
 	let error: string | null = null;
-	let joiningGuildId: string | null = null;
+	let joiningServerId: string | null = null;
+	
+	// Pagination
+	let currentPage = 1;
+	let totalServers = 0;
+	const serversPerPage = 25;
 
-	// Mock data for demonstration (will be replaced by API call)
-	const mockGuilds: Guild[] = [
-		{
-			id: '1',
-			name: 'Hearth Official',
-			description: 'The official Hearth community server. Get help, share feedback, and connect with other users.',
-			icon: null,
-			banner: null,
-			member_count: 12543,
-			category: 'tech',
-			tags: ['open-source', 'community', 'support'],
-			is_featured: true
-		},
-		{
-			id: '2',
-			name: 'Pixel Warriors',
-			description: 'A friendly gaming community for casual and competitive players alike.',
-			icon: null,
-			banner: null,
-			member_count: 8932,
-			category: 'gaming',
-			tags: ['gaming', 'fun', 'events'],
-			is_featured: true
-		},
-		{
-			id: '3',
-			name: 'Synthwave Lounge',
-			description: 'Share and discover synthwave, vaporwave, and retro music.',
-			icon: null,
-			banner: null,
-			member_count: 5621,
-			category: 'music',
-			tags: ['music', 'artists', 'discovery'],
-			is_featured: true
-		},
-		{
-			id: '4',
-			name: 'Code Crafters',
-			description: 'Programming discussions, code reviews, and learning resources.',
-			icon: null,
-			banner: null,
-			member_count: 15234,
-			category: 'tech',
-			tags: ['programming', 'learning', 'help'],
-			is_featured: true
-		},
-		{
-			id: '5',
-			name: 'Digital Artists Hub',
-			description: 'A creative space for digital artists to share work and get feedback.',
-			icon: null,
-			banner: null,
-			member_count: 3421,
-			category: 'art',
-			tags: ['art', 'design', 'feedback'],
-			is_featured: false
-		},
-		{
-			id: '6',
-			name: 'Study Buddies',
-			description: 'Join study sessions, share resources, and motivate each other.',
-			icon: null,
-			banner: null,
-			member_count: 2156,
-			category: 'education',
-			tags: ['study', 'motivation', 'productivity'],
-			is_featured: false
-		},
-		{
-			id: '7',
-			name: 'Space Explorers',
-			description: 'Discuss astronomy, space missions, and the mysteries of the universe.',
-			icon: null,
-			banner: null,
-			member_count: 8765,
-			category: 'science',
-			tags: ['space', 'science', 'discussion'],
-			is_featured: true
-		},
-		{
-			id: '8',
-			name: 'Movie Night',
-			description: 'Watch parties, movie discussions, and recommendations.',
-			icon: null,
-			banner: null,
-			member_count: 4521,
-			category: 'entertainment',
-			tags: ['movies', 'tv', 'watch-party'],
-			is_featured: false
-		},
-		{
-			id: '9',
-			name: 'Chill & Chat',
-			description: 'A relaxed place to hang out and make new friends.',
-			icon: null,
-			banner: null,
-			member_count: 9876,
-			category: 'social',
-			tags: ['social', 'friends', 'chill'],
-			is_featured: false
-		},
-		{
-			id: '10',
-			name: 'Sports Central',
-			description: 'Discuss your favorite sports, teams, and athletes.',
-			icon: null,
-			banner: null,
-			member_count: 6789,
-			category: 'sports',
-			tags: ['sports', 'discussion', 'news'],
-			is_featured: false
-		},
-		{
-			id: '11',
-			name: 'Anime Universe',
-			description: 'Discuss anime, manga, and Japanese culture.',
-			icon: null,
-			banner: null,
-			member_count: 22345,
-			category: 'anime',
-			tags: ['anime', 'manga', 'culture'],
-			is_featured: true
-		},
-		{
-			id: '12',
-			name: 'Indie Game Dev',
-			description: 'Support and collaborate with independent game developers.',
-			icon: null,
-			banner: null,
-			member_count: 1234,
-			category: 'gaming',
-			tags: ['gamedev', 'indie', 'collaboration'],
-			is_featured: false
-		}
-	];
+	const dispatch = createEventDispatcher();
 
 	onMount(async () => {
-		await loadGuilds();
+		await loadInitialData();
 	});
 
-	async function loadGuilds() {
+	async function loadInitialData() {
 		loading = true;
 		error = null;
-		
+
 		try {
-			// Fetch categories, featured servers, and search results in parallel
-			const [categoriesRes, featuredRes, searchRes] = await Promise.all([
-				api.get<any[]>('/discovery/categories').catch(() => null),
-				api.get<any[]>('/discovery/featured?limit=10').catch(() => []),
-				api.get<any>('/discovery/search?limit=50').catch(() => ({ servers: [] }))
-			]);
-			
-			// Update categories from API if available
-			if (categoriesRes && Array.isArray(categoriesRes)) {
-				const apiCategories = categoriesRes.map((c: any) => ({
-					id: c.slug,
-					name: c.name,
-					slug: c.slug,
-					icon: c.icon,
-					server_count: c.server_count
-				}));
-				// Merge with default categories, API data takes precedence
-				const defaultIds = new Set(categories.map(c => c.slug));
-				apiCategories.forEach((c: any) => defaultIds.delete(c.slug));
-				categories = [
-					{ id: 'all', name: 'All', slug: 'all', icon: '🏠' },
-					...apiCategories,
-					...categories.filter(c => defaultIds.has(c.slug))
-				];
+			// Fetch discovery home page data
+			const homeData = await api.get<any>('/servers/discover/home').catch(() => null);
+
+			if (homeData) {
+				// Update categories
+				if (homeData.categories && homeData.categories.length > 0) {
+					categories = [
+						{ id: 'all', name: 'All', slug: 'all', icon: '🏠', server_count: homeData.categories.reduce((sum: number, c: any) => sum + (c.server_count || 0), 0) },
+						...homeData.categories.map((c: any) => ({
+							id: c.slug,
+							name: c.name,
+							slug: c.slug,
+							icon: c.icon,
+							server_count: c.server_count,
+							total_members: c.total_members,
+							avg_member_count: c.avg_member_count
+						}))
+					];
+				}
+
+				// Update featured servers
+				if (homeData.featured && homeData.featured.length > 0) {
+					featuredServers = homeData.featured.map((s: any) => normalizeServer(s, true));
+				}
+
+				// Update trending servers
+				if (homeData.trending && homeData.trending.length > 0) {
+					trendingServers = homeData.trending.map((t: any) => normalizeServer(t.server || t, false));
+				}
+
+				// Update recommended servers
+				if (homeData.recommended && homeData.recommended.length > 0) {
+					recommendedServers = homeData.recommended.map((r: any) => normalizeServer(r, false));
+				}
+
+				// Update stats
+				if (homeData.stats) {
+					totalServers = homeData.stats.total_servers || 0;
+				}
 			}
+
+			// Fetch all servers for browsing
+			const serversResponse = await api.get<any>('/servers/discover').catch(() => null);
 			
-			// Merge featured and regular servers
-			const featuredServers = featuredRes || [];
-			const searchServers = searchRes?.servers || [];
-			
-			// Mark featured servers and merge
-			featuredServers.forEach((g: any) => g.is_featured = true);
-			const allServers = [...featuredServers, ...searchServers.filter((s: any) => 
-				!featuredServers.some((f: any) => f.server_id === s.server_id)
-			)];
-			
-			guilds = allServers.map((g: any) => ({
-				id: g.server_id || g.id,
-				name: g.name,
-				description: g.short_description || g.description || '',
-				icon: g.icon_url,
-				banner: g.banner_url,
-				member_count: g.member_count || g.member_count_snapshot || 0,
-				category: g.primary_category || g.category || 'social',
-				tags: g.tags || [],
-				is_featured: g.is_featured || false
-			}));
+			if (serversResponse) {
+				servers = serversResponse.servers?.map((s: any) => normalizeServer(s, false)) || [];
+				totalServers = serversResponse.total || servers.length;
+			} else {
+				// Fallback to mock data
+				servers = mockServers;
+				featuredServers = mockServers.filter(s => s.is_featured);
+				totalServers = mockServers.length;
+			}
+
 		} catch (err: any) {
-			console.error('Failed to load guilds:', err);
+			console.error('Failed to load discovery data:', err);
 			error = err.message || 'Failed to load servers';
-			// Fallback to mock data on error
-			guilds = mockGuilds;
+			// Fallback to mock data
+			servers = mockServers;
+			featuredServers = mockServers.filter(s => s.is_featured);
+			totalServers = mockServers.length;
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function joinGuild(guildId: string) {
-		joiningGuildId = guildId;
+	async function loadMoreServers() {
+		if (loadingMore) return;
 		
+		loadingMore = true;
+		currentPage++;
+
 		try {
-			// First get the server listing to get invite code
-			const listing = await api.get<any>(`/discovery/servers/${guildId}`);
+			const response = await api.get<any>(`/servers/discover?page=${currentPage}&limit=${serversPerPage}`).catch(() => null);
 			
-			if (listing?.invite_code) {
-				// Accept the invite
-				await api.post(`/invites/${listing.invite_code}`);
+			if (response && response.servers) {
+				const newServers = response.servers.map((s: any) => normalizeServer(s, false));
+				servers = [...servers, ...newServers];
 			}
-			
-			// Navigate to the joined server
-			goto(`/channels/${guildId}/general`);
-		} catch (err: any) {
-			console.error('Failed to join guild:', err);
-			// Still navigate to the server even if invite acceptance fails
-			goto(`/channels/${guildId}/general`);
+		} catch (err) {
+			console.error('Failed to load more servers:', err);
+			currentPage--; // Revert on error
 		} finally {
-			joiningGuildId = null;
+			loadingMore = false;
 		}
 	}
 
-	function selectCategory(categoryId: string) {
+	async function searchServers(query: string) {
+		if (!query.trim()) {
+			// Reset to default
+			await loadInitialData();
+			return;
+		}
+
+		loading = true;
+		try {
+			const response = await api.get<any>(`/servers/discover/search?q=${encodeURIComponent(query)}`).catch(() => null);
+			
+			if (response) {
+				servers = response.servers?.map((s: any) => normalizeServer(s, false)) || [];
+				totalServers = response.total || servers.length;
+			}
+
+			// Fetch suggestions
+			const suggestionsResponse = await api.get<any>(`/servers/discover/suggestions?q=${encodeURIComponent(query)}`).catch(() => null);
+			if (suggestionsResponse && suggestionsResponse.suggestions) {
+				suggestions = suggestionsResponse.suggestions;
+			}
+		} catch (err) {
+			console.error('Search failed:', err);
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function filterByCategory(categoryId: string) {
 		selectedCategory = categoryId;
-	}
-
-	function formatMemberCount(count: number): string {
-		if (count >= 1000000) {
-			return (count / 1000000).toFixed(1) + 'M';
+		
+		if (categoryId === 'all') {
+			await loadInitialData();
+			return;
 		}
-		if (count >= 1000) {
-			return (count / 1000).toFixed(1) + 'K';
+
+		loading = true;
+		try {
+			const response = await api.get<any>(`/servers/discover?category=${categoryId}`).catch(() => null);
+			
+			if (response) {
+				servers = response.servers?.map((s: any) => normalizeServer(s, false)) || [];
+				totalServers = response.total || servers.length;
+			} else {
+				// Filter mock data
+				servers = mockServers.filter(s => s.category === categoryId);
+				totalServers = servers.length;
+			}
+		} catch (err) {
+			console.error('Category filter failed:', err);
+		} finally {
+			loading = false;
 		}
-		return count.toString();
 	}
 
-	function getInitials(name: string): string {
-		return name
-			.split(' ')
-			.map(word => word[0])
-			.join('')
-			.toUpperCase()
-			.slice(0, 2);
-	}
-
-	function getRandomColor(id: string): string {
-		const colors = [
-			'#5865f2', '#eb459e', '#3ba55d', '#f23f43', '#faa61a',
-			'#2d7d46', '#91a6e6', '#f37b68', '#4f5d7e', '#72767d'
-		];
-		let hash = 0;
-		for (let i = 0; i < id.length; i++) {
-			hash = id.charCodeAt(i) + ((hash << 5) - hash);
+	async function handleSearch(event: CustomEvent<string>) {
+		searchQuery = event.detail;
+		if (searchQuery.trim()) {
+			await searchServers(searchQuery);
 		}
-		return colors[Math.abs(hash) % colors.length];
 	}
 
-	$: filteredGuilds = guilds.filter(guild => {
-		const matchesCategory = selectedCategory === 'all' || guild.category === selectedCategory;
-		const matchesSearch = searchQuery === '' || 
-			guild.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			guild.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			guild.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+	async function handleSuggestionSelect(event: CustomEvent<{ type: string; value: string }>) {
+		const suggestion = event.detail;
+		searchQuery = suggestion.value;
+		await searchServers(searchQuery);
+	}
+
+	function handleCategorySelect(event: CustomEvent<string>) {
+		filterByCategory(event.detail);
+	}
+
+	async function handleJoin(event: CustomEvent<string>) {
+		const serverId = event.detail;
+		joiningServerId = serverId;
+
+		try {
+			// Get server details to find invite code
+			const serverDetail = await api.get<any>(`/servers/${serverId}`).catch(() => null);
+			
+			if (serverDetail?.invite_code) {
+				await api.post(`/invites/${serverDetail.invite_code}`);
+			} else {
+				// Try direct join endpoint
+				await api.post(`/servers/${serverId}/join`);
+			}
+
+			// Navigate to the server
+			goto(`/channels/${serverId}/general`);
+		} catch (err: any) {
+			console.error('Failed to join server:', err);
+			// Still navigate even if join fails
+			goto(`/channels/${serverId}/general`);
+		} finally {
+			joiningServerId = null;
+		}
+	}
+
+	function normalizeServer(data: any, isFeatured: boolean): Server {
+		return {
+			id: data.id || data.server_id || '',
+			server_id: data.server_id,
+			name: data.name,
+			description: data.short_description || data.description || '',
+			icon_url: data.icon_url,
+			banner_url: data.banner_url,
+			member_count: data.member_count || data.member_count_snapshot || 0,
+			category: data.primary_category || data.category || 'other',
+			tags: data.tags || [],
+			is_featured: data.is_featured || isFeatured,
+			featured_at: data.featured_at,
+			is_verified: data.is_verified || false,
+			reason: data.reason,
+			mutual_member_count: data.mutual_member_count,
+			trend_score: data.trend_score,
+			growth_rate: data.growth_rate,
+			invite_code: data.invite_code
+		};
+	}
+
+	// Computed values
+	$: filteredServers = servers.filter(server => {
+		const matchesCategory = selectedCategory === 'all' || server.category === selectedCategory;
+		const matchesSearch = !searchQuery || 
+			server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+			(server.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+			server.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 		return matchesCategory && matchesSearch;
 	});
 
-	$: featuredGuilds = filteredGuilds.filter(g => g.is_featured);
-	$: regularGuilds = filteredGuilds.filter(g => !g.is_featured);
+	$: displayFeatured = selectedCategory === 'all' && !searchQuery ? featuredServers : [];
+	$: displayTrending = selectedCategory === 'all' && !searchQuery ? trendingServers : [];
+	$: displayRecommended = selectedCategory === 'all' && !searchQuery ? recommendedServers : [];
 </script>
 
 <svelte:head>
@@ -324,189 +378,155 @@
 </svelte:head>
 
 <div class="guild-discovery">
-	<!-- Left Sidebar - Categories -->
+	<!-- Left Sidebar -->
 	<aside class="sidebar">
 		<div class="sidebar-header">
 			<h2>Discover</h2>
 		</div>
-		
-		<nav class="category-list" aria-label="Server categories">
-			{#each categories as category}
-				<button
-					class="category-item"
-					class:active={selectedCategory === category.id}
-					on:click={() => selectCategory(category.id)}
-					aria-pressed={selectedCategory === category.id}
-				>
-					<span class="category-icon">{category.icon}</span>
-					<span class="category-name">{category.name}</span>
-				</button>
-			{/each}
-		</nav>
+		<CategoryFilter 
+			{categories}
+			{selectedCategory}
+			on:select={handleCategorySelect}
+		/>
 	</aside>
 
 	<!-- Main Content -->
 	<main class="main-content">
-		<!-- Header with Search -->
+		<!-- Header -->
 		<header class="content-header">
 			<div class="header-content">
 				<h1>
-					{#if selectedCategory === 'all'}
-						Discover Servers
+					{#if searchQuery}
+						Search Results
+					{:else if selectedCategory !== 'all'}
+						{categories.find(c => c.id === selectedCategory)?.name || 'Servers'}
 					{:else}
-						{categories.find(c => c.id === selectedCategory)?.name} Servers
+						Discover Servers
 					{/if}
 				</h1>
-				<p class="header-subtitle">Find communities that share your interests</p>
-				
-				<div class="search-container">
-					<svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-					</svg>
-					<input
-						type="text"
-						placeholder="Search for servers..."
-						bind:value={searchQuery}
-						class="search-input"
-						aria-label="Search for servers"
-					/>
+				<p class="header-subtitle">
 					{#if searchQuery}
-						<button
-							class="clear-search"
-							on:click={() => searchQuery = ''}
-							aria-label="Clear search"
-						>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-							</svg>
-						</button>
+						{filteredServers.length} results for "{searchQuery}"
+					{:else if selectedCategory === 'all'}
+						Find communities that share your interests
+					{:else}
+						{filteredServers.length} servers in this category
 					{/if}
-				</div>
+				</p>
+				
+				<SearchBar
+					bind:value={searchQuery}
+					{suggestions}
+					on:search={handleSearch}
+					on:select={handleSuggestionSelect}
+					placeholder="Search for servers..."
+				/>
 			</div>
 		</header>
 
-		<!-- Guilds Grid -->
-		<div class="guilds-container">
+		<!-- Content -->
+		<div class="content-body">
 			{#if loading}
 				<div class="loading-state">
 					<div class="spinner"></div>
 					<p>Loading servers...</p>
 				</div>
-			{:else if error && guilds.length === 0}
+			{:else if error && servers.length === 0}
 				<div class="error-state">
 					<p>{error}</p>
-					<button class="retry-btn" on:click={loadGuilds}>Try Again</button>
-				</div>
-			{:else if filteredGuilds.length === 0}
-				<div class="empty-state">
-					<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-					</svg>
-					<h3>No servers found</h3>
-					<p>Try adjusting your search or category filter</p>
+					<button class="retry-btn" on:click={loadInitialData}>Try Again</button>
 				</div>
 			{:else}
-				<!-- Featured Guilds Section -->
-				{#if featuredGuilds.length > 0 && searchQuery === '' && selectedCategory === 'all'}
-					<section class="guild-section" aria-labelledby="featured-heading">
-						<h2 id="featured-heading" class="section-title">Featured Servers</h2>
-						<div class="guilds-grid featured">
-							{#each featuredGuilds as guild (guild.id)}
-								<article class="guild-card featured">
-									<div class="guild-banner" style="background: linear-gradient(135deg, {getRandomColor(guild.id)}40, {getRandomColor(guild.id)}20);">
-										{#if guild.banner}
-											<img src={guild.banner} alt="" loading="lazy" />
-										{/if}
-									</div>
-									<div class="guild-content">
-										<div class="guild-icon-large" style="background-color: {getRandomColor(guild.id)};">
-											{#if guild.icon}
-												<img src={guild.icon} alt="" loading="lazy" />
-											{:else}
-												<span>{getInitials(guild.name)}</span>
-											{/if}
-										</div>
-										<h3 class="guild-name">{guild.name}</h3>
-										<p class="guild-description">{guild.description}</p>
-										<div class="guild-meta">
-											<span class="member-count">
-												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-												</svg>
-												{formatMemberCount(guild.member_count)} members
-											</span>
-										</div>
-										<div class="guild-tags">
-											{#each guild.tags.slice(0, 3) as tag}
-												<span class="tag">{tag}</span>
-											{/each}
-										</div>
-										<button
-											class="join-btn"
-											on:click={() => joinGuild(guild.id)}
-											disabled={joiningGuildId === guild.id}
-										>
-											{#if joiningGuildId === guild.id}
-												<span class="btn-spinner"></span>
-											{:else}
-												Join Server
-											{/if}
-										</button>
-									</div>
-								</article>
+				<!-- Trending Section -->
+				{#if displayTrending.length > 0}
+					<TrendingServers
+						servers={displayTrending}
+						on:join={handleJoin}
+						{joiningServerId}
+					/>
+				{/if}
+
+				<!-- Recommended Section -->
+				{#if displayRecommended.length > 0}
+					<RecommendedServers
+						servers={displayRecommended}
+						on:join={handleJoin}
+						{joiningServerId}
+					/>
+				{/if}
+
+				<!-- Featured Section -->
+				{#if displayFeatured.length > 0}
+					<section class="servers-section">
+						<div class="section-header">
+							<h2>Featured Servers</h2>
+							<span class="server-count">{displayFeatured.length} servers</span>
+						</div>
+						<div class="servers-grid featured">
+							{#each displayFeatured as server (server.id)}
+								<ServerCard
+									{server}
+									variant="featured"
+									on:join={handleJoin}
+									{joiningServerId}
+								/>
 							{/each}
 						</div>
 					</section>
 				{/if}
 
-				<!-- All Guilds Section -->
-				<section class="guild-section" aria-labelledby="all-heading">
-					<h2 id="all-heading" class="section-title">
-						{#if searchQuery}
-							Search Results
-						{:else if selectedCategory !== 'all'}
-							{categories.find(c => c.id === selectedCategory)?.name} Servers
-						{:else}
-							All Servers
-						{/if}
-					</h2>
-					<div class="guilds-grid">
-						{#each regularGuilds.length > 0 || searchQuery !== '' || selectedCategory !== 'all' ? filteredGuilds : [] as guild (guild.id)}
-							<article class="guild-card">
-								<div class="guild-icon" style="background-color: {getRandomColor(guild.id)};">
-									{#if guild.icon}
-										<img src={guild.icon} alt="" loading="lazy" />
-									{:else}
-										<span>{getInitials(guild.name)}</span>
-									{/if}
-								</div>
-								<div class="guild-info">
-									<h3 class="guild-name">{guild.name}</h3>
-									<p class="guild-description">{guild.description}</p>
-									<div class="guild-meta">
-										<span class="member-count">
-											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-											</svg>
-											{formatMemberCount(guild.member_count)}
-										</span>
-									</div>
-								</div>
-								<button
-									class="join-btn"
-									on:click={() => joinGuild(guild.id)}
-									disabled={joiningGuildId === guild.id}
-									aria-label="Join {guild.name}"
+				<!-- All Servers Section -->
+				<section class="servers-section">
+					<div class="section-header">
+						<h2>
+							{#if searchQuery}
+								Search Results
+							{:else if selectedCategory !== 'all'}
+								{categories.find(c => c.id === selectedCategory)?.name || 'All'} Servers
+							{:else}
+								Browse All Servers
+							{/if}
+						</h2>
+						<span class="server-count">{filteredServers.length} servers</span>
+					</div>
+
+					{#if filteredServers.length === 0}
+						<div class="empty-state">
+							<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+							</svg>
+							<h3>No servers found</h3>
+							<p>Try adjusting your search or category filter</p>
+						</div>
+					{:else}
+						<div class="servers-grid">
+							{#each filteredServers as server (server.id)}
+								<ServerCard
+									{server}
+									variant="default"
+									on:join={handleJoin}
+									{joiningServerId}
+								/>
+							{/each}
+						</div>
+
+						{#if filteredServers.length >= serversPerPage}
+							<div class="load-more">
+								<button 
+									class="load-more-btn" 
+									on:click={loadMoreServers}
+									disabled={loadingMore}
 								>
-									{#if joiningGuildId === guild.id}
-										<span class="btn-spinner"></span>
+									{#if loadingMore}
+										<span class="spinner small"></span>
+										Loading...
 									{:else}
-										Join
+										Load More
 									{/if}
 								</button>
-							</article>
-						{/each}
-					</div>
+							</div>
+						{/if}
+					{/if}
 				</section>
 			{/if}
 		</div>
@@ -544,56 +564,12 @@
 		color: #f2f3f5;
 	}
 
-	.category-list {
-		padding: 8px;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.category-item {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 10px 12px;
-		border: none;
-		border-radius: 4px;
-		background: transparent;
-		color: #949ba4;
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.15s, color 0.15s;
-		text-align: left;
-	}
-
-	.category-item:hover {
-		background: #35373c;
-		color: #dbdee1;
-	}
-
-	.category-item.active {
-		background: #404249;
-		color: #f2f3f5;
-	}
-
-	.category-icon {
-		font-size: 20px;
-		width: 24px;
-		text-align: center;
-	}
-
-	.category-name {
-		flex: 1;
-	}
-
 	/* Main Content */
 	.main-content {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-		background: #313338;
 	}
 
 	.content-header {
@@ -619,84 +595,49 @@
 		font-size: 14px;
 	}
 
-	.search-container {
-		position: relative;
-		display: flex;
-		align-items: center;
-		max-width: 600px;
-	}
-
-	.search-icon {
-		position: absolute;
-		left: 12px;
-		width: 20px;
-		height: 20px;
-		color: #949ba4;
-		pointer-events: none;
-	}
-
-	.search-input {
-		width: 100%;
-		padding: 12px 40px;
-		background: #1e1f22;
-		border: 1px solid transparent;
-		border-radius: 8px;
-		color: #f2f3f5;
-		font-size: 14px;
-		transition: border-color 0.15s, background-color 0.15s;
-	}
-
-	.search-input::placeholder {
-		color: #6d6f78;
-	}
-
-	.search-input:focus {
-		outline: none;
-		border-color: #5865f2;
-		background: #2b2d31;
-	}
-
-	.clear-search {
-		position: absolute;
-		right: 12px;
-		width: 20px;
-		height: 20px;
-		padding: 0;
-		border: none;
-		background: transparent;
-		color: #949ba4;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 4px;
-		transition: color 0.15s, background-color 0.15s;
-	}
-
-	.clear-search:hover {
-		color: #f2f3f5;
-		background: #404249;
-	}
-
-	/* Guilds Container */
-	.guilds-container {
+	/* Content Body */
+	.content-body {
 		flex: 1;
 		overflow-y: auto;
 		padding: 24px 32px;
 	}
 
-	.guild-section {
+	/* Sections */
+	.servers-section {
 		margin-bottom: 32px;
 	}
 
-	.section-title {
-		margin: 0 0 16px 0;
+	.section-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 16px;
+	}
+
+	.section-header h2 {
+		margin: 0;
 		font-size: 18px;
 		font-weight: 600;
 		color: #f2f3f5;
 	}
 
-	/* Loading & Empty States */
+	.server-count {
+		font-size: 13px;
+		color: #6d6f78;
+	}
+
+	/* Grids */
+	.servers-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		gap: 16px;
+	}
+
+	.servers-grid.featured {
+		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+	}
+
+	/* Loading & Error States */
 	.loading-state,
 	.error-state,
 	.empty-state {
@@ -718,18 +659,14 @@
 		animation: spin 1s linear infinite;
 	}
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
-
-	.btn-spinner {
-		display: inline-block;
+	.spinner.small {
 		width: 16px;
 		height: 16px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top-color: white;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
+		border-width: 2px;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	.empty-icon {
@@ -747,7 +684,6 @@
 
 	.empty-state p {
 		margin: 0;
-		color: #949ba4;
 	}
 
 	.retry-btn {
@@ -760,247 +696,65 @@
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
-		transition: background-color 0.15s;
 	}
 
 	.retry-btn:hover {
 		background: #4752c4;
 	}
 
-	/* Guilds Grid */
-	.guilds-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-		gap: 16px;
-	}
-
-	.guilds-grid.featured {
-		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-	}
-
-	/* Guild Cards */
-	.guild-card {
-		background: #2b2d31;
-		border-radius: 12px;
-		overflow: hidden;
-		transition: transform 0.15s, box-shadow 0.15s;
-		border: 1px solid #1e1f22;
-	}
-
-	.guild-card:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-	}
-
-	.guild-card.featured {
-		background: #2b2d31;
-	}
-
-	.guild-banner {
-		height: 100px;
-		background: linear-gradient(135deg, #5865f240, #eb459e20);
-		position: relative;
-	}
-
-	.guild-banner img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.guild-content {
-		padding: 0 16px 16px;
-		position: relative;
-	}
-
-	.guild-icon-large {
-		width: 64px;
-		height: 64px;
-		border-radius: 12px;
-		background: #5865f2;
+	/* Load More */
+	.load-more {
 		display: flex;
-		align-items: center;
 		justify-content: center;
-		font-size: 24px;
-		font-weight: 700;
-		color: white;
-		margin-top: -32px;
-		border: 4px solid #2b2d31;
-		overflow: hidden;
+		margin-top: 24px;
 	}
 
-	.guild-icon-large img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.guild-icon {
-		width: 48px;
-		height: 48px;
-		border-radius: 12px;
-		background: #5865f2;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 16px;
-		font-weight: 600;
-		color: white;
-		flex-shrink: 0;
-		overflow: hidden;
-	}
-
-	.guild-icon img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.guild-info {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.guild-card:not(.featured) {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 16px;
-	}
-
-	.guild-name {
-		margin: 8px 0 4px 0;
-		font-size: 16px;
-		font-weight: 600;
-		color: #f2f3f5;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.guild-card:not(.featured) .guild-name {
-		margin: 0 0 4px 0;
-	}
-
-	.guild-description {
-		margin: 0 0 12px 0;
-		font-size: 13px;
-		color: #949ba4;
-		line-height: 1.4;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-
-	.guild-meta {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		margin-bottom: 12px;
-	}
-
-	.member-count {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		font-size: 12px;
-		color: #949ba4;
-	}
-
-	.member-count svg {
-		width: 14px;
-		height: 14px;
-	}
-
-	.guild-tags {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		margin-bottom: 12px;
-	}
-
-	.tag {
-		padding: 2px 8px;
-		background: #1e1f22;
-		border-radius: 4px;
-		font-size: 11px;
-		color: #949ba4;
-		font-weight: 500;
-	}
-
-	.join-btn {
-		width: 100%;
-		padding: 10px;
-		background: #23a559;
+	.load-more-btn {
+		padding: 12px 24px;
+		background: #4f545c;
 		border: none;
 		border-radius: 6px;
 		color: white;
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
-		transition: background-color 0.15s;
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		min-height: 36px;
+		gap: 8px;
+		transition: background-color 0.15s;
 	}
 
-	.join-btn:hover:not(:disabled) {
-		background: #1a8f4a;
+	.load-more-btn:hover:not(:disabled) {
+		background: #5d6269;
 	}
 
-	.join-btn:disabled {
+	.load-more-btn:disabled {
 		opacity: 0.7;
 		cursor: not-allowed;
 	}
 
-	.guild-card:not(.featured) .join-btn {
-		width: auto;
-		padding: 8px 16px;
-		min-height: 32px;
-	}
-
-	/* Scrollbar Styling */
-	.sidebar::-webkit-scrollbar,
-	.guilds-container::-webkit-scrollbar {
+	/* Scrollbar */
+	::-webkit-scrollbar {
 		width: 8px;
 	}
 
-	.sidebar::-webkit-scrollbar-track,
-	.guilds-container::-webkit-scrollbar-track {
+	::-webkit-scrollbar-track {
 		background: transparent;
 	}
 
-	.sidebar::-webkit-scrollbar-thumb,
-	.guilds-container::-webkit-scrollbar-thumb {
+	::-webkit-scrollbar-thumb {
 		background: #1e1f22;
 		border-radius: 4px;
 	}
 
-	.sidebar::-webkit-scrollbar-thumb:hover,
-	.guilds-container::-webkit-scrollbar-thumb:hover {
+	::-webkit-scrollbar-thumb:hover {
 		background: #3f4147;
 	}
 
-	/* Focus styles for accessibility */
-	.category-item:focus-visible,
-	.search-input:focus-visible,
-	.join-btn:focus-visible,
-	.clear-search:focus-visible,
-	.retry-btn:focus-visible {
-		outline: 2px solid #5865f2;
-		outline-offset: 2px;
-	}
-
-	/* Responsive adjustments */
+	/* Responsive */
 	@media (max-width: 1024px) {
 		.sidebar {
 			width: 200px;
-		}
-		
-		.guilds-grid {
-			grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 		}
 	}
 
@@ -1008,26 +762,21 @@
 		.sidebar {
 			width: 60px;
 		}
-		
-		.category-name {
+
+		.sidebar-header h2 {
 			display: none;
 		}
-		
-		.category-item {
-			justify-content: center;
-			padding: 12px;
-		}
-		
+
 		.content-header {
 			padding: 16px;
 		}
-		
-		.guilds-container {
+
+		.content-body {
 			padding: 16px;
 		}
-		
-		.guilds-grid,
-		.guilds-grid.featured {
+
+		.servers-grid,
+		.servers-grid.featured {
 			grid-template-columns: 1fr;
 		}
 	}
