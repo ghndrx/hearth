@@ -44,3 +44,11 @@
 - [ ] **[P0]** Feature: Message Forwarding — Core messaging feature for sharing content across channels/servers with attribution
 - [ ] **[P0]** Feature: Rich Embed Builder — Interactive embed creation for announcements, documentation, and bot responses
 - [ ] **[P1]** Feature: Granular Notification Controls — Per-channel notification settings, keywords, and quiet hours for user experience
+
+## 2026-03-30 Competitive Pipeline - TOP 3 CRITICAL GAPS
+
+- [ ] **[P0]** Feature: Voice Activities & Games — Discord's #1 engagement feature including Watch Together, Poker, Chess for voice channel retention
+- [ ] **[P0]** Feature: Rich Presence & Gaming Integration — Game detection, "Currently Playing" status, and gaming community positioning
+- [ ] **[P0]** Feature: Advanced Notification Controls — Per-channel settings, keyword alerts, quiet hours to prevent user churn from notification fatigue
+
+## 2026-03-30 Vulnerability Findings
