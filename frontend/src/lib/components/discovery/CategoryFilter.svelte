@@ -12,22 +12,22 @@
 	export let selectedCategory = 'all';
 	export let showCounts = true;
 
-	const defaultCategories = [
-		{ id: 'all', name: 'All', slug: 'all', icon: '🏠' },
-		{ id: 'gaming', name: 'Gaming', slug: 'gaming', icon: '🎮' },
-		{ id: 'music', name: 'Music', slug: 'music', icon: '🎵' },
-		{ id: 'technology', name: 'Technology', slug: 'technology', icon: '💻' },
-		{ id: 'art', name: 'Art & Design', slug: 'art', icon: '🎨' },
-		{ id: 'education', name: 'Education', slug: 'education', icon: '📚' },
-		{ id: 'entertainment', name: 'Entertainment', slug: 'entertainment', icon: '🎬' },
-		{ id: 'social', name: 'Social', slug: 'social', icon: '💬' },
-		{ id: 'sports', name: 'Sports', slug: 'sports', icon: '⚽' },
-		{ id: 'anime', name: 'Anime & Manga', slug: 'anime', icon: '🍜' },
-		{ id: 'science', name: 'Science', slug: 'science', icon: '🔬' },
-		{ id: 'fashion', name: 'Fashion', slug: 'fashion', icon: '👗' },
-		{ id: 'food', name: 'Food & Cooking', slug: 'food', icon: '🍳' },
-		{ id: 'business', name: 'Business', slug: 'business', icon: '💼' },
-		{ id: 'language', name: 'Language Learning', slug: 'language', icon: '🗣️' },
+	const defaultCategories: Array<{ id: string; name: string; slug: string; icon: string; server_count?: number }> = [
+		{ id: 'all', name: 'All', slug: 'all', icon: '🏠', server_count: 0 },
+		{ id: 'gaming', name: 'Gaming', slug: 'gaming', icon: '🎮', server_count: 0 },
+		{ id: 'music', name: 'Music', slug: 'music', icon: '🎵', server_count: 0 },
+		{ id: 'technology', name: 'Technology', slug: 'technology', icon: '💻', server_count: 0 },
+		{ id: 'art', name: 'Art & Design', slug: 'art', icon: '🎨', server_count: 0 },
+		{ id: 'education', name: 'Education', slug: 'education', icon: '📚', server_count: 0 },
+		{ id: 'entertainment', name: 'Entertainment', slug: 'entertainment', icon: '🎬', server_count: 0 },
+		{ id: 'social', name: 'Social', slug: 'social', icon: '💬', server_count: 0 },
+		{ id: 'sports', name: 'Sports', slug: 'sports', icon: '⚽', server_count: 0 },
+		{ id: 'anime', name: 'Anime & Manga', slug: 'anime', icon: '🍜', server_count: 0 },
+		{ id: 'science', name: 'Science', slug: 'science', icon: '🔬', server_count: 0 },
+		{ id: 'fashion', name: 'Fashion', slug: 'fashion', icon: '👗', server_count: 0 },
+		{ id: 'food', name: 'Food & Cooking', slug: 'food', icon: '🍳', server_count: 0 },
+		{ id: 'business', name: 'Business', slug: 'business', icon: '💼', server_count: 0 },
+		{ id: 'language', name: 'Language Learning', slug: 'language', icon: '🗣️', server_count: 0 },
 	];
 
 	$: allCategories = categories.length > 0
