@@ -28,6 +28,23 @@
 	function handleJoin(serverId: string) {
 		dispatch('join', serverId);
 	}
+
+	$: validServers = (servers.filter(s => s.server_id || s.id) as Array<{
+		id: string;
+		server_id?: string;
+		name: string;
+		description?: string;
+		short_description?: string;
+		icon_url?: string;
+		banner_url?: string;
+		member_count: number;
+		category?: string;
+		tags?: string[];
+		is_featured?: boolean;
+		reason?: string;
+		mutual_member_count?: number;
+		mutual_servers?: string[];
+	}>);
 </script>
 
 <section class="recommended-servers">
@@ -63,7 +80,7 @@
 		</div>
 	{:else}
 		<div class="recommended-grid">
-			{#each servers.filter(s => s.server_id || s.id) as server (server.server_id || server.id)}
+			{#each validServers as server (server.server_id || server.id)}
 				<div class="recommended-item">
 					{#if server.reason}
 						<div class="reason-badge">
