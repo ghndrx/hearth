@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 
 	"hearth/internal/models"
 )
@@ -38,6 +39,9 @@ type DiscoverableServerRepo interface {
 	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error)
 	GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error)
 	GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error)
+	Create(ctx context.Context, server *models.DiscoverableServer) error
+	Update(ctx context.Context, server *models.DiscoverableServer) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // GetDiscoverableServers returns paginated discoverable servers
@@ -78,8 +82,8 @@ func (r *DiscoverableServerRepository) GetDiscoverableServers(ctx context.Contex
 
 	// Get servers sorted by member_count DESC, is_verified DESC, name ASC
 	query := `
-		SELECT id, server_id, name, description, category, icon_url, banner_url, 
-		       member_count, is_verified, is_featured, created_at
+		SELECT id, server_id, name, description, category, icon_url, banner_url,
+		       tags, member_count, is_verified, is_featured, created_at
 		FROM discoverable_servers
 		WHERE ` + whereClause + `
 		ORDER BY member_count DESC, is_verified DESC, name ASC
@@ -107,7 +111,7 @@ func (r *DiscoverableServerRepository) GetFeaturedServers(ctx context.Context, l
 
 	query := `
 		SELECT id, server_id, name, description, category, icon_url, banner_url,
-		       member_count, is_verified, featured_at, created_at
+		       tags, member_count, is_verified, featured_at, created_at
 		FROM discoverable_servers
 		WHERE is_public = true AND is_featured = true
 		ORDER BY featured_at DESC
@@ -127,7 +131,7 @@ func (r *DiscoverableServerRepository) GetFeaturedServers(ctx context.Context, l
 func (r *DiscoverableServerRepository) GetByServerID(ctx context.Context, serverID uuid.UUID) (*models.DiscoverableServer, error) {
 	query := `
 		SELECT id, server_id, name, description, category, icon_url, banner_url,
-		       member_count, is_verified, is_public, is_featured, featured_at,
+		       tags, member_count, is_verified, is_public, is_featured, featured_at,
 		       created_at, updated_at
 		FROM discoverable_servers
 		WHERE server_id = $1
@@ -149,7 +153,7 @@ func (r *DiscoverableServerRepository) GetByServerID(ctx context.Context, server
 func (r *DiscoverableServerRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.DiscoverableServer, error) {
 	query := `
 		SELECT id, server_id, name, description, category, icon_url, banner_url,
-		       member_count, is_verified, is_public, is_featured, featured_at,
+		       tags, member_count, is_verified, is_public, is_featured, featured_at,
 		       created_at, updated_at
 		FROM discoverable_servers
 		WHERE id = $1
@@ -386,7 +390,7 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 	// This is a simplified algorithm - in production you'd use ML
 	query := `
 		SELECT ds.id, ds.server_id, ds.name, ds.description, ds.category, ds.icon_url, ds.banner_url,
-		       ds.member_count, ds.is_verified, ds.is_featured, ds.created_at
+		       ds.tags, ds.member_count, ds.is_verified, ds.is_featured, ds.created_at
 		FROM discoverable_servers ds
 		WHERE ds.is_public = true
 			AND ds.server_id NOT IN (
@@ -541,6 +545,45 @@ func (r *DiscoverableServerRepository) GetSearchSuggestions(ctx context.Context,
 	}
 
 	return suggestions, nil
+}
+
+// Create inserts a new discoverable server listing
+func (r *DiscoverableServerRepository) Create(ctx context.Context, server *models.DiscoverableServer) error {
+	query := `
+		INSERT INTO discoverable_servers (id, server_id, name, description, category, icon_url, banner_url, tags, member_count, is_verified, is_public, is_featured)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING created_at, updated_at
+	`
+
+	return r.db.QueryRowContext(ctx, query,
+		server.ID, server.ServerID, server.Name, server.Description,
+		string(server.Category), server.IconURL, server.BannerURL,
+		pq.Array(server.Tags), server.MemberCount, server.IsVerified,
+		server.IsPublic, server.IsFeatured,
+	).Scan(&server.CreatedAt, &server.UpdatedAt)
+}
+
+// Update updates an existing discoverable server listing
+func (r *DiscoverableServerRepository) Update(ctx context.Context, server *models.DiscoverableServer) error {
+	query := `
+		UPDATE discoverable_servers
+		SET name = $1, description = $2, category = $3, icon_url = $4,
+		    banner_url = $5, tags = $6, member_count = $7
+		WHERE id = $8
+		RETURNING updated_at
+	`
+
+	return r.db.QueryRowContext(ctx, query,
+		server.Name, server.Description, string(server.Category),
+		server.IconURL, server.BannerURL, pq.Array(server.Tags),
+		server.MemberCount, server.ID,
+	).Scan(&server.UpdatedAt)
+}
+
+// Delete removes a discoverable server listing
+func (r *DiscoverableServerRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM discoverable_servers WHERE id = $1", id)
+	return err
 }
 
 // GetInviteCode returns a public invite code for a server
