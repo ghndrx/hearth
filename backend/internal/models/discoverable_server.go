@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
 // ServerDiscoveryCategory represents categories for the public server directory
@@ -56,15 +55,11 @@ type DiscoverableServer struct {
 	Category    ServerDiscoveryCategory `json:"category" db:"category"`
 	IconURL     *string               `json:"icon_url,omitempty" db:"icon_url"`
 	BannerURL   *string               `json:"banner_url,omitempty" db:"banner_url"`
-	Tags        pq.StringArray        `json:"tags" db:"tags"`
 	MemberCount int                   `json:"member_count" db:"member_count"`
 	IsVerified  bool                  `json:"is_verified" db:"is_verified"`
 	IsPublic    bool                  `json:"is_public" db:"is_public"`
 	IsFeatured  bool                  `json:"is_featured" db:"is_featured"`
 	FeaturedAt  *time.Time            `json:"featured_at,omitempty" db:"featured_at"`
-	Language    string                `json:"language" db:"language"`
-	Region      *string              `json:"region,omitempty" db:"region"`
-	VanityURL   *string              `json:"vanity_url,omitempty" db:"vanity_url"`
 	CreatedAt   time.Time             `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time             `json:"updated_at" db:"updated_at"`
 }
@@ -84,27 +79,10 @@ type DiscoverableServerSearchResult struct {
 	Category    ServerDiscoveryCategory `json:"category" db:"category"`
 	IconURL     *string               `json:"icon_url,omitempty" db:"icon_url"`
 	BannerURL   *string               `json:"banner_url,omitempty" db:"banner_url"`
-	Tags        pq.StringArray        `json:"tags" db:"tags"`
 	MemberCount int                   `json:"member_count" db:"member_count"`
 	IsVerified  bool                  `json:"is_verified" db:"is_verified"`
 	IsFeatured  bool                  `json:"is_featured" db:"is_featured"`
 	CreatedAt   time.Time             `json:"created_at" db:"created_at"`
-}
-
-// RegisterServerRequest is the request to register a server for discovery
-type RegisterServerRequest struct {
-	Name        string                 `json:"name" validate:"required,min=2,max=100"`
-	Description string                 `json:"description" validate:"max=1000"`
-	Category    ServerDiscoveryCategory `json:"category" validate:"required"`
-	Tags        []string               `json:"tags,omitempty" validate:"max=10"`
-}
-
-// UpdateDiscoverableServerRequest is the request to update a discoverable server listing
-type UpdateDiscoverableServerRequest struct {
-	Name        *string                 `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	Description *string                 `json:"description,omitempty" validate:"omitempty,max=1000"`
-	Category    *ServerDiscoveryCategory `json:"category,omitempty"`
-	Tags        []string                `json:"tags,omitempty" validate:"omitempty,max=10"`
 }
 
 // PaginatedDiscoverableServers is the response for paginated server listings
@@ -133,9 +111,9 @@ type DiscoverableFeaturedServer struct {
 
 // CategoryInfo represents a discovery category with server count
 type CategoryInfo struct {
-	Name        string `json:"name" db:"name"`
-	Slug        string `json:"slug" db:"slug"`
-	ServerCount int    `json:"server_count" db:"server_count"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	ServerCount int    `json:"server_count"`
 }
 
 // DiscoverFilters represents search/filter options for server discovery
