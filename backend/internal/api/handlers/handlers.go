@@ -39,6 +39,7 @@ type Handlers struct {
 	ScreenShare         *ScreenShareHandler
 	AutoMod             *AutoModHandler
 	Discovery           *DiscoveryHandler
+	DiscoverableServer  *DiscoverableServerHandler
 	Templates           *TemplateHandler
 	Stream              *StreamHandler
 	ForumTags           *ForumTagsHandler
@@ -127,6 +128,14 @@ func (h *Handlers) SetDiscoveryHandler(
 	serverService *services.ServerService,
 ) {
 	h.Discovery = NewDiscoveryHandler(discoveryService, serverService)
+}
+
+// SetDiscoverableServerHandler sets the discoverable server handler
+func (h *Handlers) SetDiscoverableServerHandler(
+	discoverableServerService *services.DiscoverableServerService,
+	serverService *services.ServerService,
+) {
+	h.DiscoverableServer = NewDiscoverableServerHandler(discoverableServerService, serverService)
 }
 
 // SetForumTagsHandler sets the forum tags handler
