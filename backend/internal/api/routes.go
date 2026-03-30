@@ -77,6 +77,15 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		publicServers.Get("/:id", h.Discovery.GetPublicServer)
 	}
 
+	// Enhanced Public Server Discovery (new endpoints)
+	if h.DiscoverableServer != nil {
+		discoverServers := v1.Group("/servers")
+		discoverServers.Get("/discover", h.DiscoverableServer.GetDiscoverableServers)
+		discoverServers.Get("/discover/featured", h.DiscoverableServer.GetFeaturedServers)
+		discoverServers.Get("/categories", h.DiscoverableServer.GetCategories)
+		discoverServers.Get("/:id", h.DiscoverableServer.GetServerDetail)
+	}
+
 	// Protected routes
 	api := v1.Group("", m.RequireAuth)
 
@@ -181,6 +190,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	servers.Patch("/:id", h.Servers.Update)
 	servers.Delete("/:id", h.Servers.Delete)
 	servers.Post("/:id/transfer-ownership", h.Servers.TransferOwnership)
+	servers.Post("/:id/join", h.DiscoverableServer.JoinServer)
 
 	// Server members
 	servers.Get("/:id/members", h.Servers.GetMembers)
