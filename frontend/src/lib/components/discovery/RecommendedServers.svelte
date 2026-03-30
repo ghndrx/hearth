@@ -80,7 +80,7 @@
 		</div>
 	{:else}
 		<div class="recommended-grid">
-			{#each validServers as server (server.server_id || server.id)}
+			{#each servers.filter(s => s.server_id || s.id) as server (server.server_id || server.id)}
 				<div class="recommended-item">
 					{#if server.reason}
 						<div class="reason-badge">
