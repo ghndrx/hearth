@@ -10,8 +10,8 @@ const mockServer = {
 	server_id: 'server-456',
 	name: 'Test Gaming Community',
 	description: 'A great server for gaming enthusiasts',
-	icon_url: undefined,
-	banner_url: undefined,
+	icon_url: null,
+	banner_url: null,
 	member_count: 12345,
 	category: 'gaming',
 	tags: ['gaming', 'fun', 'esports'],
@@ -122,20 +122,18 @@ describe('CategoryFilter Component', () => {
 
 	it('emits select event on category click', async () => {
 		const selectHandler = vi.fn();
-		const { component } = render(CategoryFilter, { 
+		render(CategoryFilter, { 
 			props: { 
 				categories: mockCategories,
-				selectedCategory: 'all'
+				selectedCategory: 'all',
+				on: { select: selectHandler }
 			} 
 		});
-		
-		// @ts-expect-error - Svelte 5 event handling compatibility
-		component.$on('select', selectHandler);
 		
 		const gamingButton = screen.getByRole('button', { name: /gaming/i });
 		await fireEvent.click(gamingButton);
 		
-		expect(selectHandler).not.toHaveBeenCalled();
+		expect(selectHandler).toHaveBeenCalled();
 	});
 
 	it('displays server counts when showCounts is true', () => {
@@ -204,7 +202,9 @@ describe('SearchBar Component', () => {
 
 	it('emits search event with debounce', async () => {
 		const searchHandler = vi.fn();
-		render(SearchBar);
+		const { component } = render(SearchBar);
+		
+		component.$on('search', searchHandler);
 		
 		const input = screen.getByRole('textbox') as HTMLInputElement;
 		await fireEvent.input(input, { target: { value: 'test' } });
@@ -212,7 +212,7 @@ describe('SearchBar Component', () => {
 		// Wait for debounce
 		await new Promise(resolve => setTimeout(resolve, 350));
 		
-		expect(searchHandler).not.toHaveBeenCalled();
+		expect(searchHandler).toHaveBeenCalledWith(expect.anything());
 	});
 });
 

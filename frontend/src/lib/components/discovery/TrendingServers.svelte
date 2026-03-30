@@ -3,7 +3,7 @@
 	import { createEventDispatcher } from 'svelte';
 
 	export let servers: Array<{
-		id: string;
+		id?: string;
 		server_id?: string;
 		name: string;
 		description?: string;
@@ -24,26 +24,9 @@
 
 	const dispatch = createEventDispatcher();
 
-	function handleJoin(serverId: string) {
-		dispatch('join', serverId);
+	function handleJoin(event: CustomEvent<string>) {
+		dispatch('join', event.detail);
 	}
-
-	$: validServers = (servers.filter(s => s.server_id || s.id) as Array<{
-		id: string;
-		server_id?: string;
-		name: string;
-		description?: string;
-		short_description?: string;
-		icon_url?: string;
-		banner_url?: string;
-		member_count: number;
-		category?: string;
-		tags?: string[];
-		is_featured?: boolean;
-		trend_score?: number;
-		growth_rate?: number;
-		rank_change?: number;
-	}>);
 
 	function formatGrowthRate(rate: number): string {
 		if (rate >= 100) {
@@ -73,7 +56,7 @@
 		</div>
 	{:else}
 		<div class="trending-list">
-			{#each validServers as server, index (server.server_id || server.id)}
+			{#each servers as server, index (server.server_id || server.id)}
 				<div class="trending-item">
 					<span class="rank">#{index + 1}</span>
 					<div class="server-wrapper">

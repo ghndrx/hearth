@@ -60,61 +60,61 @@
 		{
 			id: '1', name: 'Hearth Official',
 			description: 'The official Hearth community server. Get help, share feedback, and connect with other users.',
-			icon_url: undefined, banner_url: undefined, member_count: 12543, category: 'technology',
+			icon_url: null, banner_url: null, member_count: 12543, category: 'technology',
 			tags: ['open-source', 'community', 'support'], is_featured: true
 		},
 		{
 			id: '2', name: 'Pixel Warriors',
 			description: 'A friendly gaming community for casual and competitive players alike.',
-			icon_url: undefined, banner_url: undefined, member_count: 8932, category: 'gaming',
+			icon_url: null, banner_url: null, member_count: 8932, category: 'gaming',
 			tags: ['gaming', 'fun', 'events'], is_featured: true
 		},
 		{
 			id: '3', name: 'Synthwave Lounge',
 			description: 'Share and discover synthwave, vaporwave, and retro music.',
-			icon_url: undefined, banner_url: undefined, member_count: 5621, category: 'music',
+			icon_url: null, banner_url: null, member_count: 5621, category: 'music',
 			tags: ['music', 'artists', 'discovery'], is_featured: true
 		},
 		{
 			id: '4', name: 'Code Crafters',
 			description: 'Programming discussions, code reviews, and learning resources.',
-			icon_url: undefined, banner_url: undefined, member_count: 15234, category: 'technology',
+			icon_url: null, banner_url: null, member_count: 15234, category: 'technology',
 			tags: ['programming', 'learning', 'help'], is_featured: true
 		},
 		{
 			id: '5', name: 'Digital Artists Hub',
 			description: 'A creative space for digital artists to share work and get feedback.',
-			icon_url: undefined, banner_url: undefined, member_count: 3421, category: 'art',
+			icon_url: null, banner_url: null, member_count: 3421, category: 'art',
 			tags: ['art', 'design', 'feedback'], is_featured: false
 		},
 		{
 			id: '6', name: 'Study Buddies',
 			description: 'Join study sessions, share resources, and motivate each other.',
-			icon_url: undefined, banner_url: undefined, member_count: 2156, category: 'education',
+			icon_url: null, banner_url: null, member_count: 2156, category: 'education',
 			tags: ['study', 'motivation', 'productivity'], is_featured: false
 		},
 		{
 			id: '7', name: 'Space Explorers',
 			description: 'Discuss astronomy, space missions, and the mysteries of the universe.',
-			icon_url: undefined, banner_url: undefined, member_count: 8765, category: 'science',
+			icon_url: null, banner_url: null, member_count: 8765, category: 'science',
 			tags: ['space', 'science', 'discussion'], is_featured: true
 		},
 		{
 			id: '8', name: 'Movie Night',
 			description: 'Watch parties, movie discussions, and recommendations.',
-			icon_url: undefined, banner_url: undefined, member_count: 4521, category: 'entertainment',
+			icon_url: null, banner_url: null, member_count: 4521, category: 'entertainment',
 			tags: ['movies', 'tv', 'watch-party'], is_featured: false
 		},
 		{
 			id: '9', name: 'Chill & Chat',
 			description: 'A relaxed place to hang out and make new friends.',
-			icon_url: undefined, banner_url: undefined, member_count: 9876, category: 'social',
+			icon_url: null, banner_url: null, member_count: 9876, category: 'social',
 			tags: ['social', 'friends', 'chill'], is_featured: false
 		},
 		{
 			id: '10', name: 'Sports Central',
 			description: 'Discuss your favorite sports, teams, and athletes.',
-			icon_url: undefined, banner_url: undefined, member_count: 6789, category: 'sports',
+			icon_url: null, banner_url: null, member_count: 6789, category: 'sports',
 			tags: ['sports', 'discussion', 'news'], is_featured: false
 		},
 	];
@@ -363,7 +363,7 @@
 		const matchesSearch = !searchQuery || 
 			server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			(server.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-			(server.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+			server.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 		return matchesCategory && matchesSearch;
 	});
 
