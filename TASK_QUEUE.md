@@ -38,3 +38,9 @@
 - [ ] **[P0]** Feature: Soundboard Integration — Discord's most popular voice feature for audio clips and memes in voice channels
 - [ ] **[P0]** Feature: Custom Emoji System — Server emoji upload, management, and cross-server usage for premium users
 - [ ] **[P1]** Feature: Voice Activities & Games — Built-in activities like poker, chess, and watch-together for voice engagement
+
+## 2026-03-30 Additional Critical Messaging Features
+
+- [ ] **[P0]** Feature: Message Forwarding — Core messaging feature for sharing content across channels/servers with attribution
+- [ ] **[P0]** Feature: Rich Embed Builder — Interactive embed creation for announcements, documentation, and bot responses
+- [ ] **[P1]** Feature: Granular Notification Controls — Per-channel notification settings, keywords, and quiet hours for user experience
