@@ -73,7 +73,7 @@
 		</div>
 	{:else}
 		<div class="trending-list">
-			{#each validServers as server, index (server.server_id || server.id)}
+			{#each servers.filter(s => s.server_id || s.id) as server, index (server.server_id || server.id)}
 				<div class="trending-item">
 					<span class="rank">#{index + 1}</span>
 					<div class="server-wrapper">
