@@ -71,8 +71,8 @@ func TestLocalBackend_validatePath(t *testing.T) {
 		{
 			name:    "absolute path that would escape",
 			path:    "/etc/passwd",
-			wantErr: false,
-			reason:  "absolute paths get joined and stay within bounds",
+			wantErr: true,
+			reason:  "absolute paths are rejected to prevent os.Root escape",
 		},
 	}
 
