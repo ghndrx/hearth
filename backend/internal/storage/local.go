@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,7 +89,7 @@ func (b *LocalBackend) Upload(ctx context.Context, path string, file io.Reader, 
 		if removeErr := b.root.Remove(cleanPath); removeErr != nil {
 			log.Printf("Failed to remove partial file %s: %v", cleanPath, removeErr)
 		}
-		return "", retErr
+		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 	return b.GetURL(path), nil
 }
