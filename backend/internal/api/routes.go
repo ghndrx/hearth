@@ -92,6 +92,16 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		discoverServers.Get("/discover/suggestions", h.DiscoverableServer.GetSearchSuggestions)
 		discoverServers.Get("/categories", h.DiscoverableServer.GetCategories)
 		discoverServers.Get("/:id", h.DiscoverableServer.GetServerDetail)
+
+		// Public Discovery API (GET /discovery/servers, GET /discovery/categories)
+		discoveryPublic := v1.Group("/discovery")
+		discoveryPublic.Get("/servers", h.DiscoverableServer.GetDiscoverableServers)
+		discoveryPublic.Get("/categories", h.DiscoverableServer.GetCategories)
+		discoveryPublic.Get("/servers/search", h.DiscoverableServer.SearchServersEnhanced)
+		discoveryPublic.Get("/servers/featured", h.DiscoverableServer.GetFeaturedServers)
+		discoveryPublic.Get("/servers/trending", h.DiscoverableServer.GetTrendingServers)
+		discoveryPublic.Get("/servers/tags", h.DiscoverableServer.GetPopularTags)
+		discoveryPublic.Get("/servers/:id", h.DiscoverableServer.GetServerDetail)
 	}
 
 	// Protected routes
@@ -318,6 +328,22 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	threads.Put("/:id/tags", h.ForumTags.ApplyTags)
 	threads.Get("/:id/tags", h.ForumTags.GetThreadTags)
 	threads.Put("/:id/pin", h.ForumTags.PinThread)
+
+	// Thread auto-archive
+	if h.ThreadAutoArchive != nil {
+		// Thread-level auto-archive status
+		threads.Get("/:id/auto-archive", h.ThreadAutoArchive.GetThreadAutoArchiveStatus)
+
+		// Channel-level auto-archive override
+		channels.Get("/:id/auto-archive", h.ThreadAutoArchive.GetChannelAutoArchiveOverride)
+		channels.Put("/:id/auto-archive", h.ThreadAutoArchive.SetChannelAutoArchiveOverride)
+		channels.Delete("/:id/auto-archive", h.ThreadAutoArchive.DeleteChannelAutoArchiveOverride)
+
+		// Server-level auto-archive settings
+		servers.Get("/:id/auto-archive", h.ThreadAutoArchive.GetServerAutoArchiveSettings)
+		servers.Patch("/:id/auto-archive", h.ThreadAutoArchive.UpdateServerAutoArchiveSettings)
+		servers.Get("/:id/auto-archive/stats", h.ThreadAutoArchive.GetServerAutoArchiveStats)
+	}
 
 	// Forum channel tags
 	channels.Get("/:id/tags", h.ForumTags.ListTags)
