@@ -3,7 +3,7 @@
 	import { createEventDispatcher } from 'svelte';
 
 	export let servers: Array<{
-		id?: string;
+		id: string;
 		server_id?: string;
 		name: string;
 		description?: string;

@@ -122,12 +122,15 @@ describe('CategoryFilter Component', () => {
 
 	it('emits select event on category click', async () => {
 		const selectHandler = vi.fn();
-		render(CategoryFilter, { 
+		const { component } = render(CategoryFilter, { 
 			props: { 
 				categories: mockCategories,
 				selectedCategory: 'all'
 			} 
 		});
+		
+		// @ts-ignore - Svelte 5 event handling compatibility
+		component.$on('select', selectHandler);
 		
 		const gamingButton = screen.getByRole('button', { name: /gaming/i });
 		await fireEvent.click(gamingButton);
