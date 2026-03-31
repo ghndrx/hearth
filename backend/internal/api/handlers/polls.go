@@ -18,6 +18,7 @@ type PollServiceInterface interface {
 	UpdatePoll(ctx context.Context, poll *models.Poll) error
 	DeletePoll(ctx context.Context, id uuid.UUID) error
 	GetGuildPolls(ctx context.Context, guildID uuid.UUID) ([]*models.Poll, error)
+	GetChannelPolls(ctx context.Context, channelID uuid.UUID) ([]*models.Poll, error)
 	Vote(ctx context.Context, pollID, optionID, userID uuid.UUID) error
 }
 
@@ -377,9 +378,7 @@ func (h *PollHandler) GetChannelPolls(c *fiber.Ctx) error {
 		})
 	}
 
-	// Note: Using GetGuildPolls as it's already implemented
-	// In a real implementation, we'd have GetByChannelID
-	polls, err := h.pollService.GetGuildPolls(c.Context(), channelID)
+	polls, err := h.pollService.GetChannelPolls(c.Context(), channelID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to get polls",

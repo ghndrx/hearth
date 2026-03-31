@@ -283,6 +283,7 @@ func main() {
 		messageService,
 		serviceBus,
 	)
+	pollService := services.NewPollService(repos.Polls)
 
 	// Initialize voice signaling service
 	var voiceService *websocket.VoiceSignalingService
@@ -410,6 +411,9 @@ func main() {
 	)
 
 	h := handlers.NewHandlersWithTyping(authService, userService, serverService, channelService, messageService, roleService, searchService, threadService, typingService, webhookService, wsGateway, voiceService)
+
+	// Wire up Poll handler
+	h.SetPollHandler(pollService)
 
 	// Wire up OAuth service if available
 	if oauthService != nil {
