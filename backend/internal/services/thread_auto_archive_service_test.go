@@ -222,6 +222,18 @@ func (m *simpleMockChannelRepo) Delete(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
+func (m *simpleMockChannelRepo) GetDMChannel(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error) {
+	return nil, nil
+}
+
+func (m *simpleMockChannelRepo) GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
+	return nil, nil
+}
+
+func (m *simpleMockChannelRepo) UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error {
+	return nil
+}
+
 func (m *simpleMockChannelRepo) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
 	return nil
 }
@@ -250,18 +262,6 @@ func (m *simpleMockChannelRepo) DeletePermissionOverride(ctx context.Context, ch
 	return nil
 }
 
-func (m *simpleMockChannelRepo) UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error {
-	return nil
-}
-
-func (m *simpleMockChannelRepo) GetDMChannel(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error) {
-	return nil, nil
-}
-
-func (m *simpleMockChannelRepo) GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
-	return nil, nil
-}
-
 // simpleMockServerRepo is a simple mock for ServerRepository
 type simpleMockServerRepo struct {
 	server *models.Server
@@ -275,32 +275,109 @@ func (m *simpleMockServerRepo) GetMember(ctx context.Context, serverID, userID u
 	return nil, nil
 }
 
-func (m *simpleMockServerRepo) Create(ctx context.Context, server *models.Server) error { return nil }
-func (m *simpleMockServerRepo) Update(ctx context.Context, server *models.Server) error { return nil }
-func (m *simpleMockServerRepo) Delete(ctx context.Context, id uuid.UUID) error { return nil }
-func (m *simpleMockServerRepo) TransferOwnership(ctx context.Context, serverID, newOwnerID uuid.UUID) error { return nil }
-func (m *simpleMockServerRepo) GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error) { return nil, nil }
-func (m *simpleMockServerRepo) GetMembersPaginated(ctx context.Context, serverID uuid.UUID, cursor *models.MemberCursor, limit int) (*models.PaginatedMembers, error) { return nil, nil }
-func (m *simpleMockServerRepo) GetMembersWithRole(ctx context.Context, serverID, roleID uuid.UUID) ([]*models.Member, error) { return nil, nil }
-func (m *simpleMockServerRepo) AddMember(ctx context.Context, member *models.Member) error { return nil }
-func (m *simpleMockServerRepo) UpdateMember(ctx context.Context, member *models.Member) error { return nil }
-func (m *simpleMockServerRepo) RemoveMember(ctx context.Context, serverID, userID uuid.UUID) error { return nil }
-func (m *simpleMockServerRepo) GetMemberCount(ctx context.Context, serverID uuid.UUID) (int, error) { return 0, nil }
-func (m *simpleMockServerRepo) GetUserServers(ctx context.Context, userID uuid.UUID) ([]*models.Server, error) { return nil, nil }
-func (m *simpleMockServerRepo) GetOwnedServersCount(ctx context.Context, userID uuid.UUID) (int, error) { return 0, nil }
-func (m *simpleMockServerRepo) GetBan(ctx context.Context, serverID, userID uuid.UUID) (*models.Ban, error) { return nil, nil }
-func (m *simpleMockServerRepo) AddBan(ctx context.Context, ban *models.Ban) error { return nil }
-func (m *simpleMockServerRepo) RemoveBan(ctx context.Context, serverID, userID uuid.UUID) error { return nil }
-func (m *simpleMockServerRepo) GetBans(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error) { return nil, nil }
-func (m *simpleMockServerRepo) CreateInvite(ctx context.Context, invite *models.Invite) error { return nil }
-func (m *simpleMockServerRepo) GetInvite(ctx context.Context, code string) (*models.Invite, error) { return nil, nil }
-func (m *simpleMockServerRepo) GetInviteByVanityCode(ctx context.Context, vanityCode string) (*models.Invite, error) { return nil, nil }
-func (m *simpleMockServerRepo) GetInvites(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error) { return nil, nil }
-func (m *simpleMockServerRepo) DeleteInvite(ctx context.Context, code string) error { return nil }
-func (m *simpleMockServerRepo) IncrementInviteUses(ctx context.Context, code string) error { return nil }
-func (m *simpleMockServerRepo) LogInviteUse(ctx context.Context, log *models.InviteUseLog) error { return nil }
-func (m *simpleMockServerRepo) GetInviteUseLogs(ctx context.Context, inviteCode string) ([]models.InviteUseLog, error) { return nil, nil }
-func (m *simpleMockServerRepo) GetServerInviteUseLogs(ctx context.Context, serverID uuid.UUID) ([]models.InviteUseLog, error) { return nil, nil }
+func (m *simpleMockServerRepo) Create(ctx context.Context, server *models.Server) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) Update(ctx context.Context, server *models.Server) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) TransferOwnership(ctx context.Context, serverID, newOwnerID uuid.UUID) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) GetMembers(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.Member, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) GetMembersPaginated(ctx context.Context, serverID uuid.UUID, cursor *models.MemberCursor, limit int) (*models.PaginatedMembers, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) GetMembersWithRole(ctx context.Context, serverID, roleID uuid.UUID) ([]*models.Member, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) AddMember(ctx context.Context, member *models.Member) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) UpdateMember(ctx context.Context, member *models.Member) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) RemoveMember(ctx context.Context, serverID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) GetMemberCount(ctx context.Context, serverID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+func (m *simpleMockServerRepo) GetUserServers(ctx context.Context, userID uuid.UUID) ([]*models.Server, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) GetOwnedServersCount(ctx context.Context, userID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+func (m *simpleMockServerRepo) GetBan(ctx context.Context, serverID, userID uuid.UUID) (*models.Ban, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) AddBan(ctx context.Context, ban *models.Ban) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) RemoveBan(ctx context.Context, serverID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) GetBans(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) CreateInvite(ctx context.Context, invite *models.Invite) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) GetInvite(ctx context.Context, code string) (*models.Invite, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) GetInviteByVanityCode(ctx context.Context, vanityCode string) (*models.Invite, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) GetInvites(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) DeleteInvite(ctx context.Context, code string) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) IncrementInviteUses(ctx context.Context, code string) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) LogInviteUse(ctx context.Context, log *models.InviteUseLog) error {
+	return nil
+}
+
+func (m *simpleMockServerRepo) GetInviteUseLogs(ctx context.Context, inviteCode string) ([]models.InviteUseLog, error) {
+	return nil, nil
+}
+
+func (m *simpleMockServerRepo) GetServerInviteUseLogs(ctx context.Context, serverID uuid.UUID) ([]models.InviteUseLog, error) {
+	return nil, nil
+}
 
 // simpleMockEventBus is a simple mock for EventBus
 type simpleMockEventBus struct{}
