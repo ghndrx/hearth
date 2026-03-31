@@ -2,6 +2,28 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-03-31](https://github.com/ghndrx/hearth/compare/2026-03-30...HEAD)
+
+### Features
+* feature/message file preview (#33)
+
+### Bug Fixes
+* fix(frontend): resolve TypeScript type errors in role-service-permission-checks
+* fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
+* fix(a11y): add tabindex to soundboard picker dialog (#34)
+* fix(frontend): resolve TypeScript error in EventDetail.svelte (#32)
+* fix: add MANAGE_EVENTS permission check for event management (#31)
+* fix(discovery): link server verification from discoverable_servers table (#29)
+* fix(frontend): resolve TypeScript null type errors in discovery components (#30)
+
+### Other Changes
+* chore: update TASK_QUEUE.md with 2026-03-31 GitHub issues analysis
+* chore(frontend): regenerate package-lock.json for npm ci compatibility
+* fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
+
+### Miscellaneous
+  (none)
+
 ## [2026-03-30](https://github.com/ghndrx/hearth/compare/2026-03-29...HEAD)
 
 ### Features

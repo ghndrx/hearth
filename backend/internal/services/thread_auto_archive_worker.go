@@ -252,7 +252,7 @@ func (w *ThreadAutoArchiveWorker) SetBatchSize(size int) {
 
 // SetCheckInterval sets how often the worker checks for threads to archive
 func (w *ThreadAutoArchiveWorker) SetCheckInterval(interval time.Duration) {
-	if interval >= 10*time.Second {
+	if interval >= time.Second {
 		w.checkInterval = interval
 	}
 }

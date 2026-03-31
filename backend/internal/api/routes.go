@@ -210,6 +210,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	servers.Post("/:id/transfer-ownership", h.Servers.TransferOwnership)
 	servers.Post("/:id/join", h.DiscoverableServer.JoinServer)
 
+	// Server discovery registration (auth-protected, server owner only)
+	if h.DiscoverableServer != nil {
+		servers.Post("/:serverId/discover", h.DiscoverableServer.RegisterServer)
+		servers.Patch("/discover/:id", h.DiscoverableServer.UpdateRegisteredServer)
+		servers.Delete("/discover/:id", h.DiscoverableServer.DeleteRegisteredServer)
+	}
+
 	// Server members
 	servers.Get("/:id/members", h.Servers.GetMembers)
 	servers.Get("/:id/members/:userId", h.Servers.GetMember)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"hearth/internal/models"
 )
 
@@ -38,6 +39,9 @@ type DiscoverableServerRepo interface {
 	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error)
 	GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error)
 	GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error)
+	Create(ctx context.Context, server *models.DiscoverableServer) error
+	Update(ctx context.Context, server *models.DiscoverableServer) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // ServerRepo interface for basic server operations
@@ -206,6 +210,116 @@ func (s *DiscoverableServerService) JoinServer(ctx context.Context, serverID, us
 	}
 
 	return s.memberRepo.AddMember(ctx, newMember)
+}
+
+// RegisterServer registers a server for public discovery (server owner only)
+func (s *DiscoverableServerService) RegisterServer(ctx context.Context, serverID, ownerID uuid.UUID, req *models.RegisterServerRequest) (*models.DiscoverableServer, error) {
+	// Verify the server exists
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return nil, ErrServerNotFound
+	}
+	if server == nil {
+		return nil, ErrServerNotFound
+	}
+
+	// Verify the user is the server owner
+	if server.OwnerID != ownerID {
+		return nil, ErrNotServerOwner
+	}
+
+	// Validate category
+	if !models.IsValidCategory(string(req.Category)) {
+		return nil, errors.New("invalid category")
+	}
+
+	// Check if already registered
+	existing, err := s.repo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, errors.New("server already registered for discovery")
+	}
+
+	desc := req.Description
+	ds := &models.DiscoverableServer{
+		ID:          uuid.New(),
+		ServerID:    serverID,
+		Name:        req.Name,
+		Description: &desc,
+		Category:    req.Category,
+		IconURL:     server.IconURL,
+		BannerURL:   server.BannerURL,
+		Tags:        pq.StringArray(req.Tags),
+		MemberCount: 0,
+		IsVerified:  false,
+		IsPublic:    true,
+		IsFeatured:  false,
+	}
+
+	if err := s.repo.Create(ctx, ds); err != nil {
+		return nil, err
+	}
+
+	return ds, nil
+}
+
+// UpdateRegisteredServer updates a server's discovery listing (server owner only)
+func (s *DiscoverableServerService) UpdateRegisteredServer(ctx context.Context, id, ownerID uuid.UUID, req *models.UpdateDiscoverableServerRequest) (*models.DiscoverableServer, error) {
+	ds, err := s.repo.GetByID(ctx, id)
+	if err != nil || ds == nil {
+		return nil, ErrDiscoverableServerNotFound
+	}
+
+	// Verify ownership
+	server, err := s.serverRepo.GetByID(ctx, ds.ServerID)
+	if err != nil || server == nil {
+		return nil, ErrServerNotFound
+	}
+	if server.OwnerID != ownerID {
+		return nil, ErrNotServerOwner
+	}
+
+	if req.Name != nil {
+		ds.Name = *req.Name
+	}
+	if req.Description != nil {
+		ds.Description = req.Description
+	}
+	if req.Category != nil {
+		if !models.IsValidCategory(string(*req.Category)) {
+			return nil, errors.New("invalid category")
+		}
+		ds.Category = *req.Category
+	}
+	if req.Tags != nil {
+		ds.Tags = pq.StringArray(req.Tags)
+	}
+
+	if err := s.repo.Update(ctx, ds); err != nil {
+		return nil, err
+	}
+
+	return ds, nil
+}
+
+// DeleteRegisteredServer removes a server from discovery (server owner only)
+func (s *DiscoverableServerService) DeleteRegisteredServer(ctx context.Context, id, ownerID uuid.UUID) error {
+	ds, err := s.repo.GetByID(ctx, id)
+	if err != nil || ds == nil {
+		return ErrDiscoverableServerNotFound
+	}
+
+	server, err := s.serverRepo.GetByID(ctx, ds.ServerID)
+	if err != nil || server == nil {
+		return ErrServerNotFound
+	}
+	if server.OwnerID != ownerID {
+		return ErrNotServerOwner
+	}
+
+	return s.repo.Delete(ctx, id)
 }
 
 // SearchServersEnhanced performs enhanced search on discoverable servers
