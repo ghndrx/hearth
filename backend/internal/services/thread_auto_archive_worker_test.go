@@ -241,16 +241,45 @@ func (m *simpleMockChannelRepoForWorker) Delete(ctx context.Context, id uuid.UUI
 	return nil
 }
 
-func (m *simpleMockChannelRepoForWorker) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error { return nil }
-func (m *simpleMockChannelRepoForWorker) RemoveRecipient(ctx context.Context, channelID, userID uuid.UUID) error { return nil }
-func (m *simpleMockChannelRepoForWorker) CountRecipients(ctx context.Context, channelID uuid.UUID) (int, error) { return 0, nil }
-func (m *simpleMockChannelRepoForWorker) BulkUpdatePositions(ctx context.Context, entries []models.ReorderChannelEntry) error { return nil }
-func (m *simpleMockChannelRepoForWorker) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) { return nil, nil }
-func (m *simpleMockChannelRepoForWorker) UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error { return nil }
-func (m *simpleMockChannelRepoForWorker) DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error { return nil }
-func (m *simpleMockChannelRepoForWorker) UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error { return nil }
-func (m *simpleMockChannelRepoForWorker) GetDMChannel(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error) { return nil, nil }
-func (m *simpleMockChannelRepoForWorker) GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) { return nil, nil }
+func (m *simpleMockChannelRepoForWorker) GetDMChannel(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error) {
+	return nil, nil
+}
+
+func (m *simpleMockChannelRepoForWorker) GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
+	return nil, nil
+}
+
+func (m *simpleMockChannelRepoForWorker) UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error {
+	return nil
+}
+
+func (m *simpleMockChannelRepoForWorker) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *simpleMockChannelRepoForWorker) RemoveRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *simpleMockChannelRepoForWorker) CountRecipients(ctx context.Context, channelID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+func (m *simpleMockChannelRepoForWorker) BulkUpdatePositions(ctx context.Context, entries []models.ReorderChannelEntry) error {
+	return nil
+}
+
+func (m *simpleMockChannelRepoForWorker) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) {
+	return nil, nil
+}
+
+func (m *simpleMockChannelRepoForWorker) UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error {
+	return nil
+}
+
+func (m *simpleMockChannelRepoForWorker) DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error {
+	return nil
+}
 
 // simpleMockEventBusForWorker is a simple mock for EventBus
 type simpleMockEventBusForWorker struct{}
@@ -341,7 +370,7 @@ func TestThreadAutoArchiveWorker_ProcessThreadActivity_SkipsArchived(t *testing.
 func TestThreadAutoArchiveWorker_GetWorkerStatus(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := newSimpleMockChannelRepoForWorker()
+	mockChannelRepo := &simpleMockChannelRepoForWorker{}
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
@@ -355,7 +384,7 @@ func TestThreadAutoArchiveWorker_GetWorkerStatus(t *testing.T) {
 func TestThreadAutoArchiveWorker_SetBatchSize(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := newSimpleMockChannelRepoForWorker()
+	mockChannelRepo := &simpleMockChannelRepoForWorker{}
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
@@ -377,11 +406,12 @@ func TestThreadAutoArchiveWorker_SetBatchSize(t *testing.T) {
 func TestThreadAutoArchiveWorker_SetCheckInterval(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := newSimpleMockChannelRepoForWorker()
+	mockChannelRepo := &simpleMockChannelRepoForWorker{}
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
 
-	worker.SetCheckInterval(5 * time.Second)
-	assert.Equal(t, 5*time.Second, worker.checkInterval)
+	// Test that interval is set when >= 10 seconds
+	worker.SetCheckInterval(15 * time.Second)
+	assert.Equal(t, 15*time.Second, worker.checkInterval)
 }
