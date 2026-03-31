@@ -28,6 +28,11 @@ func (m *MockPollRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 	return args.Get(0).(*models.Poll), args.Error(1)
 }
 
+func (m *MockPollRepository) GetByChannelID(ctx context.Context, channelID uuid.UUID) ([]*models.Poll, error) {
+	args := m.Called(ctx, channelID)
+	return args.Get(0).([]*models.Poll), args.Error(1)
+}
+
 func (m *MockPollRepository) Update(ctx context.Context, poll *models.Poll) error {
 	args := m.Called(ctx, poll)
 	return args.Error(0)
@@ -43,8 +48,8 @@ func (m *MockPollRepository) GetByGuildID(ctx context.Context, guildID uuid.UUID
 	return args.Get(0).([]*models.Poll), args.Error(1)
 }
 
-func (m *MockPollRepository) VoteForOption(ctx context.Context, pollID, optionID uuid.UUID) error {
-	args := m.Called(ctx, pollID, optionID)
+func (m *MockPollRepository) VoteForOption(ctx context.Context, pollID, optionID, userID uuid.UUID) error {
+	args := m.Called(ctx, pollID, optionID, userID)
 	return args.Error(0)
 }
 
@@ -116,9 +121,19 @@ func TestPollService_Vote(t *testing.T) {
 	optionID := uuid.New()
 	userID := uuid.New()
 
+	// Create a valid open poll for testing
+	openPoll := &models.Poll{
+		ID:        pollID,
+		ChannelID: uuid.New(),
+		CreatorID: uuid.New(),
+		Question:  "Test Poll",
+		EndTime:   nil, // Open poll (no end time)
+	}
+
 	// Scenario 1: Successful Vote
+	repo.On("GetByID", ctx, pollID).Return(openPoll, nil)
 	repo.On("CheckUserVote", ctx, pollID, userID).Return(nil, nil)
-	repo.On("VoteForOption", ctx, pollID, optionID).Return(nil)
+	repo.On("VoteForOption", ctx, pollID, optionID, userID).Return(nil)
 
 	err := service.Vote(ctx, pollID, optionID, userID)
 	assert.NoError(t, err)
@@ -126,8 +141,8 @@ func TestPollService_Vote(t *testing.T) {
 
 	// Scenario 2: User Already Voted
 	repo.ExpectedCalls = nil
+	repo.On("GetByID", ctx, pollID).Return(openPoll, nil)
 	repo.On("CheckUserVote", ctx, pollID, userID).Return(&models.PollOptionVote{}, nil) // Mock existing vote
-	repo.On("VoteForOption", ctx, pollID, optionID).Return(nil)                         // Should not be called
 
 	err = service.Vote(ctx, pollID, optionID, userID)
 	assert.Error(t, err)

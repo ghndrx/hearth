@@ -163,6 +163,7 @@ type Repositories struct {
 	ServerAudioSettings  *ServerAudioSettingsRepository
 	Premium              *PremiumRepository
 	Search               *SearchRepository
+	Polls                *PollRepository
 }
 
 // NewRepositories creates all repositories
@@ -190,5 +191,6 @@ func NewRepositories(db *sqlx.DB) *Repositories {
 		ServerAudioSettings:  NewServerAudioSettingsRepository(db),
 		Premium:              NewPremiumRepository(db),
 		Search:               NewSearchRepository(db),
+		Polls:                NewPollRepository(db),
 	}
 }
