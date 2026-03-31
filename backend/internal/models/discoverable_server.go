@@ -62,6 +62,9 @@ type DiscoverableServer struct {
 	IsPublic    bool                  `json:"is_public" db:"is_public"`
 	IsFeatured  bool                  `json:"is_featured" db:"is_featured"`
 	FeaturedAt  *time.Time            `json:"featured_at,omitempty" db:"featured_at"`
+	Language    string                `json:"language" db:"language"`
+	Region      *string              `json:"region,omitempty" db:"region"`
+	VanityURL   *string              `json:"vanity_url,omitempty" db:"vanity_url"`
 	CreatedAt   time.Time             `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time             `json:"updated_at" db:"updated_at"`
 }
@@ -130,9 +133,9 @@ type DiscoverableFeaturedServer struct {
 
 // CategoryInfo represents a discovery category with server count
 type CategoryInfo struct {
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	ServerCount int    `json:"server_count"`
+	Name        string `json:"name" db:"name"`
+	Slug        string `json:"slug" db:"slug"`
+	ServerCount int    `json:"server_count" db:"server_count"`
 }
 
 // DiscoverFilters represents search/filter options for server discovery

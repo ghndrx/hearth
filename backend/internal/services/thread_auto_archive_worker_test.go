@@ -244,39 +244,30 @@ func (m *simpleMockChannelRepoForWorker) Delete(ctx context.Context, id uuid.UUI
 func (m *simpleMockChannelRepoForWorker) GetDMChannel(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error) {
 	return nil, nil
 }
-
 func (m *simpleMockChannelRepoForWorker) GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
 	return nil, nil
 }
-
 func (m *simpleMockChannelRepoForWorker) UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error {
 	return nil
 }
-
 func (m *simpleMockChannelRepoForWorker) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
 	return nil
 }
-
 func (m *simpleMockChannelRepoForWorker) RemoveRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
 	return nil
 }
-
 func (m *simpleMockChannelRepoForWorker) CountRecipients(ctx context.Context, channelID uuid.UUID) (int, error) {
 	return 0, nil
 }
-
 func (m *simpleMockChannelRepoForWorker) BulkUpdatePositions(ctx context.Context, entries []models.ReorderChannelEntry) error {
 	return nil
 }
-
 func (m *simpleMockChannelRepoForWorker) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) {
 	return nil, nil
 }
-
 func (m *simpleMockChannelRepoForWorker) UpsertPermissionOverride(ctx context.Context, override *models.PermissionOverride) error {
 	return nil
 }
-
 func (m *simpleMockChannelRepoForWorker) DeletePermissionOverride(ctx context.Context, channelID, targetID uuid.UUID, targetType string) error {
 	return nil
 }

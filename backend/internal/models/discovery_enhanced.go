@@ -1,5 +1,11 @@
 package models
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 // ServerRecommendation represents a recommended server for a user
 type ServerRecommendation struct {
 	DiscoverableServerSearchResult
@@ -41,9 +47,9 @@ type TrendingServerInfo struct {
 // CategoryWithStats represents a category with additional statistics
 type CategoryWithStats struct {
 	CategoryInfo
-	TotalMembers    int     `json:"total_members"`
-	AvgMemberCount  float64 `json:"avg_member_count"`
-	GrowthRate      float64 `json:"growth_rate"`
+	TotalMembers    int     `json:"total_members" db:"total_members"`
+	AvgMemberCount  float64 `json:"avg_member_count" db:"avg_member_count"`
+	GrowthRate      float64 `json:"growth_rate" db:"growth_rate"`
 }
 
 // DiscoveryHomePage represents the full discovery home page data
@@ -77,4 +83,15 @@ type SearchSuggestion struct {
 	Type  string `json:"type"`  // category, tag, server
 	Value string `json:"value"`
 	Count int    `json:"count,omitempty"`
+}
+
+// ServerDiscoveryDailyStats represents daily aggregated discovery stats for a server
+type ServerDiscoveryDailyStats struct {
+	ID           uuid.UUID `json:"id" db:"id"`
+	ServerID     uuid.UUID `json:"server_id" db:"server_id"`
+	StatDate     time.Time `json:"stat_date" db:"stat_date"`
+	Views        int       `json:"views" db:"views"`
+	Impressions  int       `json:"impressions" db:"impressions"`
+	Joins        int       `json:"joins" db:"joins"`
+	SearchClicks int       `json:"search_clicks" db:"search_clicks"`
 }
