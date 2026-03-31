@@ -1,5 +1,22 @@
 package models
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// ServerDiscoveryDailyStats represents daily aggregated discovery stats for a server
+type ServerDiscoveryDailyStats struct {
+	ID           uuid.UUID `json:"id" db:"id"`
+	ServerID     uuid.UUID `json:"server_id" db:"server_id"`
+	StatDate     time.Time `json:"stat_date" db:"stat_date"`
+	Views        int       `json:"views" db:"views"`
+	Impressions  int       `json:"impressions" db:"impressions"`
+	Joins        int       `json:"joins" db:"joins"`
+	SearchClicks int       `json:"search_clicks" db:"search_clicks"`
+}
+
 // ServerRecommendation represents a recommended server for a user
 type ServerRecommendation struct {
 	DiscoverableServerSearchResult

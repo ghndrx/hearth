@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,6 +43,8 @@ type DiscoverableServerRepo interface {
 	Create(ctx context.Context, server *models.DiscoverableServer) error
 	Update(ctx context.Context, server *models.DiscoverableServer) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error
+	GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error)
 }
 
 // ServerRepo interface for basic server operations
@@ -320,6 +323,54 @@ func (s *DiscoverableServerService) DeleteRegisteredServer(ctx context.Context, 
 	}
 
 	return s.repo.Delete(ctx, id)
+}
+
+// SetServerPublicStatus is an admin method to force-set a server's public status
+func (s *DiscoverableServerService) SetServerPublicStatus(ctx context.Context, id uuid.UUID, isPublic bool) error {
+	ds, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if ds == nil {
+		return ErrDiscoverableServerNotFound
+	}
+
+	ds.IsPublic = isPublic
+	return s.repo.Update(ctx, ds)
+}
+
+// validActivityTypes are the allowed activity types for discovery tracking
+var validActivityTypes = map[string]bool{
+	"view":         true,
+	"impression":   true,
+	"join":         true,
+	"search_click": true,
+}
+
+// validDiscoverySources are the allowed discovery sources
+var validDiscoverySources = map[string]bool{
+	"home":        true,
+	"search":      true,
+	"category":    true,
+	"trending":    true,
+	"recommended": true,
+	"featured":    true,
+}
+
+// TrackActivity records a discovery activity event for a server
+func (s *DiscoverableServerService) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
+	if !validActivityTypes[activityType] {
+		return fmt.Errorf("invalid activity type: %s", activityType)
+	}
+	if source != "" && !validDiscoverySources[source] {
+		return fmt.Errorf("invalid discovery source: %s", source)
+	}
+	return s.repo.TrackActivity(ctx, serverID, userID, activityType, source)
+}
+
+// GetServerDailyStats returns daily discovery stats for a server
+func (s *DiscoverableServerService) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
+	return s.repo.GetServerDailyStats(ctx, serverID, days)
 }
 
 // SearchServersEnhanced performs enhanced search on discoverable servers
