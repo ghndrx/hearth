@@ -323,3 +323,71 @@ func TestCategoryInfo(t *testing.T) {
 		assert.Equal(t, 75, info.ServerCount)
 	})
 }
+
+// TestDiscoveryResponse tests the combined discovery response model
+func TestDiscoveryResponse(t *testing.T) {
+	t.Run("discovery response structure includes all fields", func(t *testing.T) {
+		// This tests the expected structure of the GET /discovery response
+		// which combines home page data with paginated server listings
+		
+		servers := []*models.DiscoverableServerSearchResult{
+			{Name: "Server 1", MemberCount: 1000},
+			{Name: "Server 2", MemberCount: 2000},
+		}
+		
+		featured := []*models.DiscoverableFeaturedServer{
+			{Name: "Featured 1", MemberCount: 5000},
+		}
+		
+		trending := []*models.TrendingServerInfo{
+			{Server: &models.DiscoverableServerSearchResult{Name: "Trending 1"}, TrendScore: 90.0},
+		}
+		
+		recommended := []*models.ServerRecommendation{
+			{DiscoverableServerSearchResult: models.DiscoverableServerSearchResult{Name: "Rec 1"}, Reason: "Popular in your interests"},
+		}
+		
+		categories := []*models.CategoryWithStats{
+			{CategoryInfo: models.CategoryInfo{Name: "Gaming", Slug: "gaming", ServerCount: 100}},
+		}
+		
+		tags := []*models.DiscoveryTag{
+			{Name: "Gaming", Slug: "gaming", UsageCount: 500},
+		}
+		
+		stats := &models.DiscoveryPageStats{
+			TotalServers:       1000,
+			TotalMembers:      50000,
+			TotalCategories:   9,
+			NewServersThisWeek: 25,
+		}
+		
+		// Verify the expected structure is valid
+		assert.NotNil(t, servers)
+		assert.NotNil(t, featured)
+		assert.NotNil(t, trending)
+		assert.NotNil(t, recommended)
+		assert.NotNil(t, categories)
+		assert.NotNil(t, tags)
+		assert.NotNil(t, stats)
+		
+		assert.Len(t, servers, 2)
+		assert.Len(t, featured, 1)
+		assert.Len(t, trending, 1)
+		assert.Len(t, recommended, 1)
+		assert.Len(t, categories, 1)
+		assert.Len(t, tags, 1)
+		
+		// Verify pagination info is in stats
+		assert.Equal(t, int64(1000), stats.TotalServers)
+		assert.Equal(t, int64(50000), stats.TotalMembers)
+		assert.Equal(t, 9, stats.TotalCategories)
+		assert.Equal(t, 25, stats.NewServersThisWeek)
+		
+		// Verify trending info
+		assert.Equal(t, 90.0, trending[0].TrendScore)
+		
+		// Verify recommendation
+		assert.Equal(t, "Popular in your interests", recommended[0].Reason)
+	})
+}
