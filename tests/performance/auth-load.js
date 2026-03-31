@@ -112,7 +112,9 @@ function testRegistration() {
         token: body.access_token,
         refresh: body.refresh_token,
       });
-    } catch {}
+    } catch (error) {
+      console.warn('Failed to parse auth response body:', error);
+    }
   }
 }
 
