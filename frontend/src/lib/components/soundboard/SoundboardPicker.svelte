@@ -265,7 +265,6 @@
 		role="dialog" 
 		aria-label="Soundboard picker" 
 		aria-modal="true"
-		tabindex="-1"
 		on:keydown={handleKeydown}
 	>
 		<!-- Header -->
