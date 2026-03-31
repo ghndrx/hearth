@@ -41,6 +41,6 @@
 
 ## 2026-03-31 Competitive Pipeline
 
-- [ ] **[P0]** Feature: Thread Auto-Archive System — Automatic thread management for improved server organization and performance
-- [ ] **[P1]** Feature: Advanced Notification Controls — Granular per-channel notification settings for better user experience
-- [ ] **[P1]** Feature: Channel Following & Cross-Server Content — Follow announcement channels across servers for content syndication
+- [ ] **[P0]** Feature: Voice Messages — Audio message recording and playback in text channels for mobile-first communication
+- [ ] **[P0]** Feature: Enhanced Mobile Experience — Mobile-first UI patterns and optimizations for competitive mobile parity
+- [ ] **[P1]** Feature: Server Insights Dashboard — Analytics and metrics dashboard for community management and growth tracking
