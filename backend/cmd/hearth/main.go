@@ -541,9 +541,6 @@ func main() {
 	h.SetPremiumHandler(premiumService, billingService)
 	log.Printf("✅ Premium & Billing services initialized")
 
-	// Initialize Invite Tracking handler (TODO: re-enable after invite tracking merge)
-	// h.SetInviteTrackingHandler(serverService)
-	// log.Printf("✅ Invite tracking handler initialized")
 
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
@@ -645,5 +642,3 @@ func main() {
 	_ = redisCache
 }
 
-// force rebuild 1771201747
-// trigger 1771202638
