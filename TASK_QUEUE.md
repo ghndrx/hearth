@@ -44,3 +44,9 @@
 - [ ] **[P0]** Feature: Voice Messages — Audio message recording and playback in text channels for mobile-first communication
 - [ ] **[P0]** Feature: Enhanced Mobile Experience — Mobile-first UI patterns and optimizations for competitive mobile parity
 - [ ] **[P1]** Feature: Server Insights Dashboard — Analytics and metrics dashboard for community management and growth tracking
+
+## 2026-03-31 Critical Feature Gap Analysis
+
+- [ ] **[P0]** Feature: Bot API and Developer Platform — Essential developer ecosystem with bot creation, OAuth2, and API access for third-party integrations
+- [ ] **[P0]** Feature: Live Video Streaming — Go Live functionality for streaming games/applications to voice channel audiences
+- [ ] **[P0]** Feature: Advanced Permissions System — Fine-grained permission controls with role hierarchies and channel overrides
