@@ -39,6 +39,8 @@ type DiscoverableServerRepo interface {
 	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error)
 	GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error)
 	GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error)
+	TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error
+	GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error)
 	Create(ctx context.Context, server *models.DiscoverableServer) error
 	Update(ctx context.Context, server *models.DiscoverableServer) error
 	Delete(ctx context.Context, id uuid.UUID) error

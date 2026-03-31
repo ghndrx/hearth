@@ -146,9 +146,9 @@ type DiscoverableFeaturedServer struct {
 
 // CategoryInfo represents a discovery category with server count
 type CategoryInfo struct {
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	ServerCount int    `json:"server_count"`
+	Name        string `json:"name" db:"name"`
+	Slug        string `json:"slug" db:"slug"`
+	ServerCount int    `json:"server_count" db:"server_count"`
 }
 
 // DiscoverFilters represents search/filter options for server discovery
