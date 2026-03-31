@@ -3,7 +3,7 @@
 	import { createEventDispatcher } from 'svelte';
 
 	export let servers: Array<{
-		id: string;
+		id?: string;
 		server_id?: string;
 		name: string;
 		description?: string;
@@ -28,23 +28,6 @@
 	function handleJoin(serverId: string) {
 		dispatch('join', serverId);
 	}
-
-	$: validServers = (servers.filter(s => s.server_id || s.id) as Array<{
-		id: string;
-		server_id?: string;
-		name: string;
-		description?: string;
-		short_description?: string;
-		icon_url?: string;
-		banner_url?: string;
-		member_count: number;
-		category?: string;
-		tags?: string[];
-		is_featured?: boolean;
-		reason?: string;
-		mutual_member_count?: number;
-		mutual_servers?: string[];
-	}>);
 </script>
 
 <section class="recommended-servers">
@@ -89,7 +72,7 @@
 						</div>
 					{/if}
 					<ServerCard
-						{server}
+						server={server as any}
 						variant="featured"
 						onJoin={handleJoin}
 						{joiningServerId}
