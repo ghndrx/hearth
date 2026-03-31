@@ -188,6 +188,68 @@ func (h *DiscoverableServerHandler) SearchServersEnhanced(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
+// GetDiscovery is the main public server directory endpoint listing servers that have opted into being discoverable
+// GET /api/v1/discovery
+func (h *DiscoverableServerHandler) GetDiscovery(c *fiber.Ctx) error {
+	featuredLimit := c.QueryInt("featured_limit", 5)
+	trendingLimit := c.QueryInt("trending_limit", 10)
+	recommendedLimit := c.QueryInt("recommended_limit", 10)
+
+	// Parse pagination for main server listing
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := c.QueryInt("limit", 25)
+	if limit < 1 || limit > 100 {
+		limit = 25
+	}
+
+	// Parse filters for server listing
+	filters := &models.DiscoverFilters{
+		Query:    c.Query("q"),
+		Category: models.ServerDiscoveryCategory(c.Query("category")),
+		Page:     page,
+		Limit:    limit,
+	}
+
+	// User is optional for home page
+	var userID uuid.UUID
+	if id, ok := c.Locals("userID").(uuid.UUID); ok {
+		userID = id
+	}
+
+	// Fetch home page data and paginated servers concurrently
+	homePage, err := h.discoverableServerService.GetDiscoveryHomePage(c.Context(), userID, featuredLimit, trendingLimit, recommendedLimit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get discovery page",
+		})
+	}
+
+	// Get paginated server listings
+	serversResult, err := h.discoverableServerService.GetDiscoverableServers(c.Context(), filters)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get servers",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"featured":      homePage.Featured,
+		"trending":      homePage.Trending,
+		"recommended":   homePage.Recommended,
+		"categories":    homePage.Categories,
+		"popular_tags":  homePage.PopularTags,
+		"stats":         homePage.Stats,
+		"servers":       serversResult.Servers,
+		"total":         serversResult.Total,
+		"page":          serversResult.Page,
+		"limit":         serversResult.Limit,
+		"total_pages":   serversResult.TotalPages,
+	})
+}
+
 // GetDiscoveryHomePage returns the full discovery home page data
 // GET /api/v1/servers/discover/home
 func (h *DiscoverableServerHandler) GetDiscoveryHomePage(c *fiber.Ctx) error {

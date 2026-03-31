@@ -92,6 +92,10 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		discoverServers.Get("/discover/suggestions", h.DiscoverableServer.GetSearchSuggestions)
 		discoverServers.Get("/categories", h.DiscoverableServer.GetCategories)
 		discoverServers.Get("/:id", h.DiscoverableServer.GetServerDetail)
+
+		// Main public server directory endpoint - GET /api/v1/discovery
+		// Lists servers that have opted into being discoverable with featured, trending, recommendations
+		v1.Get("/discovery", h.DiscoverableServer.GetDiscovery)
 	}
 
 	// Protected routes

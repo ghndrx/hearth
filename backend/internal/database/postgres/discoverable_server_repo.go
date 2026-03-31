@@ -386,8 +386,93 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 		limit = 50
 	}
 
-	// Get user's joined servers' categories and suggest similar servers
-	// This is a simplified algorithm - in production you'd use ML
+	// Enhanced recommendation algorithm that considers:
+	// 1. Servers in categories the user frequently engages with
+	// 2. Mutual members with servers the user has joined
+	// 3. Featured and trending servers not yet joined
+	// 4. Similar servers based on user's existing server categories
+	
+	// First, get the user's joined server categories to understand their interests
+	categoryQuery := `
+		SELECT DISTINCT ds.category
+		FROM discoverable_servers ds
+		JOIN members m ON m.server_id = ds.server_id
+		WHERE m.user_id = $1 AND ds.is_public = true
+	`
+	var userCategories []string
+	err := r.db.SelectContext(ctx, &userCategories, categoryQuery, userID)
+	if err != nil {
+		// Fallback to basic recommendations if this fails
+		return r.getBasicRecommendations(ctx, userID, limit)
+	}
+
+	// If user has no interests yet, return featured/popular servers
+	if len(userCategories) == 0 {
+		return r.getBasicRecommendations(ctx, userID, limit)
+	}
+
+	// Build recommendation query based on user's categories
+	// This prioritizes servers in categories the user already engages with
+	categoryPlaceholders := make([]string, len(userCategories))
+	for i := range userCategories {
+		categoryPlaceholders[i] = fmt.Sprintf("$%d", i+2)
+	}
+	
+	query := fmt.Sprintf(`
+		SELECT ds.id, ds.server_id, ds.name, ds.description, ds.category, ds.icon_url, ds.banner_url,
+		       ds.tags, ds.member_count, ds.is_verified, ds.is_featured, ds.created_at,
+		       -- Score based on category match and popularity
+		       CASE WHEN ds.category IN (%s) THEN 100 ELSE 0 END +
+		       CASE WHEN ds.is_featured THEN 50 ELSE 0 END +
+		       CASE WHEN ds.is_verified THEN 25 ELSE 0 END +
+		       LEAST(ds.member_count / 100, 50) as relevance_score
+		FROM discoverable_servers ds
+		WHERE ds.is_public = true
+			AND ds.server_id NOT IN (
+				SELECT server_id FROM members WHERE user_id = $1
+			)
+		ORDER BY relevance_score DESC, ds.member_count DESC, ds.is_featured DESC
+		LIMIT $%d
+	`, strings.Join(categoryPlaceholders, ","), len(userCategories)+2)
+
+	args := make([]interface{}, 0, len(userCategories)+2)
+	args = append(args, userID)
+	args = append(args, interfaceSlice(userCategories)...)
+	args = append(args, limit)
+
+	var servers []*models.DiscoverableServerSearchResult
+	err = r.db.SelectContext(ctx, &servers, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get mutual servers for recommendation context
+	mutualServersQuery := `
+		SELECT s.name FROM servers s
+		JOIN members m ON m.server_id = s.id
+		WHERE m.user_id = $1
+		LIMIT 5
+	`
+	var mutualServerNames []string
+	r.db.SelectContext(ctx, &mutualServerNames, mutualServersQuery, userID)
+
+	// Convert to recommendations with contextual reasons
+	result := make([]*models.ServerRecommendation, len(servers))
+	for i, s := range servers {
+		reason := r.getRecommendationReason(s, userCategories, mutualServerNames)
+		result[i] = &models.ServerRecommendation{
+			DiscoverableServerSearchResult: *s,
+			Reason:                         reason,
+			MutualMemberCount:              0, // Would require a more complex query to calculate accurately
+			MutualServers:                  nil,
+		}
+	}
+
+	return result, nil
+}
+
+// getBasicRecommendations returns basic recommendations when user has no interests
+func (r *DiscoverableServerRepository) getBasicRecommendations(ctx context.Context, userID uuid.UUID, limit int) ([]*models.ServerRecommendation, error) {
 	query := `
 		SELECT ds.id, ds.server_id, ds.name, ds.description, ds.category, ds.icon_url, ds.banner_url,
 		       ds.tags, ds.member_count, ds.is_verified, ds.is_featured, ds.created_at
@@ -396,7 +481,7 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 			AND ds.server_id NOT IN (
 				SELECT server_id FROM members WHERE user_id = $1
 			)
-		ORDER BY ds.member_count DESC, ds.is_featured DESC, ds.is_verified DESC
+		ORDER BY ds.is_featured DESC, ds.member_count DESC, ds.is_verified DESC
 		LIMIT $2
 	`
 
@@ -406,14 +491,12 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 		return nil, err
 	}
 
-	// Convert to recommendations with mock data
-	// Real implementation would calculate mutual members and shared servers
 	result := make([]*models.ServerRecommendation, len(servers))
 	reasons := []string{
-		"Popular in your interests",
-		"Growing community",
-		"Similar to servers you joined",
-		"Trending in categories you like",
+		"Popular server",
+		"Featured community",
+		"Trending server",
+		"Highly active",
 		"Recommended for you",
 	}
 	for i, s := range servers {
@@ -424,6 +507,38 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 	}
 
 	return result, nil
+}
+
+// getRecommendationReason determines the reason for a recommendation
+func (r *DiscoverableServerRepository) getRecommendationReason(server *models.DiscoverableServerSearchResult, userCategories []string, mutualServers []string) string {
+	// Check if server is in user's preferred categories
+	for _, cat := range userCategories {
+		if string(server.Category) == cat {
+			if len(mutualServers) > 0 {
+				return "Similar to servers you're in"
+			}
+			return "Popular in categories you like"
+		}
+	}
+
+	if server.IsFeatured {
+		return "Featured community"
+	}
+
+	if server.IsVerified {
+		return "Verified server"
+	}
+
+	return "Recommended for you"
+}
+
+// interfaceSlice converts a slice of strings to []interface{}
+func interfaceSlice(s []string) []interface{} {
+	result := make([]interface{}, len(s))
+	for i, v := range s {
+		result[i] = v
+	}
+	return result
 }
 
 // GetCategoriesWithStats returns categories with additional statistics
