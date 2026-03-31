@@ -6,9 +6,6 @@
 	import { sendMessage } from '$lib/stores/messages';
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import { fetchUnreadState, markChannelRead } from '$lib/stores/unread';
-	import { threadStore } from '$lib/stores/thread';
-	import { api } from '$lib/api';
-	import type { Thread, ThreadMessage } from '$lib/stores/thread';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -109,36 +106,10 @@
 		}
 	}
 	
-	async function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
-		const { id: threadId, name: threadName } = event.detail;
-		console.log('[Page] Forum post created:', { threadId, threadName });
+	function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
+		console.log('[Page] Forum post created:', event.detail);
 		showForumPostModal = false;
-
-		// Navigate to the created forum post by opening it in the thread view
-		try {
-			const channelId = $currentChannel?.id;
-			if (!channelId) {
-				console.error('[Page] Cannot open thread: no current channel');
-				return;
-			}
-
-			// Fetch the thread messages to get the parent message
-			const messagesResponse = await api.get<ThreadMessage[]>(
-				`/channels/${channelId}/messages/${threadId}/thread`
-			);
-
-			const messages = messagesResponse || [];
-			const parentMessage = messages.length > 0 ? messages[0] : null;
-
-			if (parentMessage) {
-				// Open the thread in the thread view panel
-				await threadStore.open(parentMessage, channelId);
-			} else {
-				console.warn('[Page] No messages found for new thread:', threadId);
-			}
-		} catch (error) {
-			console.error('[Page] Failed to navigate to created forum post:', error);
-		}
+		// TODO: Navigate to the created post or refresh the list
 	}
 </script>
 
