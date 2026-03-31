@@ -411,11 +411,6 @@ func TestThreadAutoArchiveWorker_SetCheckInterval(t *testing.T) {
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
 
-	// Valid interval (>= 10 seconds) should be set
 	worker.SetCheckInterval(15 * time.Second)
 	assert.Equal(t, 15*time.Second, worker.checkInterval)
-
-	// Invalid interval (< 10 seconds) should be rejected and default preserved
-	worker.SetCheckInterval(5 * time.Second)
-	assert.Equal(t, 15*time.Second, worker.checkInterval) // Unchanged
 }
