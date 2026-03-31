@@ -18,9 +18,10 @@ var (
 	ErrMFANotEnabled      = errors.New("MFA is not enabled")
 
 	// Channel errors
-	ErrChannelNotFound  = errors.New("channel not found")
-	ErrNotChannelMember = errors.New("not a member of this channel")
-	ErrCannotDeleteDM   = errors.New("cannot delete DM channel")
+	ErrChannelNotFound         = errors.New("channel not found")
+	ErrNotChannelMember        = errors.New("not a member of this channel")
+	ErrCannotDeleteDM          = errors.New("cannot delete DM channel")
+	ErrChannelTypeNotSupported = errors.New("channel type not supported for this operation")
 
 	// Message errors
 	ErrMessageNotFound  = errors.New("message not found")
