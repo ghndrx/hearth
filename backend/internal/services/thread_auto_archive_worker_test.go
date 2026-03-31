@@ -376,7 +376,7 @@ func TestThreadAutoArchiveWorker_ProcessThreadActivity_SkipsArchived(t *testing.
 func TestThreadAutoArchiveWorker_GetWorkerStatus(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := &simpleMockChannelRepoForWorker{}
+	mockChannelRepo := newSimpleMockChannelRepoForWorker()
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
@@ -390,7 +390,7 @@ func TestThreadAutoArchiveWorker_GetWorkerStatus(t *testing.T) {
 func TestThreadAutoArchiveWorker_SetBatchSize(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := &simpleMockChannelRepoForWorker{}
+	mockChannelRepo := newSimpleMockChannelRepoForWorker()
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
@@ -412,11 +412,15 @@ func TestThreadAutoArchiveWorker_SetBatchSize(t *testing.T) {
 func TestThreadAutoArchiveWorker_SetCheckInterval(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := &simpleMockChannelRepoForWorker{}
+	mockChannelRepo := newSimpleMockChannelRepoForWorker()
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
 
 	worker.SetCheckInterval(15 * time.Second)
 	assert.Equal(t, 15*time.Second, worker.checkInterval)
+
+	// Invalid interval (< 10 seconds) should be rejected and default preserved
+	worker.SetCheckInterval(5 * time.Second)
+	assert.Equal(t, 15*time.Second, worker.checkInterval) // Unchanged
 }
