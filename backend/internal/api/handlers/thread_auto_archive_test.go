@@ -95,16 +95,20 @@ func setupThreadAutoArchiveTestApp(handler *ThreadAutoArchiveHandler) *fiber.App
 		c.Locals("userID", uuid.New())
 		return c.Next()
 	})
-	servers := app.Group("/servers")
-	servers.Get("/:id/auto-archive", handler.GetServerAutoArchiveSettings)
-	servers.Patch("/:id/auto-archive", handler.UpdateServerAutoArchiveSettings)
-	servers.Get("/:id/auto-archive/stats", handler.GetServerAutoArchiveStats)
-	channels := app.Group("/channels")
-	channels.Get("/:id/auto-archive", handler.GetChannelAutoArchiveOverride)
-	channels.Put("/:id/auto-archive", handler.SetChannelAutoArchiveOverride)
-	channels.Delete("/:id/auto-archive", handler.DeleteChannelAutoArchiveOverride)
+
 	threads := app.Group("/threads")
-	threads.Get("/:id/auto-archive", handler.GetThreadAutoArchiveStatus)
+	threads.Get("/:thread_id/auto-archive", handler.GetThreadAutoArchiveStatus)
+
+	channels := app.Group("/channels")
+	channels.Get("/:channel_id/auto-archive", handler.GetChannelAutoArchiveOverride)
+	channels.Put("/:channel_id/auto-archive", handler.SetChannelAutoArchiveOverride)
+	channels.Delete("/:channel_id/auto-archive", handler.DeleteChannelAutoArchiveOverride)
+
+	servers := app.Group("/servers")
+	servers.Get("/:server_id/auto-archive", handler.GetServerAutoArchiveSettings)
+	servers.Patch("/:server_id/auto-archive", handler.UpdateServerAutoArchiveSettings)
+	servers.Get("/:server_id/auto-archive/stats", handler.GetServerAutoArchiveStats)
+
 	return app
 }
 
