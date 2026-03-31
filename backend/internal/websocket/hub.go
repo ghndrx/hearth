@@ -141,10 +141,15 @@ func (h *Hub) handleBroadcast(event *Event) {
 	case event.ChannelID != nil:
 		// Send to all clients subscribed to channel
 		h.channelsMux.RLock()
-		clients := h.channels[*event.ChannelID]
+		clientList := h.channels[*event.ChannelID]
+		// Copy clients to a slice while holding the lock to avoid concurrent map access
+		var clients []*Client
+		for client := range clientList {
+			clients = append(clients, client)
+		}
 		h.channelsMux.RUnlock()
 
-		for client := range clients {
+		for _, client := range clients {
 			select {
 			case client.send <- data:
 			default:
@@ -155,10 +160,15 @@ func (h *Hub) handleBroadcast(event *Event) {
 	case event.ServerID != nil:
 		// Send to all clients subscribed to server
 		h.serversMux.RLock()
-		clients := h.servers[*event.ServerID]
+		serverClients := h.servers[*event.ServerID]
+		// Copy clients to a slice while holding the lock to avoid concurrent map access
+		var clients []*Client
+		for client := range serverClients {
+			clients = append(clients, client)
+		}
 		h.serversMux.RUnlock()
 
-		for client := range clients {
+		for _, client := range clients {
 			select {
 			case client.send <- data:
 			default:
@@ -168,10 +178,15 @@ func (h *Hub) handleBroadcast(event *Event) {
 	case event.UserID != nil:
 		// Send to specific user (all their connections)
 		h.clientsMux.RLock()
-		clients := h.clients[*event.UserID]
+		userClients := h.clients[*event.UserID]
+		// Copy clients to a slice while holding the lock to avoid concurrent map access
+		var clients []*Client
+		for client := range userClients {
+			clients = append(clients, client)
+		}
 		h.clientsMux.RUnlock()
 
-		for client := range clients {
+		for _, client := range clients {
 			select {
 			case client.send <- data:
 			default:
