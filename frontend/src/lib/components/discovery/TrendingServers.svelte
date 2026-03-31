@@ -3,7 +3,7 @@
 	import { createEventDispatcher } from 'svelte';
 
 	export let servers: Array<{
-		id: string;
+		id?: string;
 		server_id?: string;
 		name: string;
 		description?: string;
@@ -27,23 +27,6 @@
 	function handleJoin(serverId: string) {
 		dispatch('join', serverId);
 	}
-
-	$: validServers = (servers.filter(s => s.server_id || s.id) as Array<{
-		id: string;
-		server_id?: string;
-		name: string;
-		description?: string;
-		short_description?: string;
-		icon_url?: string;
-		banner_url?: string;
-		member_count: number;
-		category?: string;
-		tags?: string[];
-		is_featured?: boolean;
-		trend_score?: number;
-		growth_rate?: number;
-		rank_change?: number;
-	}>);
 
 	function formatGrowthRate(rate: number): string {
 		if (rate >= 100) {
@@ -78,7 +61,7 @@
 					<span class="rank">#{index + 1}</span>
 					<div class="server-wrapper">
 						<ServerCard
-							{server}
+							server={server as any}
 							variant="compact"
 							onJoin={handleJoin}
 							{joiningServerId}
