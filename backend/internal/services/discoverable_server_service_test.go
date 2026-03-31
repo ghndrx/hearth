@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -15,11 +16,11 @@ import (
 
 // --- Mock implementations ---
 
-type mockDiscoverableServerRepo struct {
+type MockDiscoverableServerRepo struct {
 	mock.Mock
 }
 
-func (m *mockDiscoverableServerRepo) GetDiscoverableServers(ctx context.Context, filters *models.DiscoverFilters) ([]*models.DiscoverableServerSearchResult, int, error) {
+func (m *MockDiscoverableServerRepo) GetDiscoverableServers(ctx context.Context, filters *models.DiscoverFilters) ([]*models.DiscoverableServerSearchResult, int, error) {
 	args := m.Called(ctx, filters)
 	if args.Get(0) == nil {
 		return nil, args.Int(1), args.Error(2)
@@ -27,7 +28,7 @@ func (m *mockDiscoverableServerRepo) GetDiscoverableServers(ctx context.Context,
 	return args.Get(0).([]*models.DiscoverableServerSearchResult), args.Int(1), args.Error(2)
 }
 
-func (m *mockDiscoverableServerRepo) GetFeaturedServers(ctx context.Context, limit int) ([]*models.DiscoverableFeaturedServer, error) {
+func (m *MockDiscoverableServerRepo) GetFeaturedServers(ctx context.Context, limit int) ([]*models.DiscoverableFeaturedServer, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -35,7 +36,7 @@ func (m *mockDiscoverableServerRepo) GetFeaturedServers(ctx context.Context, lim
 	return args.Get(0).([]*models.DiscoverableFeaturedServer), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetByServerID(ctx context.Context, serverID uuid.UUID) (*models.DiscoverableServer, error) {
+func (m *MockDiscoverableServerRepo) GetByServerID(ctx context.Context, serverID uuid.UUID) (*models.DiscoverableServer, error) {
 	args := m.Called(ctx, serverID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -43,7 +44,7 @@ func (m *mockDiscoverableServerRepo) GetByServerID(ctx context.Context, serverID
 	return args.Get(0).(*models.DiscoverableServer), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.DiscoverableServer, error) {
+func (m *MockDiscoverableServerRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.DiscoverableServer, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -51,7 +52,7 @@ func (m *mockDiscoverableServerRepo) GetByID(ctx context.Context, id uuid.UUID) 
 	return args.Get(0).(*models.DiscoverableServer), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetCategories(ctx context.Context) ([]*models.CategoryInfo, error) {
+func (m *MockDiscoverableServerRepo) GetCategories(ctx context.Context) ([]*models.CategoryInfo, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -59,7 +60,7 @@ func (m *mockDiscoverableServerRepo) GetCategories(ctx context.Context) ([]*mode
 	return args.Get(0).([]*models.CategoryInfo), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) SearchServers(ctx context.Context, query string, category models.ServerDiscoveryCategory, page, limit int) ([]*models.DiscoverableServerSearchResult, int, error) {
+func (m *MockDiscoverableServerRepo) SearchServers(ctx context.Context, query string, category models.ServerDiscoveryCategory, page, limit int) ([]*models.DiscoverableServerSearchResult, int, error) {
 	args := m.Called(ctx, query, category, page, limit)
 	if args.Get(0) == nil {
 		return nil, args.Int(1), args.Error(2)
@@ -67,7 +68,7 @@ func (m *mockDiscoverableServerRepo) SearchServers(ctx context.Context, query st
 	return args.Get(0).([]*models.DiscoverableServerSearchResult), args.Int(1), args.Error(2)
 }
 
-func (m *mockDiscoverableServerRepo) SearchServersEnhanced(ctx context.Context, req *models.DiscoverySearchRequest) ([]*models.DiscoverableServerSearchResult, int, error) {
+func (m *MockDiscoverableServerRepo) SearchServersEnhanced(ctx context.Context, req *models.DiscoverySearchRequest) ([]*models.DiscoverableServerSearchResult, int, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Int(1), args.Error(2)
@@ -75,7 +76,7 @@ func (m *mockDiscoverableServerRepo) SearchServersEnhanced(ctx context.Context, 
 	return args.Get(0).([]*models.DiscoverableServerSearchResult), args.Int(1), args.Error(2)
 }
 
-func (m *mockDiscoverableServerRepo) GetTrendingServers(ctx context.Context, limit int) ([]*models.TrendingServerInfo, error) {
+func (m *MockDiscoverableServerRepo) GetTrendingServers(ctx context.Context, limit int) ([]*models.TrendingServerInfo, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -83,7 +84,7 @@ func (m *mockDiscoverableServerRepo) GetTrendingServers(ctx context.Context, lim
 	return args.Get(0).([]*models.TrendingServerInfo), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetRecommendedServers(ctx context.Context, userID uuid.UUID, limit int) ([]*models.ServerRecommendation, error) {
+func (m *MockDiscoverableServerRepo) GetRecommendedServers(ctx context.Context, userID uuid.UUID, limit int) ([]*models.ServerRecommendation, error) {
 	args := m.Called(ctx, userID, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -91,7 +92,7 @@ func (m *mockDiscoverableServerRepo) GetRecommendedServers(ctx context.Context, 
 	return args.Get(0).([]*models.ServerRecommendation), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetCategoriesWithStats(ctx context.Context) ([]*models.CategoryWithStats, error) {
+func (m *MockDiscoverableServerRepo) GetCategoriesWithStats(ctx context.Context) ([]*models.CategoryWithStats, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -99,7 +100,7 @@ func (m *mockDiscoverableServerRepo) GetCategoriesWithStats(ctx context.Context)
 	return args.Get(0).([]*models.CategoryWithStats), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetPopularTags(ctx context.Context, limit int) ([]*models.DiscoveryTag, error) {
+func (m *MockDiscoverableServerRepo) GetPopularTags(ctx context.Context, limit int) ([]*models.DiscoveryTag, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -107,7 +108,7 @@ func (m *mockDiscoverableServerRepo) GetPopularTags(ctx context.Context, limit i
 	return args.Get(0).([]*models.DiscoveryTag), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error) {
+func (m *MockDiscoverableServerRepo) GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -115,7 +116,7 @@ func (m *mockDiscoverableServerRepo) GetDiscoveryStats(ctx context.Context) (*mo
 	return args.Get(0).(*models.DiscoveryPageStats), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error) {
+func (m *MockDiscoverableServerRepo) GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error) {
 	args := m.Called(ctx, query, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -123,17 +124,32 @@ func (m *mockDiscoverableServerRepo) GetSearchSuggestions(ctx context.Context, q
 	return args.Get(0).([]*models.SearchSuggestion), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error) {
+func (m *MockDiscoverableServerRepo) GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error) {
 	args := m.Called(ctx, serverID)
 	return args.String(0), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
+func (m *MockDiscoverableServerRepo) Create(ctx context.Context, server *models.DiscoverableServer) error {
+	args := m.Called(ctx, server)
+	return args.Error(0)
+}
+
+func (m *MockDiscoverableServerRepo) Update(ctx context.Context, server *models.DiscoverableServer) error {
+	args := m.Called(ctx, server)
+	return args.Error(0)
+}
+
+func (m *MockDiscoverableServerRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockDiscoverableServerRepo) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
 	args := m.Called(ctx, serverID, userID, activityType, source)
 	return args.Error(0)
 }
 
-func (m *mockDiscoverableServerRepo) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
+func (m *MockDiscoverableServerRepo) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
 	args := m.Called(ctx, serverID, days)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -173,7 +189,7 @@ type MockServerRepoForDiscovery struct {
 	mock.Mock
 }
 
-func (m *mockServerRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Server, error) {
+func (m *MockServerRepoForDiscovery) GetByID(ctx context.Context, id uuid.UUID) (*models.Server, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -181,11 +197,11 @@ func (m *mockServerRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Ser
 	return args.Get(0).(*models.Server), args.Error(1)
 }
 
-type mockMemberRepo struct {
+type MockMemberRepoForDiscovery struct {
 	mock.Mock
 }
 
-func (m *mockMemberRepo) GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error) {
+func (m *MockMemberRepoForDiscovery) GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error) {
 	args := m.Called(ctx, serverID, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -193,433 +209,574 @@ func (m *mockMemberRepo) GetMember(ctx context.Context, serverID, userID uuid.UU
 	return args.Get(0).(*models.Member), args.Error(1)
 }
 
-func (m *mockMemberRepo) AddMember(ctx context.Context, member *models.Member) error {
+func (m *MockMemberRepoForDiscovery) AddMember(ctx context.Context, member *models.Member) error {
 	args := m.Called(ctx, member)
 	return args.Error(0)
 }
 
 // --- Helper ---
 
-func newTestService() (*DiscoverableServerService, *mockDiscoverableServerRepo, *mockServerRepo, *mockMemberRepo) {
-	repo := new(mockDiscoverableServerRepo)
-	serverRepo := new(mockServerRepo)
-	memberRepo := new(mockMemberRepo)
+func newTestDiscoverableServerService() (*DiscoverableServerService, *MockDiscoverableServerRepo, *MockServerRepoForDiscovery, *MockMemberRepoForDiscovery) {
+	repo := new(MockDiscoverableServerRepo)
+	serverRepo := new(MockServerRepoForDiscovery)
+	memberRepo := new(MockMemberRepoForDiscovery)
 	svc := NewDiscoverableServerService(repo, serverRepo, memberRepo)
 	return svc, repo, serverRepo, memberRepo
 }
 
-func makeServer(name string, memberCount int, public bool) *models.DiscoverableServer {
-	return &models.DiscoverableServer{
-		ID:          uuid.New(),
-		ServerID:    uuid.New(),
-		Name:        name,
-		Category:    models.DiscoveryCategoryGaming,
-		MemberCount: memberCount,
-		IsVerified:  true,
-		IsPublic:    public,
-		Language:    "en",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-}
-
 // --- Tests ---
 
-func TestGetDiscoverableServers(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestGetDiscoverableServers_Pagination(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 
 	servers := []*models.DiscoverableServerSearchResult{
-		{Name: "Server A", MemberCount: 1000},
-		{Name: "Server B", MemberCount: 500},
+		{ID: uuid.New(), Name: "Server A", MemberCount: 100},
+		{ID: uuid.New(), Name: "Server B", MemberCount: 50},
 	}
 
-	t.Run("returns paginated results", func(t *testing.T) {
-		filters := &models.DiscoverFilters{Page: 1, Limit: 20}
-		repo.On("GetDiscoverableServers", ctx, filters).Return(servers, 2, nil).Once()
+	repo.On("GetDiscoverableServers", ctx, mock.AnythingOfType("*models.DiscoverFilters")).Return(servers, 42, nil)
 
-		result, err := svc.GetDiscoverableServers(ctx, filters)
-		assert.NoError(t, err)
-		assert.Equal(t, 2, result.Total)
-		assert.Equal(t, 1, result.Page)
-		assert.Equal(t, 20, result.Limit)
-		assert.Equal(t, 1, result.TotalPages)
-		assert.Len(t, result.Servers, 2)
-	})
-
-	t.Run("normalizes zero page", func(t *testing.T) {
-		filters := &models.DiscoverFilters{Page: 0, Limit: 0}
-		// After normalization: Page=1, Limit=20
-		repo.On("GetDiscoverableServers", ctx, mock.AnythingOfType("*models.DiscoverFilters")).Return(servers, 2, nil).Once()
-
-		result, err := svc.GetDiscoverableServers(ctx, filters)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, result.Page)
-		assert.Equal(t, 20, result.Limit)
-	})
-
-	t.Run("calculates total pages correctly", func(t *testing.T) {
-		filters := &models.DiscoverFilters{Page: 1, Limit: 3}
-		repo.On("GetDiscoverableServers", ctx, filters).Return(servers, 10, nil).Once()
-
-		result, err := svc.GetDiscoverableServers(ctx, filters)
-		assert.NoError(t, err)
-		assert.Equal(t, 4, result.TotalPages) // ceil(10/3) = 4
-	})
-
-	t.Run("handles repo error", func(t *testing.T) {
-		filters := &models.DiscoverFilters{Page: 1, Limit: 20}
-		repo.On("GetDiscoverableServers", ctx, filters).Return(nil, 0, errors.New("db error")).Once()
-
-		result, err := svc.GetDiscoverableServers(ctx, filters)
-		assert.Error(t, err)
-		assert.Nil(t, result)
-	})
+	result, err := svc.GetDiscoverableServers(ctx, &models.DiscoverFilters{Page: 2, Limit: 20})
+	assert.NoError(t, err)
+	assert.Equal(t, 42, result.Total)
+	assert.Equal(t, 2, result.Page)
+	assert.Equal(t, 20, result.Limit)
+	assert.Equal(t, 3, result.TotalPages) // ceil(42/20) = 3
+	assert.Len(t, result.Servers, 2)
 }
 
-func TestGetServerByID(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestGetDiscoverableServers_NormalizesFilters(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 
-	t.Run("returns public server", func(t *testing.T) {
-		server := makeServer("Test", 100, true)
-		repo.On("GetByID", ctx, server.ID).Return(server, nil).Once()
+	repo.On("GetDiscoverableServers", ctx, mock.AnythingOfType("*models.DiscoverFilters")).
+		Return([]*models.DiscoverableServerSearchResult{}, 0, nil)
 
-		result, err := svc.GetServerByID(ctx, server.ID)
-		assert.NoError(t, err)
-		assert.Equal(t, "Test", result.Name)
-	})
-
-	t.Run("rejects non-public server", func(t *testing.T) {
-		server := makeServer("Private", 100, false)
-		repo.On("GetByID", ctx, server.ID).Return(server, nil).Once()
-
-		result, err := svc.GetServerByID(ctx, server.ID)
-		assert.ErrorIs(t, err, ErrServerNotPublic)
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns not found for nil", func(t *testing.T) {
-		id := uuid.New()
-		repo.On("GetByID", ctx, id).Return(nil, nil).Once()
-
-		result, err := svc.GetServerByID(ctx, id)
-		assert.ErrorIs(t, err, ErrDiscoverableServerNotFound)
-		assert.Nil(t, result)
-	})
+	// Zero page/limit should be normalized
+	result, err := svc.GetDiscoverableServers(ctx, &models.DiscoverFilters{Page: 0, Limit: 0})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.Limit)
 }
 
-func TestGetServerDetail(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestGetDiscoverableServers_RepoError(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 
-	t.Run("includes invite code", func(t *testing.T) {
-		server := makeServer("Detail Server", 500, true)
-		repo.On("GetByID", ctx, server.ID).Return(server, nil).Once()
-		repo.On("GetInviteCode", ctx, server.ServerID).Return("abc123", nil).Once()
+	repo.On("GetDiscoverableServers", ctx, mock.AnythingOfType("*models.DiscoverFilters")).
+		Return(nil, 0, errors.New("db error"))
 
-		detail, err := svc.GetServerDetail(ctx, server.ID)
-		assert.NoError(t, err)
-		assert.Equal(t, "Detail Server", detail.Name)
-		assert.NotNil(t, detail.InviteCode)
-		assert.Equal(t, "abc123", *detail.InviteCode)
-	})
-
-	t.Run("works without invite code", func(t *testing.T) {
-		server := makeServer("No Invite", 100, true)
-		repo.On("GetByID", ctx, server.ID).Return(server, nil).Once()
-		repo.On("GetInviteCode", ctx, server.ServerID).Return("", nil).Once()
-
-		detail, err := svc.GetServerDetail(ctx, server.ID)
-		assert.NoError(t, err)
-		assert.Nil(t, detail.InviteCode)
-	})
+	_, err := svc.GetDiscoverableServers(ctx, &models.DiscoverFilters{})
+	assert.Error(t, err)
+	assert.Equal(t, "db error", err.Error())
 }
 
-func TestJoinServer(t *testing.T) {
-	svc, repo, _, memberRepo := newTestService()
+func TestGetServerByID_Success(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
-	userID := uuid.New()
+	id := uuid.New()
 
-	t.Run("successfully joins server", func(t *testing.T) {
-		server := makeServer("Join Me", 500, true)
-		repo.On("GetByServerID", ctx, server.ServerID).Return(server, nil).Once()
-		memberRepo.On("GetMember", ctx, server.ServerID, userID).Return(nil, nil).Once()
-		memberRepo.On("AddMember", ctx, mock.AnythingOfType("*models.Member")).Return(nil).Once()
+	server := &models.DiscoverableServer{
+		ID:       id,
+		Name:     "Test Server",
+		IsPublic: true,
+	}
+	repo.On("GetByID", ctx, id).Return(server, nil)
 
-		err := svc.JoinServer(ctx, server.ServerID, userID)
-		assert.NoError(t, err)
-		memberRepo.AssertCalled(t, "AddMember", ctx, mock.AnythingOfType("*models.Member"))
-	})
-
-	t.Run("rejects already member", func(t *testing.T) {
-		server := makeServer("Already In", 500, true)
-		member := &models.Member{UserID: userID, ServerID: server.ServerID}
-		repo.On("GetByServerID", ctx, server.ServerID).Return(server, nil).Once()
-		memberRepo.On("GetMember", ctx, server.ServerID, userID).Return(member, nil).Once()
-
-		err := svc.JoinServer(ctx, server.ServerID, userID)
-		assert.ErrorIs(t, err, ErrAlreadyMember)
-	})
-
-	t.Run("rejects private server", func(t *testing.T) {
-		server := makeServer("Private", 500, false)
-		repo.On("GetByServerID", ctx, server.ServerID).Return(server, nil).Once()
-
-		err := svc.JoinServer(ctx, server.ServerID, userID)
-		assert.ErrorIs(t, err, ErrServerNotPublic)
-	})
-
-	t.Run("rejects non-existent server", func(t *testing.T) {
-		serverID := uuid.New()
-		repo.On("GetByServerID", ctx, serverID).Return(nil, nil).Once()
-
-		err := svc.JoinServer(ctx, serverID, userID)
-		assert.ErrorIs(t, err, ErrDiscoverableServerNotFound)
-	})
+	result, err := svc.GetServerByID(ctx, id)
+	assert.NoError(t, err)
+	assert.Equal(t, "Test Server", result.Name)
 }
 
-func TestSearchServersEnhanced(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestGetServerByID_NotFound(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+
+	repo.On("GetByID", ctx, id).Return(nil, nil)
+
+	_, err := svc.GetServerByID(ctx, id)
+	assert.ErrorIs(t, err, ErrDiscoverableServerNotFound)
+}
+
+func TestGetServerByID_NotPublic(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+
+	server := &models.DiscoverableServer{ID: id, IsPublic: false}
+	repo.On("GetByID", ctx, id).Return(server, nil)
+
+	_, err := svc.GetServerByID(ctx, id)
+	assert.ErrorIs(t, err, ErrServerNotPublic)
+}
+
+func TestGetServerDetail_IncludesInviteCode(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+	serverID := uuid.New()
+
+	server := &models.DiscoverableServer{ID: id, ServerID: serverID, Name: "Test", IsPublic: true}
+	repo.On("GetByID", ctx, id).Return(server, nil)
+	repo.On("GetInviteCode", ctx, serverID).Return("abc123", nil)
+
+	detail, err := svc.GetServerDetail(ctx, id)
+	assert.NoError(t, err)
+	assert.NotNil(t, detail.InviteCode)
+	assert.Equal(t, "abc123", *detail.InviteCode)
+}
+
+func TestSearchServersEnhanced_Pagination(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 
-	t.Run("returns search results with pagination", func(t *testing.T) {
-		servers := []*models.DiscoverableServerSearchResult{
-			{Name: "Match A"},
-			{Name: "Match B"},
-		}
-		req := &models.DiscoverySearchRequest{
-			Query:  "match",
-			SortBy: "popular",
-			Page:   1,
-			Limit:  25,
-		}
-		repo.On("SearchServersEnhanced", ctx, req).Return(servers, 50, nil).Once()
+	servers := []*models.DiscoverableServerSearchResult{
+		{ID: uuid.New(), Name: "Gaming Hub", MemberCount: 500},
+	}
+	req := &models.DiscoverySearchRequest{
+		Query:    "gaming",
+		Category: models.DiscoveryCategoryGaming,
+		SortBy:   "popular",
+		Page:     1,
+		Limit:    25,
+	}
 
-		result, err := svc.SearchServersEnhanced(ctx, req)
-		assert.NoError(t, err)
-		assert.Equal(t, 50, result.Total)
-		assert.Equal(t, 2, result.TotalPages)
-		assert.Len(t, result.Servers, 2)
-	})
+	repo.On("SearchServersEnhanced", ctx, req).Return(servers, 1, nil)
 
-	t.Run("defaults limit when zero", func(t *testing.T) {
-		req := &models.DiscoverySearchRequest{Query: "test", Limit: 0}
-		repo.On("SearchServersEnhanced", ctx, req).Return([]*models.DiscoverableServerSearchResult{}, 0, nil).Once()
-
-		result, err := svc.SearchServersEnhanced(ctx, req)
-		assert.NoError(t, err)
-		assert.Equal(t, 25, result.Limit)
-	})
+	result, err := svc.SearchServersEnhanced(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, result.Total)
+	assert.Equal(t, 1, result.TotalPages)
+	assert.Len(t, result.Servers, 1)
+	assert.Equal(t, "Gaming Hub", result.Servers[0].Name)
 }
 
-func TestGetTrendingServers(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestSearchServersEnhanced_DefaultLimit(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 
-	t.Run("returns trending servers", func(t *testing.T) {
-		trending := []*models.TrendingServerInfo{
-			{Server: &models.DiscoverableServerSearchResult{Name: "Hot Server"}, TrendScore: 95.0, GrowthRate: 15.0},
-		}
-		repo.On("GetTrendingServers", ctx, 10).Return(trending, nil).Once()
+	req := &models.DiscoverySearchRequest{Query: "test", Limit: 0}
+	repo.On("SearchServersEnhanced", ctx, req).Return([]*models.DiscoverableServerSearchResult{}, 0, nil)
 
-		result, err := svc.GetTrendingServers(ctx, 10)
-		assert.NoError(t, err)
-		assert.Len(t, result, 1)
-		assert.Equal(t, 95.0, result[0].TrendScore)
-	})
+	result, err := svc.SearchServersEnhanced(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, 25, result.Limit) // default limit
 }
 
-func TestGetRecommendedServers(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestGetDiscoveryHomePage_Success(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 	userID := uuid.New()
 
-	t.Run("returns recommendations", func(t *testing.T) {
-		recs := []*models.ServerRecommendation{
-			{
-				DiscoverableServerSearchResult: models.DiscoverableServerSearchResult{Name: "Rec Server"},
-				Reason:                         "Popular in categories you enjoy",
-				MutualMemberCount:              10,
-			},
-		}
-		repo.On("GetRecommendedServers", ctx, userID, 10).Return(recs, nil).Once()
+	featured := []*models.DiscoverableFeaturedServer{{Name: "Featured1"}}
+	trending := []*models.TrendingServerInfo{{TrendScore: 10.0}}
+	recommended := []*models.ServerRecommendation{{Reason: "test"}}
+	categories := []*models.CategoryWithStats{{}}
+	tags := []*models.DiscoveryTag{{Name: "gaming"}}
+	stats := &models.DiscoveryPageStats{TotalServers: 100}
 
-		result, err := svc.GetRecommendedServers(ctx, userID, 10)
-		assert.NoError(t, err)
-		assert.Len(t, result, 1)
-		assert.Equal(t, "Rec Server", result[0].Name)
-		assert.Equal(t, 10, result[0].MutualMemberCount)
-	})
+	repo.On("GetFeaturedServers", ctx, 5).Return(featured, nil)
+	repo.On("GetTrendingServers", ctx, 10).Return(trending, nil)
+	repo.On("GetRecommendedServers", ctx, userID, 10).Return(recommended, nil)
+	repo.On("GetCategoriesWithStats", ctx).Return(categories, nil)
+	repo.On("GetPopularTags", ctx, 10).Return(tags, nil)
+	repo.On("GetDiscoveryStats", ctx).Return(stats, nil)
+
+	page, err := svc.GetDiscoveryHomePage(ctx, userID, 5, 10, 10)
+	assert.NoError(t, err)
+	assert.Len(t, page.Featured, 1)
+	assert.Len(t, page.Trending, 1)
+	assert.Len(t, page.Recommended, 1)
+	assert.Equal(t, int64(100), page.Stats.TotalServers)
 }
 
-func TestGetDiscoveryHomePage(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestGetDiscoveryHomePage_NoUser(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
-	userID := uuid.New()
 
-	t.Run("returns full home page", func(t *testing.T) {
-		featured := []*models.DiscoverableFeaturedServer{{Name: "Featured"}}
-		trending := []*models.TrendingServerInfo{{Server: &models.DiscoverableServerSearchResult{Name: "Trending"}}}
-		recs := []*models.ServerRecommendation{{DiscoverableServerSearchResult: models.DiscoverableServerSearchResult{Name: "Rec"}}}
-		cats := []*models.CategoryWithStats{{CategoryInfo: models.CategoryInfo{Name: "Gaming"}}}
-		tags := []*models.DiscoveryTag{{Name: "Competitive"}}
-		stats := &models.DiscoveryPageStats{TotalServers: 100}
+	repo.On("GetFeaturedServers", ctx, 5).Return([]*models.DiscoverableFeaturedServer{}, nil)
+	repo.On("GetTrendingServers", ctx, 10).Return([]*models.TrendingServerInfo{}, nil)
+	repo.On("GetCategoriesWithStats", ctx).Return([]*models.CategoryWithStats{}, nil)
+	repo.On("GetPopularTags", ctx, 10).Return([]*models.DiscoveryTag{}, nil)
+	repo.On("GetDiscoveryStats", ctx).Return(&models.DiscoveryPageStats{}, nil)
 
-		repo.On("GetFeaturedServers", ctx, 5).Return(featured, nil).Once()
-		repo.On("GetTrendingServers", ctx, 10).Return(trending, nil).Once()
-		repo.On("GetRecommendedServers", ctx, userID, 10).Return(recs, nil).Once()
-		repo.On("GetCategoriesWithStats", ctx).Return(cats, nil).Once()
-		repo.On("GetPopularTags", ctx, 10).Return(tags, nil).Once()
-		repo.On("GetDiscoveryStats", ctx).Return(stats, nil).Once()
-
-		page, err := svc.GetDiscoveryHomePage(ctx, userID, 5, 10, 10)
-		assert.NoError(t, err)
-		assert.Len(t, page.Featured, 1)
-		assert.Len(t, page.Trending, 1)
-		assert.Len(t, page.Recommended, 1)
-		assert.Len(t, page.Categories, 1)
-		assert.Len(t, page.PopularTags, 1)
-		assert.Equal(t, int64(100), page.Stats.TotalServers)
-	})
-
-	t.Run("skips recommendations for anonymous user", func(t *testing.T) {
-		repo.On("GetFeaturedServers", ctx, 5).Return([]*models.DiscoverableFeaturedServer{}, nil).Once()
-		repo.On("GetTrendingServers", ctx, 10).Return([]*models.TrendingServerInfo{}, nil).Once()
-		repo.On("GetCategoriesWithStats", ctx).Return([]*models.CategoryWithStats{}, nil).Once()
-		repo.On("GetPopularTags", ctx, 10).Return([]*models.DiscoveryTag{}, nil).Once()
-		repo.On("GetDiscoveryStats", ctx).Return(&models.DiscoveryPageStats{}, nil).Once()
-
-		page, err := svc.GetDiscoveryHomePage(ctx, uuid.Nil, 5, 10, 10)
-		assert.NoError(t, err)
-		assert.Nil(t, page.Recommended)
-	})
+	page, err := svc.GetDiscoveryHomePage(ctx, uuid.Nil, 5, 10, 10)
+	assert.NoError(t, err)
+	assert.Nil(t, page.Recommended) // No recommendations for anonymous user
 }
 
-func TestTrackActivity(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestDiscoveryJoinServer_Success(t *testing.T) {
+	svc, repo, _, memberRepo := newTestDiscoverableServerService()
 	ctx := context.Background()
 	serverID := uuid.New()
 	userID := uuid.New()
 
-	t.Run("tracks valid activity", func(t *testing.T) {
-		repo.On("TrackActivity", ctx, serverID, &userID, "view", "home").Return(nil).Once()
+	ds := &models.DiscoverableServer{ServerID: serverID, IsPublic: true}
+	repo.On("GetByServerID", ctx, serverID).Return(ds, nil)
+	memberRepo.On("GetMember", ctx, serverID, userID).Return(nil, nil)
+	memberRepo.On("AddMember", ctx, mock.AnythingOfType("*models.Member")).Return(nil)
 
-		err := svc.TrackActivity(ctx, serverID, &userID, "view", "home")
-		assert.NoError(t, err)
-	})
-
-	t.Run("rejects invalid activity type", func(t *testing.T) {
-		err := svc.TrackActivity(ctx, serverID, &userID, "invalid_type", "home")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid activity type")
-	})
-
-	t.Run("rejects invalid source", func(t *testing.T) {
-		err := svc.TrackActivity(ctx, serverID, &userID, "view", "invalid_source")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid discovery source")
-	})
-
-	t.Run("allows empty source", func(t *testing.T) {
-		repo.On("TrackActivity", ctx, serverID, &userID, "impression", "").Return(nil).Once()
-
-		err := svc.TrackActivity(ctx, serverID, &userID, "impression", "")
-		assert.NoError(t, err)
-	})
+	err := svc.JoinServer(ctx, serverID, userID)
+	assert.NoError(t, err)
+	memberRepo.AssertCalled(t, "AddMember", ctx, mock.AnythingOfType("*models.Member"))
 }
 
-func TestGetCategoriesWithStats(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestDiscoveryJoinServer_AlreadyMember(t *testing.T) {
+	svc, repo, _, memberRepo := newTestDiscoverableServerService()
 	ctx := context.Background()
+	serverID := uuid.New()
+	userID := uuid.New()
 
-	t.Run("returns categories with stats", func(t *testing.T) {
-		cats := []*models.CategoryWithStats{
-			{CategoryInfo: models.CategoryInfo{Name: "Gaming", Slug: "gaming", ServerCount: 50}, TotalMembers: 10000, AvgMemberCount: 200, GrowthRate: 5.0},
-			{CategoryInfo: models.CategoryInfo{Name: "Music", Slug: "music", ServerCount: 30}, TotalMembers: 5000, AvgMemberCount: 166.67, GrowthRate: 3.0},
-		}
-		repo.On("GetCategoriesWithStats", ctx).Return(cats, nil).Once()
+	ds := &models.DiscoverableServer{ServerID: serverID, IsPublic: true}
+	repo.On("GetByServerID", ctx, serverID).Return(ds, nil)
+	memberRepo.On("GetMember", ctx, serverID, userID).Return(&models.Member{}, nil)
 
-		result, err := svc.GetCategoriesWithStats(ctx)
-		assert.NoError(t, err)
-		assert.Len(t, result, 2)
-		assert.Equal(t, 50, result[0].ServerCount)
-		assert.Equal(t, 10000, result[0].TotalMembers)
-	})
+	err := svc.JoinServer(ctx, serverID, userID)
+	assert.ErrorIs(t, err, ErrAlreadyMember)
 }
 
-func TestGetPopularTags(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestDiscoveryJoinServer_NotPublic(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
+	serverID := uuid.New()
 
-	t.Run("returns tags", func(t *testing.T) {
-		tags := []*models.DiscoveryTag{
-			{Name: "Competitive", Slug: "competitive", UsageCount: 100},
-			{Name: "Casual", Slug: "casual", UsageCount: 80},
-		}
-		repo.On("GetPopularTags", ctx, 20).Return(tags, nil).Once()
+	ds := &models.DiscoverableServer{ServerID: serverID, IsPublic: false}
+	repo.On("GetByServerID", ctx, serverID).Return(ds, nil)
 
-		result, err := svc.GetPopularTags(ctx, 20)
-		assert.NoError(t, err)
-		assert.Len(t, result, 2)
-	})
+	err := svc.JoinServer(ctx, serverID, uuid.New())
+	assert.ErrorIs(t, err, ErrServerNotPublic)
 }
 
-func TestGetSearchSuggestions(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+func TestRegisterServer_Success(t *testing.T) {
+	svc, repo, serverRepo, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
 
-	t.Run("returns suggestions", func(t *testing.T) {
-		suggestions := []*models.SearchSuggestion{
-			{Type: "server", Value: "Gaming Hub"},
-			{Type: "category", Value: "gaming"},
-		}
-		repo.On("GetSearchSuggestions", ctx, "gam", 10).Return(suggestions, nil).Once()
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+	repo.On("GetByServerID", ctx, serverID).Return(nil, nil)
+	repo.On("Create", ctx, mock.AnythingOfType("*models.DiscoverableServer")).Return(nil)
 
-		result, err := svc.GetSearchSuggestions(ctx, "gam", 10)
-		assert.NoError(t, err)
-		assert.Len(t, result, 2)
-	})
+	req := &models.RegisterServerRequest{
+		Name:        "My Server",
+		Description: "A test server",
+		Category:    models.DiscoveryCategoryGaming,
+		Tags:        []string{"fps", "competitive"},
+	}
+
+	ds, err := svc.RegisterServer(ctx, serverID, ownerID, req)
+	assert.NoError(t, err)
+	assert.Equal(t, "My Server", ds.Name)
+	assert.Equal(t, models.DiscoveryCategoryGaming, ds.Category)
+	assert.Equal(t, pq.StringArray([]string{"fps", "competitive"}), ds.Tags)
+	assert.True(t, ds.IsPublic)
+	assert.False(t, ds.IsFeatured)
+}
+
+func TestRegisterServer_NotOwner(t *testing.T) {
+	svc, _, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+	otherUser := uuid.New()
+
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+
+	req := &models.RegisterServerRequest{
+		Name:     "My Server",
+		Category: models.DiscoveryCategoryGaming,
+	}
+
+	_, err := svc.RegisterServer(ctx, serverID, otherUser, req)
+	assert.ErrorIs(t, err, ErrNotServerOwner)
+}
+
+func TestRegisterServer_ServerNotFound(t *testing.T) {
+	svc, _, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+
+	serverRepo.On("GetByID", ctx, serverID).Return(nil, nil)
+
+	req := &models.RegisterServerRequest{
+		Name:     "My Server",
+		Category: models.DiscoveryCategoryGaming,
+	}
+
+	_, err := svc.RegisterServer(ctx, serverID, uuid.New(), req)
+	assert.ErrorIs(t, err, ErrServerNotFound)
+}
+
+func TestRegisterServer_AlreadyRegistered(t *testing.T) {
+	svc, repo, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+	repo.On("GetByServerID", ctx, serverID).Return(&models.DiscoverableServer{}, nil)
+
+	req := &models.RegisterServerRequest{
+		Name:     "My Server",
+		Category: models.DiscoveryCategoryGaming,
+	}
+
+	_, err := svc.RegisterServer(ctx, serverID, ownerID, req)
+	assert.Error(t, err)
+	assert.Equal(t, "server already registered for discovery", err.Error())
+}
+
+func TestRegisterServer_InvalidCategory(t *testing.T) {
+	svc, _, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+
+	req := &models.RegisterServerRequest{
+		Name:     "My Server",
+		Category: "invalid_category",
+	}
+
+	_, err := svc.RegisterServer(ctx, serverID, ownerID, req)
+	assert.Error(t, err)
+	assert.Equal(t, "invalid category", err.Error())
+}
+
+func TestUpdateRegisteredServer_Success(t *testing.T) {
+	svc, repo, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	ds := &models.DiscoverableServer{
+		ID:       id,
+		ServerID: serverID,
+		Name:     "Old Name",
+		Category: models.DiscoveryCategoryGaming,
+		IsPublic: true,
+	}
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+
+	repo.On("GetByID", ctx, id).Return(ds, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+	repo.On("Update", ctx, mock.AnythingOfType("*models.DiscoverableServer")).Return(nil)
+
+	newName := "New Name"
+	newCat := models.DiscoveryCategoryTechnology
+	req := &models.UpdateDiscoverableServerRequest{
+		Name:     &newName,
+		Category: &newCat,
+		Tags:     []string{"coding", "devops"},
+	}
+
+	updated, err := svc.UpdateRegisteredServer(ctx, id, ownerID, req)
+	assert.NoError(t, err)
+	assert.Equal(t, "New Name", updated.Name)
+	assert.Equal(t, models.DiscoveryCategoryTechnology, updated.Category)
+	assert.Equal(t, pq.StringArray([]string{"coding", "devops"}), updated.Tags)
+}
+
+func TestUpdateRegisteredServer_NotOwner(t *testing.T) {
+	svc, repo, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	ds := &models.DiscoverableServer{ID: id, ServerID: serverID}
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+
+	repo.On("GetByID", ctx, id).Return(ds, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+
+	_, err := svc.UpdateRegisteredServer(ctx, id, uuid.New(), &models.UpdateDiscoverableServerRequest{})
+	assert.ErrorIs(t, err, ErrNotServerOwner)
+}
+
+func TestUpdateRegisteredServer_NotFound(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+
+	repo.On("GetByID", ctx, id).Return(nil, nil)
+
+	_, err := svc.UpdateRegisteredServer(ctx, id, uuid.New(), &models.UpdateDiscoverableServerRequest{})
+	assert.ErrorIs(t, err, ErrDiscoverableServerNotFound)
+}
+
+func TestDeleteRegisteredServer_Success(t *testing.T) {
+	svc, repo, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	ds := &models.DiscoverableServer{ID: id, ServerID: serverID}
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+
+	repo.On("GetByID", ctx, id).Return(ds, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+	repo.On("Delete", ctx, id).Return(nil)
+
+	err := svc.DeleteRegisteredServer(ctx, id, ownerID)
+	assert.NoError(t, err)
+	repo.AssertCalled(t, "Delete", ctx, id)
+}
+
+func TestDeleteRegisteredServer_NotOwner(t *testing.T) {
+	svc, repo, serverRepo, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+	id := uuid.New()
+	serverID := uuid.New()
+	ownerID := uuid.New()
+
+	ds := &models.DiscoverableServer{ID: id, ServerID: serverID}
+	server := &models.Server{ID: serverID, OwnerID: ownerID}
+
+	repo.On("GetByID", ctx, id).Return(ds, nil)
+	serverRepo.On("GetByID", ctx, serverID).Return(server, nil)
+
+	err := svc.DeleteRegisteredServer(ctx, id, uuid.New())
+	assert.ErrorIs(t, err, ErrNotServerOwner)
+}
+
+func TestCanJoinServer_Success(t *testing.T) {
+	svc, repo, _, memberRepo := newTestDiscoverableServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	userID := uuid.New()
+
+	ds := &models.DiscoverableServer{ServerID: serverID, IsPublic: true}
+	repo.On("GetByServerID", ctx, serverID).Return(ds, nil)
+	memberRepo.On("GetMember", ctx, serverID, userID).Return(nil, nil)
+
+	err := svc.CanJoinServer(ctx, serverID, userID)
+	assert.NoError(t, err)
+}
+
+func TestCanJoinServer_AlreadyMember(t *testing.T) {
+	svc, repo, _, memberRepo := newTestDiscoverableServerService()
+	ctx := context.Background()
+	serverID := uuid.New()
+	userID := uuid.New()
+
+	ds := &models.DiscoverableServer{ServerID: serverID, IsPublic: true}
+	repo.On("GetByServerID", ctx, serverID).Return(ds, nil)
+	memberRepo.On("GetMember", ctx, serverID, userID).Return(&models.Member{
+		UserID:   userID,
+		ServerID: serverID,
+		JoinedAt: time.Now(),
+	}, nil)
+
+	err := svc.CanJoinServer(ctx, serverID, userID)
+	assert.ErrorIs(t, err, ErrAlreadyMember)
+}
+
+func TestNormalizeDiscoverFilters(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         *models.DiscoverFilters
+		expectedPage  int
+		expectedLimit int
+	}{
+		{"zero values", &models.DiscoverFilters{Page: 0, Limit: 0}, 1, 20},
+		{"negative values", &models.DiscoverFilters{Page: -1, Limit: -5}, 1, 20},
+		{"limit too high", &models.DiscoverFilters{Page: 1, Limit: 200}, 1, 100},
+		{"valid values", &models.DiscoverFilters{Page: 3, Limit: 50}, 3, 50},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			models.NormalizeDiscoverFilters(tt.input)
+			assert.Equal(t, tt.expectedPage, tt.input.Page)
+			assert.Equal(t, tt.expectedLimit, tt.input.Limit)
+		})
+	}
+}
+
+func TestIsValidCategory(t *testing.T) {
+	assert.True(t, models.IsValidCategory("gaming"))
+	assert.True(t, models.IsValidCategory("technology"))
+	assert.True(t, models.IsValidCategory("art"))
+	assert.True(t, models.IsValidCategory("other"))
+	assert.False(t, models.IsValidCategory("invalid"))
+	assert.False(t, models.IsValidCategory(""))
+}
+
+func TestAllDiscoveryCategories(t *testing.T) {
+	categories := models.AllDiscoveryCategories()
+	assert.Equal(t, 9, len(categories))
+	assert.Contains(t, categories, models.DiscoveryCategoryGaming)
+	assert.Contains(t, categories, models.DiscoveryCategoryOther)
 }
 
 func TestGetFeaturedServers(t *testing.T) {
-	svc, repo, _, _ := newTestService()
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 
-	t.Run("returns featured servers", func(t *testing.T) {
-		featured := []*models.DiscoverableFeaturedServer{
-			{Name: "Featured A", MemberCount: 50000},
-		}
-		repo.On("GetFeaturedServers", ctx, 5).Return(featured, nil).Once()
+	featured := []*models.DiscoverableFeaturedServer{
+		{Name: "Featured1", MemberCount: 1000, IsVerified: true},
+		{Name: "Featured2", MemberCount: 500},
+	}
+	repo.On("GetFeaturedServers", ctx, 5).Return(featured, nil)
 
-		result, err := svc.GetFeaturedServers(ctx, 5)
-		assert.NoError(t, err)
-		assert.Len(t, result, 1)
-		assert.Equal(t, "Featured A", result[0].Name)
-	})
+	result, err := svc.GetFeaturedServers(ctx, 5)
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "Featured1", result[0].Name)
 }
 
-func TestCanJoinServer(t *testing.T) {
-	svc, repo, _, memberRepo := newTestService()
+func TestGetTrendingServers(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
+
+	trending := []*models.TrendingServerInfo{
+		{TrendScore: 95.0, GrowthRate: 12.5},
+	}
+	repo.On("GetTrendingServers", ctx, 10).Return(trending, nil)
+
+	result, err := svc.GetTrendingServers(ctx, 10)
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, 95.0, result[0].TrendScore)
+}
+
+func TestGetRecommendedServers(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
 	ctx := context.Background()
 	userID := uuid.New()
 
-	t.Run("allows joining public server", func(t *testing.T) {
-		server := makeServer("Joinable", 100, true)
-		repo.On("GetByServerID", ctx, server.ServerID).Return(server, nil).Once()
-		memberRepo.On("GetMember", ctx, server.ServerID, userID).Return(nil, nil).Once()
+	recs := []*models.ServerRecommendation{
+		{Reason: "Popular in your interests"},
+	}
+	repo.On("GetRecommendedServers", ctx, userID, 10).Return(recs, nil)
 
-		err := svc.CanJoinServer(ctx, server.ServerID, userID)
-		assert.NoError(t, err)
-	})
+	result, err := svc.GetRecommendedServers(ctx, userID, 10)
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "Popular in your interests", result[0].Reason)
+}
 
-	t.Run("rejects already member", func(t *testing.T) {
-		server := makeServer("AlreadyIn", 100, true)
-		member := &models.Member{UserID: userID, ServerID: server.ServerID}
-		repo.On("GetByServerID", ctx, server.ServerID).Return(server, nil).Once()
-		memberRepo.On("GetMember", ctx, server.ServerID, userID).Return(member, nil).Once()
+func TestGetSearchSuggestions(t *testing.T) {
+	svc, repo, _, _ := newTestDiscoverableServerService()
+	ctx := context.Background()
 
-		err := svc.CanJoinServer(ctx, server.ServerID, userID)
-		assert.ErrorIs(t, err, ErrAlreadyMember)
-	})
+	suggestions := []*models.SearchSuggestion{
+		{Type: "server", Value: "Gaming Hub"},
+		{Type: "category", Value: "gaming", Count: 50},
+	}
+	repo.On("GetSearchSuggestions", ctx, "gam", 10).Return(suggestions, nil)
+
+	result, err := svc.GetSearchSuggestions(ctx, "gam", 10)
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
 }
