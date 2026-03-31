@@ -69,10 +69,10 @@ func TestLocalBackend_validatePath(t *testing.T) {
 			reason:  "path that goes up then down but stays in bounds is OK",
 		},
 		{
-			name:    "absolute path is rejected",
+			name:    "absolute path that would escape",
 			path:    "/etc/passwd",
 			wantErr: true,
-			reason:  "absolute paths are rejected to prevent bypass of root scoping",
+			reason:  "absolute paths are rejected to prevent os.Root escape",
 		},
 	}
 
