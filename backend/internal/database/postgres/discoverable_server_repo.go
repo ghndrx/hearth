@@ -39,6 +39,8 @@ type DiscoverableServerRepo interface {
 	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error)
 	GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error)
 	GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error)
+	TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error
+	GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error)
 	Create(ctx context.Context, server *models.DiscoverableServer) error
 	Update(ctx context.Context, server *models.DiscoverableServer) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -605,4 +607,36 @@ func (r *DiscoverableServerRepository) GetInviteCode(ctx context.Context, server
 	}
 
 	return code, nil
+}
+
+// TrackActivity records a discovery activity event
+func (r *DiscoverableServerRepository) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
+	query := `
+		INSERT INTO server_discovery_activity (server_id, user_id, activity_type, source)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := r.db.ExecContext(ctx, query, serverID, userID, activityType, source)
+	return err
+}
+
+// GetServerDailyStats returns daily discovery stats for a server over the given number of days
+func (r *DiscoverableServerRepository) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
+	if days <= 0 {
+		days = 30
+	}
+
+	query := `
+		SELECT id, server_id, stat_date, views, impressions, joins, search_clicks
+		FROM server_discovery_daily_stats
+		WHERE server_id = $1 AND stat_date >= CURRENT_DATE - $2::int
+		ORDER BY stat_date DESC
+	`
+
+	var stats []*models.ServerDiscoveryDailyStats
+	err := r.db.SelectContext(ctx, &stats, query, serverID, days)
+	if err != nil {
+		return nil, err
+	}
+
+	return stats, nil
 }

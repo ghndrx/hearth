@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,6 +40,8 @@ type DiscoverableServerRepo interface {
 	GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error)
 	GetSearchSuggestions(ctx context.Context, query string, limit int) ([]*models.SearchSuggestion, error)
 	GetInviteCode(ctx context.Context, serverID uuid.UUID) (string, error)
+	TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error
+	GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error)
 	Create(ctx context.Context, server *models.DiscoverableServer) error
 	Update(ctx context.Context, server *models.DiscoverableServer) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -422,4 +425,38 @@ func (s *DiscoverableServerService) GetDiscoveryHomePage(ctx context.Context, us
 		PopularTags:   tags,
 		Stats:         stats,
 	}, nil
+}
+
+// validActivityTypes are the allowed activity types for discovery tracking
+var validActivityTypes = map[string]bool{
+	"view":         true,
+	"impression":   true,
+	"join":         true,
+	"search_click": true,
+}
+
+// validDiscoverySources are the allowed discovery sources
+var validDiscoverySources = map[string]bool{
+	"home":        true,
+	"search":      true,
+	"category":    true,
+	"trending":    true,
+	"recommended": true,
+	"featured":    true,
+}
+
+// TrackActivity records a discovery activity event for a server
+func (s *DiscoverableServerService) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
+	if !validActivityTypes[activityType] {
+		return fmt.Errorf("invalid activity type: %s", activityType)
+	}
+	if source != "" && !validDiscoverySources[source] {
+		return fmt.Errorf("invalid discovery source: %s", source)
+	}
+	return s.repo.TrackActivity(ctx, serverID, userID, activityType, source)
+}
+
+// GetServerDailyStats returns daily discovery stats for a server
+func (s *DiscoverableServerService) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
+	return s.repo.GetServerDailyStats(ctx, serverID, days)
 }
