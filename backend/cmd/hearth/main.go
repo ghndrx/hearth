@@ -488,6 +488,15 @@ func main() {
 	h.SetDiscoveryHandler(discoveryService, serverService)
 	log.Printf("✅ Discovery service initialized")
 
+	// Initialize DiscoverableServer service and handler (public server directory)
+	discoverableServerService := services.NewDiscoverableServerService(
+		repos.DiscoverableServers,
+		repos.Servers,
+		repos.Servers,
+	)
+	h.SetDiscoverableServerHandler(discoverableServerService, serverService)
+	log.Printf("✅ DiscoverableServer service initialized")
+
 	// Initialize App Directory service and handler
 	appDirectoryRepo := postgres.NewAppDirectoryRepository(db)
 	appDirectoryService := services.NewAppDirectoryService(appDirectoryRepo)
