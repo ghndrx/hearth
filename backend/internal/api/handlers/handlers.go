@@ -73,6 +73,11 @@ func (h *Handlers) SetWebhookHandler(webhookService *services.WebhookService) {
 	h.Webhooks = NewWebhookHandlers(webhookService)
 }
 
+// SetPollHandler sets the poll handler
+func (h *Handlers) SetPollHandler(pollService *services.PollService) {
+	h.Polls = NewPollHandler(pollService)
+}
+
 // SetStickerHandler sets the sticker handler
 func (h *Handlers) SetStickerHandler(stickerService *services.StickerService, serverService *services.ServerService, permService *services.PermissionService) {
 	h.Stickers = NewStickerHandler(stickerService, serverService, permService)
