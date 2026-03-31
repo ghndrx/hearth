@@ -1,10 +1,12 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"hearth/internal/api/handlers"
 	"hearth/internal/api/middleware"
@@ -31,6 +33,18 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		Limit:          600,
 		Window:         time.Second,
 		AuthMultiplier: 1.0,
+	})
+	// Invites: 5 per hour per user per channel (prevent invite spam / abuse)
+	inviteRateLimit := m.RateLimitWithConfig(middleware.RateLimitConfig{
+		Limit:  5,
+		Window: time.Hour,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			channelID := c.Params("id")
+			if userID, ok := c.Locals("userID").(uuid.UUID); ok {
+				return fmt.Sprintf("invite:user:%s:channel:%s", userID.String(), channelID)
+			}
+			return fmt.Sprintf("invite:ip:%s:channel:%s", c.IP(), channelID)
+		},
 	})
 
 	// API v1
@@ -409,7 +423,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	}
 
 	// Channel invites
-	channels.Post("/:id/invites", h.Channels.CreateInvite)
+	channels.Post("/:id/invites", inviteRateLimit, h.Channels.CreateInvite)
 
 	// Permission overrides
 	channels.Get("/:id/permission-overwrites", h.Channels.GetPermissionOverrides)
