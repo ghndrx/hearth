@@ -48,7 +48,7 @@ func NewThreadAutoArchiveHandler(autoArchiveService ThreadAutoArchiveServiceInte
 // @Router /servers/{server_id}/auto-archive [get]
 func (h *ThreadAutoArchiveHandler) GetServerAutoArchiveSettings(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
-	serverID, err := uuid.Parse(c.Params("server_id"))
+	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid server id",
@@ -83,7 +83,7 @@ func (h *ThreadAutoArchiveHandler) GetServerAutoArchiveSettings(c *fiber.Ctx) er
 // @Router /servers/{server_id}/auto-archive [patch]
 func (h *ThreadAutoArchiveHandler) UpdateServerAutoArchiveSettings(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
-	serverID, err := uuid.Parse(c.Params("server_id"))
+	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid server id",
@@ -137,7 +137,7 @@ func (h *ThreadAutoArchiveHandler) UpdateServerAutoArchiveSettings(c *fiber.Ctx)
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channel_id}/auto-archive [get]
 func (h *ThreadAutoArchiveHandler) GetChannelAutoArchiveOverride(c *fiber.Ctx) error {
-	channelID, err := uuid.Parse(c.Params("channel_id"))
+	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid channel id",
@@ -177,7 +177,7 @@ func (h *ThreadAutoArchiveHandler) GetChannelAutoArchiveOverride(c *fiber.Ctx) e
 // @Router /channels/{channel_id}/auto-archive [put]
 func (h *ThreadAutoArchiveHandler) SetChannelAutoArchiveOverride(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
-	channelID, err := uuid.Parse(c.Params("channel_id"))
+	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid channel id",
@@ -236,7 +236,7 @@ func (h *ThreadAutoArchiveHandler) SetChannelAutoArchiveOverride(c *fiber.Ctx) e
 // @Router /channels/{channel_id}/auto-archive [delete]
 func (h *ThreadAutoArchiveHandler) DeleteChannelAutoArchiveOverride(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(uuid.UUID)
-	channelID, err := uuid.Parse(c.Params("channel_id"))
+	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid channel id",
@@ -283,7 +283,7 @@ func (h *ThreadAutoArchiveHandler) DeleteChannelAutoArchiveOverride(c *fiber.Ctx
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /threads/{thread_id}/auto-archive [get]
 func (h *ThreadAutoArchiveHandler) GetThreadAutoArchiveStatus(c *fiber.Ctx) error {
-	threadID, err := uuid.Parse(c.Params("thread_id"))
+	threadID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid thread id",
@@ -316,7 +316,7 @@ func (h *ThreadAutoArchiveHandler) GetThreadAutoArchiveStatus(c *fiber.Ctx) erro
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{server_id}/auto-archive/stats [get]
 func (h *ThreadAutoArchiveHandler) GetServerAutoArchiveStats(c *fiber.Ctx) error {
-	serverID, err := uuid.Parse(c.Params("server_id"))
+	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid server id",
