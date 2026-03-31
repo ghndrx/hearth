@@ -1,31 +1,55 @@
 package handlers
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"hearth/internal/models"
-	"hearth/internal/services"
 )
+
+// ComponentServiceInterface defines the methods needed from ComponentService
+type ComponentServiceInterface interface {
+	GetMessageComponents(ctx context.Context, messageID uuid.UUID) ([]*models.MessageComponent, error)
+	HandleInteraction(ctx context.Context, userID, channelID, messageID, componentID uuid.UUID, customID string, values []string) (*models.ComponentInteraction, error)
+	UpdateMessageComponents(ctx context.Context, messageID uuid.UUID, components []*models.MessageComponent) ([]*models.MessageComponent, error)
+	RemoveAllComponents(ctx context.Context, messageID uuid.UUID) error
+}
+
+// MessageServiceGetMessageInterface defines the GetMessage method needed from MessageService
+type MessageServiceGetMessageInterface interface {
+	GetMessage(ctx context.Context, messageID uuid.UUID, requesterID uuid.UUID) (*models.Message, error)
+}
+
+// ChannelServiceGetChannelInterface defines the GetChannel method needed from ChannelService
+type ChannelServiceGetChannelInterface interface {
+	GetChannel(ctx context.Context, channelID uuid.UUID) (*models.Channel, error)
+}
+
+// PermissionServiceGetChannelPermissionsInterface defines the GetChannelPermissions method needed from PermissionService
+type PermissionServiceGetChannelPermissionsInterface interface {
+	GetChannelPermissions(ctx context.Context, channel *models.Channel, userID uuid.UUID) (int64, error)
+}
 
 // ComponentHandler handles component-related HTTP requests
 type ComponentHandler struct {
-	componentService  *services.ComponentService
-	messageService    *services.MessageService
-	channelService    *services.ChannelService
-	permissionService *services.PermissionService
+	componentService  ComponentServiceInterface
+	messageService   MessageServiceGetMessageInterface
+	channelService   ChannelServiceGetChannelInterface
+	permissionService PermissionServiceGetChannelPermissionsInterface
 }
 
 // NewComponentHandler creates a new component handler
 func NewComponentHandler(
-	componentService *services.ComponentService,
-	messageService *services.MessageService,
-	channelService *services.ChannelService,
-	permissionService *services.PermissionService,
+	componentService ComponentServiceInterface,
+	messageService MessageServiceGetMessageInterface,
+	channelService ChannelServiceGetChannelInterface,
+	permissionService PermissionServiceGetChannelPermissionsInterface,
 ) *ComponentHandler {
 	return &ComponentHandler{
-		componentService:  componentService,
-		messageService:    messageService,
+		componentService:   componentService,
+		messageService:     messageService,
 		channelService:    channelService,
 		permissionService: permissionService,
 	}
