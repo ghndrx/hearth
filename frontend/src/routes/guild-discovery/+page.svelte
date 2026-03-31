@@ -363,7 +363,7 @@
 		const matchesSearch = !searchQuery || 
 			server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			(server.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-			server.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+			(server.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 		return matchesCategory && matchesSearch;
 	});
 
