@@ -45,6 +45,12 @@
 - [ ] **[P0]** Feature: Rich Embed Builder — Interactive embed creation for announcements, documentation, and bot responses
 - [ ] **[P1]** Feature: Granular Notification Controls — Per-channel notification settings, keywords, and quiet hours for user experience
 
+## 2026-03-31 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Mobile Push Notifications — Essential real-time mobile engagement with granular notification controls for user retention
+- [ ] **[P0]** Feature: Advanced Message Search — Full-text search with filters and faceted search for large community knowledge management
+- [ ] **[P1]** Feature: Voice Activities & Games — Interactive voice channel activities like poker, chess, and watch-together for engagement
+
 ## 2026-03-31 GitHub Issues Analysis
 
 **Status**: No open issues found in repository
