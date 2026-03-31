@@ -110,4 +110,8 @@ var (
 
 	// Audit log errors
 	ErrAuditLogNotFound = errors.New("audit log entry not found")
+
+	// Poll errors
+	ErrPollClosed   = errors.New("poll is closed")
+	ErrPollNotFound = errors.New("poll not found")
 )
