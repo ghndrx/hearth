@@ -39,14 +39,19 @@
 - [ ] **[P0]** Feature: Custom Emoji System — Server emoji upload, management, and cross-server usage for premium users
 - [ ] **[P1]** Feature: Voice Activities & Games — Built-in activities like poker, chess, and watch-together for voice engagement
 
+## 2026-03-30 Additional Critical Messaging Features
+
+- [ ] **[P0]** Feature: Message Forwarding — Core messaging feature for sharing content across channels/servers with attribution
+- [ ] **[P0]** Feature: Rich Embed Builder — Interactive embed creation for announcements, documentation, and bot responses
+- [ ] **[P1]** Feature: Granular Notification Controls — Per-channel notification settings, keywords, and quiet hours for user experience
+
 ## 2026-03-31 Competitive Pipeline
 
-- [ ] **[P0]** Feature: Voice Messages — Audio message recording and playback in text channels for mobile-first communication
-- [ ] **[P0]** Feature: Enhanced Mobile Experience — Mobile-first UI patterns and optimizations for competitive mobile parity
-- [ ] **[P1]** Feature: Server Insights Dashboard — Analytics and metrics dashboard for community management and growth tracking
+- [ ] **[P0]** Feature: Mobile Push Notifications — Essential real-time mobile engagement with granular notification controls for user retention
+- [ ] **[P0]** Feature: Advanced Message Search — Full-text search with filters and faceted search for large community knowledge management
+- [ ] **[P1]** Feature: Voice Activities & Games — Interactive voice channel activities like poker, chess, and watch-together for engagement
 
-## 2026-03-31 Critical Feature Gap Analysis
+## 2026-03-31 GitHub Issues Analysis
 
-- [ ] **[P0]** Feature: Bot API and Developer Platform — Essential developer ecosystem with bot creation, OAuth2, and API access for third-party integrations
-- [ ] **[P0]** Feature: Live Video Streaming — Go Live functionality for streaming games/applications to voice channel audiences
-- [ ] **[P0]** Feature: Advanced Permissions System — Fine-grained permission controls with role hierarchies and channel overrides
+**Status**: No open issues found in repository
+**Action**: HEARTBEAT_OK - No unclaimed issues to process
