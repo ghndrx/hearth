@@ -42,6 +42,8 @@ type DiscoverableServerRepo interface {
 	Create(ctx context.Context, server *models.DiscoverableServer) error
 	Update(ctx context.Context, server *models.DiscoverableServer) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error
+	GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error)
 }
 
 // GetDiscoverableServers returns paginated discoverable servers
@@ -720,4 +722,31 @@ func (r *DiscoverableServerRepository) GetInviteCode(ctx context.Context, server
 	}
 
 	return code, nil
+}
+
+// TrackActivity records a discovery activity event for a server
+func (r *DiscoverableServerRepository) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
+	query := `
+		INSERT INTO server_discovery_activity (server_id, user_id, activity_type, source)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := r.db.ExecContext(ctx, query, serverID, userID, activityType, source)
+	return err
+}
+
+// GetServerDailyStats returns daily discovery stats for a server
+func (r *DiscoverableServerRepository) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
+	query := `
+		SELECT id, server_id, stat_date, views, impressions, joins, search_clicks
+		FROM server_discovery_daily_stats
+		WHERE server_id = $1 AND stat_date >= CURRENT_DATE - INTERVAL '1 day' * $2
+		ORDER BY stat_date DESC
+	`
+
+	var stats []*models.ServerDiscoveryDailyStats
+	err := r.db.SelectContext(ctx, &stats, query, serverID, days)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
