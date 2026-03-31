@@ -38,3 +38,9 @@
 - [ ] **[P0]** Feature: Soundboard Integration — Discord's most popular voice feature for audio clips and memes in voice channels
 - [ ] **[P0]** Feature: Custom Emoji System — Server emoji upload, management, and cross-server usage for premium users
 - [ ] **[P1]** Feature: Voice Activities & Games — Built-in activities like poker, chess, and watch-together for voice engagement
+
+## 2026-03-31 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Thread Auto-Archive System — Automatic thread management for improved server organization and performance
+- [ ] **[P1]** Feature: Advanced Notification Controls — Granular per-channel notification settings for better user experience
+- [ ] **[P1]** Feature: Channel Following & Cross-Server Content — Follow announcement channels across servers for content syndication
