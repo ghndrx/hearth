@@ -291,8 +291,16 @@
 </div>
 
 {#if showAppDetail && selectedApp}
-	<div class="modal-overlay" on:click={closeAppDetail}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeAppDetail}
+		on:keydown={(e) => e.key === 'Escape' && closeAppDetail()}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="app-detail-title"
+		tabindex="-1"
+	>
+		<div class="modal-content" role="document">
 			<button class="close-btn" on:click={closeAppDetail}>×</button>
 
 			<div class="app-detail">
@@ -305,7 +313,7 @@
 						{/if}
 					</div>
 					<div class="detail-info">
-						<h2>{selectedApp.name}</h2>
+						<h2 id="app-detail-title">{selectedApp.name}</h2>
 						<p class="detail-description">{selectedApp.description}</p>
 						<div class="detail-meta">
 							<span class="rating">⭐ {selectedApp.rating.toFixed(1)} ({selectedApp.review_count} reviews)</span>
@@ -344,8 +352,8 @@
 					<h3>Write a Review</h3>
 					<div class="review-form">
 						<div class="rating-input">
-							<label>Rating:</label>
-							<select bind:value={reviewRating}>
+							<label for="review-rating">Rating:</label>
+							<select id="review-rating" bind:value={reviewRating}>
 								<option value={5}>⭐⭐⭐⭐⭐ (5)</option>
 								<option value={4}>⭐⭐⭐⭐ (4)</option>
 								<option value={3}>⭐⭐⭐ (3)</option>
@@ -354,8 +362,9 @@
 							</select>
 						</div>
 						<div class="review-text-input">
-							<label>Review (optional):</label>
+							<label for="review-text">Review (optional):</label>
 							<textarea
+								id="review-text"
 								bind:value={reviewText}
 								placeholder="Share your experience with this app..."
 								rows="3"
