@@ -302,6 +302,32 @@ func (h *PremiumHandler) GetServerPerks(c *fiber.Ctx) error {
 	return c.JSON(perks)
 }
 
+// GetBoostTiers returns all server boost tier information
+// @Summary List boost tiers
+// @Description Returns information about all server boost tiers and their perks
+// @Tags Server Boosts
+// @Produce json
+// @Success 200 {array} models.BoostTierInfo
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /premium/boost-tiers [get]
+func (h *PremiumHandler) GetBoostTiers(c *fiber.Ctx) error {
+	tiers := h.premiumService.GetBoostTiers(c.Context())
+	return c.JSON(tiers)
+}
+
+// GetSubscriptionTiers returns all subscription tier information
+// @Summary List subscription tiers
+// @Description Returns information about all subscription tiers and their features
+// @Tags Premium
+// @Produce json
+// @Success 200 {array} models.SubscriptionTierInfo
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /premium/subscription-tiers [get]
+func (h *PremiumHandler) GetSubscriptionTiers(c *fiber.Ctx) error {
+	tiers := h.premiumService.GetSubscriptionTiers(c.Context())
+	return c.JSON(tiers)
+}
+
 // GetUserBoosts returns all boosts for the current user
 // @Summary Get user boosts
 // @Description Returns all server boosts owned by the current user

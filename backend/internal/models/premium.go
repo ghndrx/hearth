@@ -107,6 +107,76 @@ type PremiumFeatures struct {
 	NoAds           bool `json:"no_ads"`
 }
 
+// BoostTierInfo represents information about a server boost tier
+type BoostTierInfo struct {
+	Level          int    `json:"level"`
+	Name           string `json:"name"`
+	BoostsRequired int    `json:"boosts_required"`
+	Perks          ServerPerks `json:"perks"`
+}
+
+// SubscriptionTierInfo represents information about a subscription tier
+type SubscriptionTierInfo struct {
+	Tier          PremiumTier `json:"tier"`
+	Name          string      `json:"name"`
+	MonthlyPrice  float64     `json:"monthly_price"`
+	Boosts        int         `json:"server_boosts"`
+	Features      PremiumFeatures `json:"features"`
+}
+
+// GetAllBoostTiers returns information about all server boost tiers
+func GetAllBoostTiers() []BoostTierInfo {
+	tiers := make([]BoostTierInfo, 4)
+	names := []string{"No Boosts", "Level 1", "Level 2", "Level 3"}
+	
+	for i := 0; i < 4; i++ {
+		perks := ServerBoostPerks[i]
+		perks.Level = i
+		perks.BoostCount = 0
+		if i < 3 {
+			perks.BoostsRequired = LevelBoostsRequired[i+1]
+		} else {
+			perks.BoostsRequired = 0
+		}
+		
+		tiers[i] = BoostTierInfo{
+			Level:          i,
+			Name:           names[i],
+			BoostsRequired: LevelBoostsRequired[i],
+			Perks:          perks,
+		}
+	}
+	
+	return tiers
+}
+
+// GetAllSubscriptionTiers returns information about all subscription tiers
+func GetAllSubscriptionTiers() []SubscriptionTierInfo {
+	return []SubscriptionTierInfo{
+		{
+			Tier:         TierFree,
+			Name:         "Free",
+			MonthlyPrice: 0,
+			Boosts:       0,
+			Features:     GetPremiumFeatures(TierFree),
+		},
+		{
+			Tier:         TierBasic,
+			Name:         "Basic",
+			MonthlyPrice: PremiumTierPricing[TierBasic],
+			Boosts:       TierBoostsTotal[TierBasic],
+			Features:     GetPremiumFeatures(TierBasic),
+		},
+		{
+			Tier:         TierPremium,
+			Name:         "Premium",
+			MonthlyPrice: PremiumTierPricing[TierPremium],
+			Boosts:       TierBoostsTotal[TierPremium],
+			Features:     GetPremiumFeatures(TierPremium),
+		},
+	}
+}
+
 // PremiumStatus represents a user's overall premium status
 type PremiumStatus struct {
 	UserID          uuid.UUID       `json:"user_id"`
