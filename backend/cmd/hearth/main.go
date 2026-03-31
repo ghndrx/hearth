@@ -488,14 +488,21 @@ func main() {
 	h.SetDiscoveryHandler(discoveryService, serverService)
 	log.Printf("✅ Discovery service initialized")
 
-	// Initialize DiscoverableServer service and handler (public server directory)
+	// Initialize Enhanced Server Discovery (DiscoverableServer) service with Redis caching
+	discoverableServerRepo := postgres.NewDiscoverableServerRepository(db)
 	discoverableServerService := services.NewDiscoverableServerService(
-		repos.DiscoverableServers,
+		discoverableServerRepo,
 		repos.Servers,
-		repos.Servers,
+		repos.Servers, // ServerRepository implements MemberRepo (GetMember, AddMember)
 	)
-	h.SetDiscoverableServerHandler(discoverableServerService, serverService)
-	log.Printf("✅ DiscoverableServer service initialized")
+	if redisCache != nil {
+		cachedDiscoverableService := services.NewCachedDiscoverableServerService(discoverableServerService, redisCache)
+		h.SetDiscoverableServerHandler(cachedDiscoverableService.DiscoverableServerService, serverService)
+		log.Printf("✅ Enhanced Server Discovery service initialized (with Redis caching)")
+	} else {
+		h.SetDiscoverableServerHandler(discoverableServerService, serverService)
+		log.Printf("✅ Enhanced Server Discovery service initialized (without caching)")
+	}
 
 	// Initialize App Directory service and handler
 	appDirectoryRepo := postgres.NewAppDirectoryRepository(db)

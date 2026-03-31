@@ -96,6 +96,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		// Main public server directory endpoint - GET /api/v1/discovery
 		// Lists servers that have opted into being discoverable with featured, trending, recommendations
 		v1.Get("/discovery", h.DiscoverableServer.GetDiscovery)
+
+		// Public server directory endpoint - GET /api/v1/directory
+		// Public server directory with search, categories, and pagination
+		v1.Get("/directory", h.DiscoverableServer.GetDirectory)
+
+		// Discovery activity tracking (no auth required, user optional)
+		v1.Post("/directory/:id/track", h.DiscoverableServer.TrackDiscoveryActivity)
 	}
 
 	// Protected routes
@@ -549,6 +556,14 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		adminDiscovery.Post("/:listingId/approve", h.Discovery.ApproveListing)
 		adminDiscovery.Post("/:listingId/reject", h.Discovery.RejectListing)
 		adminDiscovery.Post("/:listingId/featured", h.Discovery.SetFeatured)
+	}
+
+	// Admin directory management (approve/feature servers in the directory)
+	if h.DiscoverableServer != nil {
+		adminDirectory := api.Group("/admin/directory")
+		adminDirectory.Post("/:id/approve", h.DiscoverableServer.AdminApproveServer)
+		adminDirectory.Post("/:id/reject", h.DiscoverableServer.AdminRejectServer)
+		adminDirectory.Post("/:id/feature", h.DiscoverableServer.AdminFeatureServer)
 	}
 
 	// App Directory / Bot Marketplace

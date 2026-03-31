@@ -595,6 +595,210 @@ func (h *DiscoverableServerHandler) GetCategories(c *fiber.Ctx) error {
 	})
 }
 
+// GetDirectory is the public server directory endpoint with search, categories, and pagination
+// GET /api/v1/directory
+func (h *DiscoverableServerHandler) GetDirectory(c *fiber.Ctx) error {
+	// Parse pagination
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := c.QueryInt("limit", 25)
+	if limit < 1 || limit > 100 {
+		limit = 25
+	}
+
+	// Parse filters
+	filters := &models.DiscoverFilters{
+		Query:    c.Query("q"),
+		Category: models.ServerDiscoveryCategory(c.Query("category")),
+		Page:     page,
+		Limit:    limit,
+	}
+
+	// Validate category if provided
+	if filters.Category != "" && !models.IsValidCategory(string(filters.Category)) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid category. Valid categories: gaming, technology, art, music, sports, education, entertainment, community, other",
+		})
+	}
+
+	// Parse sort options
+	sort := c.Query("sort", "popular")
+	sortOrder := c.Query("order", "desc")
+
+	// Get paginated server listings
+	serversResult, err := h.discoverableServerService.GetDiscoverableServers(c.Context(), filters)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get server directory",
+		})
+	}
+
+	// Get categories for browsing
+	categories, catErr := h.discoverableServerService.GetCategories(c.Context())
+	if catErr != nil {
+		categories = []*models.CategoryInfo{}
+	}
+
+	// Get featured servers
+	featured, featErr := h.discoverableServerService.GetFeaturedServers(c.Context(), 5)
+	if featErr != nil {
+		featured = []*models.DiscoverableFeaturedServer{}
+	}
+
+	return c.JSON(fiber.Map{
+		"servers":     serversResult.Servers,
+		"total":       serversResult.Total,
+		"page":        serversResult.Page,
+		"limit":       serversResult.Limit,
+		"total_pages": serversResult.TotalPages,
+		"categories":  categories,
+		"featured":    featured,
+		"sort":        sort,
+		"order":       sortOrder,
+	})
+}
+
+// AdminApproveServer approves a server for the public directory (admin only)
+// POST /api/v1/admin/directory/:id/approve
+func (h *DiscoverableServerHandler) AdminApproveServer(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid server ID",
+		})
+	}
+
+	err = h.discoverableServerService.SetServerPublicStatus(c.Context(), id, true)
+	if err != nil {
+		if err == services.ErrDiscoverableServerNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Server not found in directory",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to approve server",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":   "Server approved for public directory",
+		"is_public": true,
+	})
+}
+
+// AdminRejectServer removes a server from the public directory (admin only)
+// POST /api/v1/admin/directory/:id/reject
+func (h *DiscoverableServerHandler) AdminRejectServer(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid server ID",
+		})
+	}
+
+	err = h.discoverableServerService.SetServerPublicStatus(c.Context(), id, false)
+	if err != nil {
+		if err == services.ErrDiscoverableServerNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Server not found in directory",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to reject server",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":   "Server removed from public directory",
+		"is_public": false,
+	})
+}
+
+// AdminFeatureServer marks/unmarks a server as featured (admin only)
+// POST /api/v1/admin/directory/:id/feature
+func (h *DiscoverableServerHandler) AdminFeatureServer(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid server ID",
+		})
+	}
+
+	var body struct {
+		Featured bool `json:"featured"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	server, err := h.discoverableServerService.GetServerByID(c.Context(), id)
+	if err != nil {
+		if err == services.ErrDiscoverableServerNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Server not found in directory",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get server",
+		})
+	}
+
+	server.IsFeatured = body.Featured
+	if err := h.discoverableServerService.SetServerPublicStatus(c.Context(), id, server.IsPublic); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update featured status",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":     "Featured status updated",
+		"is_featured": body.Featured,
+	})
+}
+
+// TrackDiscoveryActivity records a discovery activity event
+// POST /api/v1/directory/:id/track
+func (h *DiscoverableServerHandler) TrackDiscoveryActivity(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	serverID, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid server ID",
+		})
+	}
+
+	var body struct {
+		ActivityType string `json:"activity_type"`
+		Source       string `json:"source"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	var userID *uuid.UUID
+	if id, ok := c.Locals("userID").(uuid.UUID); ok {
+		userID = &id
+	}
+
+	err = h.discoverableServerService.TrackActivity(c.Context(), serverID, userID, body.ActivityType, body.Source)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusNoContent).Send(nil)
+}
+
 // Helper function to parse comma-separated values
 func parseCommaSeparated(s string) []string {
 	if s == "" {
