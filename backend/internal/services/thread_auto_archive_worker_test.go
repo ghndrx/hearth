@@ -376,7 +376,7 @@ func TestThreadAutoArchiveWorker_ProcessThreadActivity_SkipsArchived(t *testing.
 func TestThreadAutoArchiveWorker_GetWorkerStatus(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := newSimpleMockChannelRepoForWorker()
+	mockChannelRepo := &simpleMockChannelRepoForWorker{}
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
@@ -390,7 +390,7 @@ func TestThreadAutoArchiveWorker_GetWorkerStatus(t *testing.T) {
 func TestThreadAutoArchiveWorker_SetBatchSize(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := newSimpleMockChannelRepoForWorker()
+	mockChannelRepo := &simpleMockChannelRepoForWorker{}
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
@@ -412,7 +412,7 @@ func TestThreadAutoArchiveWorker_SetBatchSize(t *testing.T) {
 func TestThreadAutoArchiveWorker_SetCheckInterval(t *testing.T) {
 	mockRepo := &simpleMockThreadAutoArchiveRepoForWorker{}
 	mockThreadRepo := newSimpleMockThreadRepoForWorker()
-	mockChannelRepo := newSimpleMockChannelRepoForWorker()
+	mockChannelRepo := &simpleMockChannelRepoForWorker{}
 	mockEventBus := &simpleMockEventBusForWorker{}
 
 	worker := NewThreadAutoArchiveWorker(mockRepo, mockThreadRepo, mockChannelRepo, mockEventBus)
