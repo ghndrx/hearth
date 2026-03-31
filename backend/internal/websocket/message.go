@@ -84,6 +84,10 @@ const (
 	EventAutocomplete      = "AUTOCOMPLETE"
 	EventCommandExecute    = "COMMAND_EXECUTE"
 	EventCommandResponse   = "COMMAND_RESPONSE"
+
+	// Thread auto-archive events
+	EventThreadAutoArchiveUpdate = "THREAD_AUTO_ARCHIVE_UPDATE"
+	EventThreadAutoArchive      = "THREAD_AUTO_ARCHIVE"
 )
 
 // DispatchEvent creates a dispatch message

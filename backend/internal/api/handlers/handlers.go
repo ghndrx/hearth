@@ -50,6 +50,7 @@ type Handlers struct {
 	Welcome             *WelcomeHandler
 	Soundboard          *SoundboardHandler
 	Premium             *PremiumHandler
+	ThreadAutoArchive   *ThreadAutoArchiveHandler
 }
 
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
@@ -304,4 +305,11 @@ func (h *Handlers) SetSoundboardHandler(
 	permService *services.PermissionService,
 ) {
 	h.Soundboard = NewSoundboardHandler(soundboardService, serverService, permService)
+}
+
+// SetThreadAutoArchiveHandler sets the thread auto-archive handler
+func (h *Handlers) SetThreadAutoArchiveHandler(
+	autoArchiveService *services.ThreadAutoArchiveService,
+) {
+	h.ThreadAutoArchive = NewThreadAutoArchiveHandler(autoArchiveService)
 }
