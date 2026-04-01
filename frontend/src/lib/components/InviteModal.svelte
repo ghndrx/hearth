@@ -5,8 +5,10 @@
 
 	export let open = false;
 	export let serverName = '';
+	// eslint-disable-next-line svelte/no-unused-export-let
 	export let serverId = '';
 	export let channelName = '';
+	// eslint-disable-next-line svelte/no-unused-export-let
 	export let _channelId = '';
 	export let baseUrl = 'https://hearth.chat';
 
