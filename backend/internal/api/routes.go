@@ -469,11 +469,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		// Server events
 		servers.Get("/:id/events", h.Events.ListServerEvents)
 		servers.Post("/:id/events", h.Events.CreateEvent)
+		servers.Get("/:id/events/ical", h.Events.ExportServerEventsICal)
 
 		// Event operations
 		api.Get("/events/:id", h.Events.GetEvent)
 		api.Patch("/events/:id", h.Events.UpdateEvent)
 		api.Delete("/events/:id", h.Events.DeleteEvent)
+		api.Get("/events/:id/ical", h.Events.ExportEventICal)
 
 		// Event RSVPs
 		api.Post("/events/:id/rsvp", h.Events.RSVP)
@@ -482,6 +484,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 
 		// Event actions
 		api.Post("/events/:id/start", h.Events.StartEvent)
+
+		// User events (iCal export for user's RSVPed events)
+		api.Get("/users/me/events/ical", h.Events.ExportUserEventsICal)
 	}
 
 	// AutoMod Rules (if handler is configured)
