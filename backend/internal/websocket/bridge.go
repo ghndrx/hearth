@@ -116,6 +116,10 @@ func (b *EventBridge) registerHandlers() {
 	b.bus.Subscribe(events.InteractionCreated, b.onInteractionCreated)
 	b.bus.Subscribe(events.CommandExecuted, b.onCommandExecuted)
 	b.bus.Subscribe(events.AutocompleteCreated, b.onAutocompleteCreated)
+
+	// Component events
+	b.bus.Subscribe(events.ComponentInteraction, b.onComponentInteraction)
+	b.bus.Subscribe(events.ComponentUpdated, b.onComponentUpdated)
 }
 
 // Message event handlers
@@ -685,6 +689,52 @@ func (b *EventBridge) onAutocompleteCreated(event events.Event) {
 		"token":          data.Token,
 	}
 	b.sendToUser(data.UserID, EventAutocomplete, wsData)
+}
+
+// Component event handlers
+
+func (b *EventBridge) onComponentInteraction(event events.Event) {
+	data, ok := event.Data.(*services.ComponentInteractionEvent)
+	if !ok {
+		log.Printf("[EventBridge] onComponentInteraction: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting COMPONENT_INTERACTION to channel %s", data.ChannelID)
+	wsData := map[string]interface{}{
+		"id":           data.Interaction.ID.String(),
+		"user_id":      data.Interaction.UserID.String(),
+		"channel_id":   data.ChannelID.String(),
+		"message_id":   data.Interaction.MessageID.String(),
+		"component_id": data.Interaction.ComponentID.String(),
+		"custom_id":    data.Interaction.CustomID,
+		"type":         data.Interaction.Type,
+		"values":       data.Interaction.Values,
+		"created_at":   data.Interaction.CreatedAt.Format("2006-01-02T15:04:05.999Z"),
+	}
+	if data.Component != nil {
+		wsData["component"] = map[string]interface{}{
+			"id":         data.Component.ID.String(),
+			"type":       data.Component.Type,
+			"custom_id":  data.Component.CustomID,
+			"label":      data.Component.Label,
+			"style":      data.Component.Style,
+		}
+	}
+	b.sendToChannel(data.ChannelID, EventTypeComponentInteraction, wsData)
+}
+
+func (b *EventBridge) onComponentUpdated(event events.Event) {
+	data, ok := event.Data.(*services.MessageUpdatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onComponentUpdated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting COMPONENT_UPDATE to channel %s", data.ChannelID)
+	wsData := map[string]interface{}{
+		"message_id":   data.Message.ID.String(),
+		"channel_id":   data.ChannelID.String(),
+	}
+	b.sendToChannel(data.ChannelID, EventTypeComponentUpdate, wsData)
 }
 
 // Additional event types for websocket

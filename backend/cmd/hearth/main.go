@@ -449,6 +449,17 @@ func main() {
 	h.SetComponentHandlerWithDeps(componentService, messageService, channelService, permService)
 	log.Printf("✅ Component service initialized")
 
+	// Initialize component rate limiter if rate limiting is enabled
+	if cfg.RateLimitEnabled {
+		memoryCache := middleware.NewSimpleInMemoryCache()
+		memoryLimiter := ratelimit.NewLimiter(memoryCache)
+		componentRateLimiter := ratelimit.NewComponentRateLimiter(memoryLimiter)
+		componentService.SetRateLimiter(componentRateLimiter)
+		log.Printf("✅ Component rate limiter wired")
+	} else {
+		log.Printf("⚠️  Component rate limiting DISABLED")
+	}
+
 	// Initialize AutoMod service and handler
 	automodService := services.NewAutoModService(repos.AutoMod)
 	h.SetAutoModHandler(automodService, serverService)
@@ -595,6 +606,11 @@ func main() {
 	// Setup routes
 	api.SetupRoutes(app, h, m)
 
+	// Set component service on channel handler for message components support
+	if h.Channels != nil {
+		h.Channels.SetComponentService(componentService)
+	}
+
 	// Graceful shutdown signal handler with connection draining
 	shutdownComplete := make(chan struct{})
 	go func() {
@@ -640,16 +656,5 @@ func main() {
 	// Wait for shutdown to complete
 	<-shutdownComplete
 	log.Println("✅ Graceful shutdown complete")
-
-	// Keep references to avoid unused variable errors during development
-	_ = repos
-	_ = quotaService
-	_ = userService
-	_ = authService
-	_ = serverService
-	_ = channelService
-	_ = messageService
-	_ = wsHub
-	_ = redisCache
 }
 
