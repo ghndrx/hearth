@@ -15,9 +15,7 @@
 	} from '$lib/stores/events';
 	import { currentServer } from '$lib/stores/servers';
 	import { user as userStore } from '$lib/stores/auth';
-	import { hasPermission, getServerRoles } from '$lib/stores/roles';
-	import { members } from '$lib/stores/members';
-
+	import { hasPermission, rolesMap } from '$lib/stores/roles';
 	export let event: Event;
 
 	const dispatch = createEventDispatcher<{
@@ -33,17 +31,9 @@
 
 	$: isCreator = $userStore?.id === event.creator_id;
 	$: isServerOwner = $currentServer && $userStore?.id === $currentServer.owner_id;
-
-	// Get user's permissions for this server
-	$: currentServerRoles = $currentServer ? getServerRoles($currentServer.id) : null;
-	$: userMember = $members.find(m => m.user_id === $userStore?.id);
-	$: userPermissions = userMember && $currentServerRoles ?
-		$currentServerRoles
-			.filter(role => userMember.roles.includes(role.id))
-			.flatMap(role => role.permissions || []) : [];
-
-	$: hasManageEventsPermission = userPermissions.length > 0 && hasPermission(userPermissions, 'MANAGE_EVENTS');
-	$: canManage = isCreator || isServerOwner || hasManageEventsPermission;
+	$: serverRoles = $currentServer ? ($rolesMap.get($currentServer.id) || []) : [];
+	$: userPermissions = serverRoles.flatMap(r => r.permissions);
+	$: canManage = isCreator || isServerOwner || hasPermission(userPermissions, 'MANAGE_EVENTS');
 
 	onMount(async () => {
 		await loadRsvps();
