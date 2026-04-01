@@ -33,17 +33,7 @@
 
 	$: isCreator = $userStore?.id === event.creator_id;
 	$: isServerOwner = $currentServer && $userStore?.id === $currentServer.owner_id;
-
-	// Get user's permissions for this server
-	$: currentServerRoles = $currentServer ? getServerRoles($currentServer.id) : null;
-	$: userMember = $members.find(m => m.user_id === $userStore?.id);
-	$: userPermissions = userMember && $currentServerRoles ?
-		$currentServerRoles
-			.filter(role => userMember.roles.includes(role.id))
-			.flatMap(role => role.permissions || []) : [];
-
-	$: hasManageEventsPermission = userPermissions.length > 0 && hasPermission(userPermissions, 'MANAGE_EVENTS');
-	$: canManage = isCreator || isServerOwner || hasManageEventsPermission;
+	$: canManage = isCreator || isServerOwner || hasPermission($currentServer?.id, 'MANAGE_EVENTS');
 
 	onMount(async () => {
 		await loadRsvps();
