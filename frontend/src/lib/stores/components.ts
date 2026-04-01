@@ -188,7 +188,7 @@ export async function sendComponentInteraction(
 	values: string[] = []
 ): Promise<{ type: string; data?: unknown }> {
 	try {
-		const response = await api.post('/api/v1/interactions/components', {
+		const response = await api.post<{ type: string; data?: unknown }>('/api/v1/interactions/components', {
 			channel_id: channelId,
 			message_id: messageId,
 			component_id: componentId,
