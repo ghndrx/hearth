@@ -16,6 +16,8 @@
 	import { currentServer } from '$lib/stores/servers';
 	import { user as userStore } from '$lib/stores/auth';
 	import { hasPermission, rolesMap } from '$lib/stores/roles';
+	import { members } from '$lib/stores/members';
+
 	export let event: Event;
 
 	const dispatch = createEventDispatcher<{
