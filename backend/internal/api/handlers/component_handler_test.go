@@ -26,10 +26,6 @@ type mockComponentHandlerComponentService struct {
 	handleInteractionFunc       func(ctx context.Context, userID, channelID, messageID, componentID uuid.UUID, customID string, values []string) (*models.ComponentInteraction, error)
 	updateMessageComponentsFunc func(ctx context.Context, messageID uuid.UUID, components []*models.MessageComponent) ([]*models.MessageComponent, error)
 	removeAllComponentsFunc     func(ctx context.Context, messageID uuid.UUID) error
-	createModalFunc             func(ctx context.Context, modal *models.ModalComponent) (*models.ModalComponent, error)
-	getModalByCustomIDFunc      func(ctx context.Context, customID string) (*models.ModalComponent, error)
-	deleteModalFunc             func(ctx context.Context, id uuid.UUID) error
-	handleModalSubmitFunc       func(ctx context.Context, userID, channelID, msgID, modalID, componentID uuid.UUID, customID string, values map[string]string) (*models.ModalInteraction, error)
 }
 
 func (m *mockComponentHandlerComponentService) GetMessageComponents(ctx context.Context, messageID uuid.UUID) ([]*models.MessageComponent, error) {
@@ -58,34 +54,6 @@ func (m *mockComponentHandlerComponentService) RemoveAllComponents(ctx context.C
 		return m.removeAllComponentsFunc(ctx, messageID)
 	}
 	return nil
-}
-
-func (m *mockComponentHandlerComponentService) CreateModal(ctx context.Context, modal *models.ModalComponent) (*models.ModalComponent, error) {
-	if m.createModalFunc != nil {
-		return m.createModalFunc(ctx, modal)
-	}
-	return nil, nil
-}
-
-func (m *mockComponentHandlerComponentService) GetModalByCustomID(ctx context.Context, customID string) (*models.ModalComponent, error) {
-	if m.getModalByCustomIDFunc != nil {
-		return m.getModalByCustomIDFunc(ctx, customID)
-	}
-	return nil, nil
-}
-
-func (m *mockComponentHandlerComponentService) DeleteModal(ctx context.Context, id uuid.UUID) error {
-	if m.deleteModalFunc != nil {
-		return m.deleteModalFunc(ctx, id)
-	}
-	return nil
-}
-
-func (m *mockComponentHandlerComponentService) HandleModalSubmit(ctx context.Context, userID, channelID, msgID, modalID, componentID uuid.UUID, customID string, values map[string]string) (*models.ModalInteraction, error) {
-	if m.handleModalSubmitFunc != nil {
-		return m.handleModalSubmitFunc(ctx, userID, channelID, msgID, modalID, componentID, customID, values)
-	}
-	return nil, nil
 }
 
 // mockComponentHandlerMessageService mocks MessageServiceGetMessageInterface
