@@ -56,6 +56,9 @@
 - [ ] **[P0]** Feature: Interactive Message Components — Buttons, dropdowns, and modals for modern bot interactions and user engagement
 - [ ] **[P0]** Feature: Video Calling System — 1-on-1 and group video calls with screen sharing for complete Discord communication parity
 - [ ] **[P0]** Feature: Native Mobile Applications — iOS and Android native apps for mobile-first user acquisition and retention
+- [ ] **[P0]** Feature: Advanced Developer Platform & App Directory — Comprehensive developer ecosystem with app discovery, OAuth2 scopes, and monetization for third-party growth
+- [ ] **[P0]** Feature: Voice Activities Platform — Interactive voice channel activities and games (poker, chess, YouTube together) for unique engagement
+- [ ] **[P1]** Feature: Advanced Live Streaming Infrastructure — Go Live broadcasting with audience management and quality controls for content creators
 
 ## 2026-03-31 GitHub Issues Analysis
 
