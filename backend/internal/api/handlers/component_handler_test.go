@@ -25,7 +25,7 @@ type mockComponentHandlerComponentService struct {
 	getMessageComponentsFunc    func(ctx context.Context, messageID uuid.UUID) ([]*models.MessageComponent, error)
 	handleInteractionFunc       func(ctx context.Context, userID, channelID, messageID, componentID uuid.UUID, customID string, values []string) (*models.ComponentInteraction, error)
 	updateMessageComponentsFunc func(ctx context.Context, messageID uuid.UUID, components []*models.MessageComponent) ([]*models.MessageComponent, error)
-	removeAllComponentsFunc    func(ctx context.Context, messageID uuid.UUID) error
+	removeAllComponentsFunc     func(ctx context.Context, messageID uuid.UUID) error
 }
 
 func (m *mockComponentHandlerComponentService) GetMessageComponents(ctx context.Context, messageID uuid.UUID) ([]*models.MessageComponent, error) {
