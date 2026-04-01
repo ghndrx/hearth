@@ -129,12 +129,15 @@ describe('CategoryFilter Component', () => {
 	// The component needs to be updated to use onselect callback prop for Svelte 5 compatibility
 	it.skip('emits select event on category click', async () => {
 		const selectHandler = vi.fn();
-		render(CategoryFilter, { 
+		const { component } = render(CategoryFilter, { 
 			props: { 
 				categories: mockCategories,
 				selectedCategory: 'all'
 			} 
 		});
+		
+		// @ts-ignore - Svelte 5 event handling compatibility
+		component.$on('select', selectHandler);
 		
 		const gamingButton = screen.getByRole('button', { name: /gaming/i });
 		await fireEvent.click(gamingButton);
@@ -213,6 +216,7 @@ describe('SearchBar Component', () => {
 	it('emits search event with debounce', async () => {
 		const searchHandler = vi.fn();
 		render(SearchBar);
+		
 		const input = screen.getByRole('textbox') as HTMLInputElement;
 		await fireEvent.input(input, { target: { value: 'test' } });
 		
