@@ -44,14 +44,15 @@ type Message struct {
 	EditedAt         *time.Time  `json:"edited_at,omitempty" db:"edited_at"`
 
 	// Populated from joins/aggregations
-	Author        *PublicUser  `json:"author,omitempty"`
-	Attachments   []Attachment `json:"attachments,omitempty"`
-	Sticker       *Sticker     `json:"sticker,omitempty"`
-	Embeds        []Embed      `json:"embeds,omitempty"`
-	Reactions     []Reaction   `json:"reactions,omitempty"`
-	Mentions      []uuid.UUID  `json:"mentions,omitempty"`
-	MentionRoles  []uuid.UUID  `json:"mention_roles,omitempty"`
-	ReferencedMsg *Message     `json:"referenced_message,omitempty"`
+	Author        *PublicUser        `json:"author,omitempty"`
+	Attachments   []Attachment       `json:"attachments,omitempty"`
+	Sticker       *Sticker          `json:"sticker,omitempty"`
+	Embeds        []Embed           `json:"embeds,omitempty"`
+	Reactions     []Reaction        `json:"reactions,omitempty"`
+	Mentions      []uuid.UUID       `json:"mentions,omitempty"`
+	MentionRoles  []uuid.UUID       `json:"mention_roles,omitempty"`
+	ReferencedMsg *Message          `json:"referenced_message,omitempty"`
+	Components    []MessageComponent `json:"components,omitempty"`
 }
 
 // MessageFlags

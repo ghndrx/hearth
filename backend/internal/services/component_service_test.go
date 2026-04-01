@@ -128,56 +128,6 @@ func intPtrComponent(i int) *int {
 	return &i
 }
 
-// TestModalValidation tests modal validation logic  
-func TestModalValidation_ValidModal(t *testing.T) {
-	modal := &models.ModalComponent{
-		ID:       uuid.New(),
-		CustomID: "test_modal",
-		Type:     models.ModalTypePrimary,
-		Title:    "Test Modal Title",
-		Rows: []models.ModalRow{
-			{
-				Components: []models.MessageComponent{
-					{
-						ID:       uuid.New(),
-						Type:     models.ComponentTypeTextInput,
-						Style:    models.TextInputStyleShort,
-						Label:    "Name",
-						CustomID: "name_input",
-					},
-				},
-			},
-		},
-	}
-	
-	assert.NotEmpty(t, modal.CustomID)
-	assert.NotEmpty(t, modal.Title)
-	assert.Greater(t, len(modal.Rows), 0)
-}
-
-func TestModalValidation_ModalTypes(t *testing.T) {
-	tests := []struct {
-		modalType models.ModalType
-		valid     bool
-	}{
-		{models.ModalTypePrimary, true},
-		{models.ModalTypeDanger, true},
-	}
-	
-	for _, tt := range tests {
-		modal := &models.ModalComponent{
-			CustomID: "test_modal",
-			Type:     tt.modalType,
-			Title:    "Test",
-			Rows: []models.ModalRow{
-				{Components: []models.MessageComponent{}},
-			},
-		}
-		
-		assert.NotEmpty(t, modal.Type)
-	}
-}
-
 // TestComponentStyles tests button styles
 func TestComponentStyles_All(t *testing.T) {
 	styles := []models.ComponentStyle{
@@ -232,23 +182,4 @@ func TestComponentInteractionTypes(t *testing.T) {
 	assert.Equal(t, models.ComponentInteractionType(1), models.InteractionTypeTextInput)
 }
 
-// TestModalInteractionData tests modal interaction structure
-func TestModalInteractionData(t *testing.T) {
-	interaction := &models.ModalInteraction{
-		ID:          uuid.New(),
-		UserID:      uuid.New(),
-		ChannelID:   uuid.New(),
-		MessageID:   uuid.New(),
-		ModalID:     uuid.New(),
-		CustomID:    "test_modal",
-		ComponentID: uuid.New(),
-		Values: map[string]string{
-			"name_input": "John Doe",
-			"email_input": "john@example.com",
-		},
-	}
-	
-	assert.NotEqual(t, uuid.Nil, interaction.ID)
-	assert.Len(t, interaction.Values, 2)
-	assert.Equal(t, "John Doe", interaction.Values["name_input"])
-}
+

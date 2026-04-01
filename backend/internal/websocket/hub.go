@@ -339,6 +339,8 @@ const (
 	EventTypeReactionAdd       = "REACTION_ADD"
 	EventTypeReactionRemove    = "REACTION_REMOVE"
 	EventTypeReactionRemoveAll = "REACTION_REMOVE_ALL"
+	EventTypeComponentInteraction = "COMPONENT_INTERACTION"
+	EventTypeComponentUpdate     = "COMPONENT_UPDATE"
 	EventTypeSubscribe         = "SUBSCRIBE"
 	EventTypeUnsubscribe       = "UNSUBSCRIBE"
 )
