@@ -21,6 +21,14 @@ type ComponentRepository interface {
 	CreateInteraction(ctx context.Context, i *models.ComponentInteraction) error
 	GetInteractionsByComponentID(ctx context.Context, componentID uuid.UUID) ([]*models.ComponentInteraction, error)
 	GetComponentsByCustomID(ctx context.Context, customID string) ([]*models.MessageComponent, error)
+	// Modal methods (composite interface with both Component and Modal repos)
+	CreateModal(ctx context.Context, m *models.ModalComponent) error
+	GetModalByID(ctx context.Context, id uuid.UUID) (*models.ModalComponent, error)
+	GetModalByCustomID(ctx context.Context, customID string) (*models.ModalComponent, error)
+	DeleteModal(ctx context.Context, id uuid.UUID) error
+	CreateModalInteraction(ctx context.Context, m *models.ModalInteraction) error
+	GetModalInteractionByID(ctx context.Context, id uuid.UUID) (*models.ModalInteraction, error)
+	GetModalInteractionsByModalID(ctx context.Context, modalID uuid.UUID) ([]*models.ModalInteraction, error)
 }
 
 // ComponentService handles component-related business logic
@@ -418,4 +426,118 @@ type ComponentInteractionEvent struct {
 	Component   *models.MessageComponent
 	Message     *models.Message
 	ChannelID   uuid.UUID
+}
+
+// ModalInteractionEvent is published when a modal is submitted
+type ModalInteractionEvent struct {
+	Interaction *models.ModalInteraction
+	Modal       *models.ModalComponent
+	Message     *models.Message
+	ChannelID   uuid.UUID
+}
+
+// ModalRepository defines modal data access
+type ModalRepository interface {
+	CreateModal(ctx context.Context, m *models.ModalComponent) error
+	GetModalByID(ctx context.Context, id uuid.UUID) (*models.ModalComponent, error)
+	GetModalByCustomID(ctx context.Context, customID string) (*models.ModalComponent, error)
+	DeleteModal(ctx context.Context, id uuid.UUID) error
+	CreateModalInteraction(ctx context.Context, m *models.ModalInteraction) error
+	GetModalInteractionByID(ctx context.Context, id uuid.UUID) (*models.ModalInteraction, error)
+	GetModalInteractionsByModalID(ctx context.Context, modalID uuid.UUID) ([]*models.ModalInteraction, error)
+}
+
+// CreateModal creates a new modal for a message
+func (s *ComponentService) CreateModal(ctx context.Context, modal *models.ModalComponent) (*models.ModalComponent, error) {
+	// Validate modal
+	if modal.CustomID == "" {
+		return nil, ErrInvalidCredentials
+	}
+	if modal.Title == "" {
+		return nil, ErrInvalidCredentials
+	}
+	if len(modal.Rows) == 0 {
+		return nil, ErrInvalidCredentials
+	}
+
+	modal.ID = uuid.New()
+	modal.CreatedAt = time.Now()
+
+	if err := s.repo.CreateModal(ctx, modal); err != nil {
+		return nil, err
+	}
+
+	return modal, nil
+}
+
+// GetModalByCustomID retrieves a modal by custom_id
+func (s *ComponentService) GetModalByCustomID(ctx context.Context, customID string) (*models.ModalComponent, error) {
+	return s.repo.GetModalByCustomID(ctx, customID)
+}
+
+// DeleteModal deletes a modal
+func (s *ComponentService) DeleteModal(ctx context.Context, id uuid.UUID) error {
+	return s.repo.DeleteModal(ctx, id)
+}
+
+// HandleModalSubmit handles a user's modal submission
+func (s *ComponentService) HandleModalSubmit(
+	ctx context.Context,
+	userID, channelID, msgID, modalID, componentID uuid.UUID,
+	customID string,
+	values map[string]string,
+) (*models.ModalInteraction, error) {
+	// Verify message exists
+	message, err := s.messageRepo.GetByID(ctx, msgID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Verify channel exists
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Get modal
+	modal, err := s.repo.GetModalByID(ctx, modalID)
+	if err != nil {
+		return nil, err
+	}
+	if modal == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Create interaction record
+	interaction := &models.ModalInteraction{
+		ID:          uuid.New(),
+		UserID:      userID,
+		ChannelID:   channelID,
+		MessageID:   msgID,
+		ModalID:     modalID,
+		CustomID:    customID,
+		ComponentID: componentID,
+		Values:      values,
+		SubmittedAt: time.Now(),
+	}
+
+	if err := s.repo.CreateModalInteraction(ctx, interaction); err != nil {
+		return nil, err
+	}
+
+	// Emit WebSocket event for modal submission
+	s.eventBus.Publish("modal.submit", &ModalInteractionEvent{
+		Interaction: interaction,
+		Modal:       modal,
+		Message:     message,
+		ChannelID:   channelID,
+	})
+
+	return interaction, nil
 }
