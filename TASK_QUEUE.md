@@ -51,6 +51,12 @@
 - [ ] **[P0]** Feature: Advanced Message Search — Full-text search with filters and faceted search for large community knowledge management
 - [ ] **[P1]** Feature: Voice Activities & Games — Interactive voice channel activities like poker, chess, and watch-together for engagement
 
+## 2026-04-01 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Interactive Message Components — Buttons, dropdowns, and modals for modern bot interactions and user engagement
+- [ ] **[P0]** Feature: Video Calling System — 1-on-1 and group video calls with screen sharing for complete Discord communication parity
+- [ ] **[P0]** Feature: Native Mobile Applications — iOS and Android native apps for mobile-first user acquisition and retention
+
 ## 2026-03-31 GitHub Issues Analysis
 
 **Status**: No open issues found in repository
