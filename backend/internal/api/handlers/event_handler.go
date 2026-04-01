@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
@@ -440,4 +443,195 @@ func (h *EventHandler) StartEvent(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"status": "ok"})
+}
+
+// ExportEventICal exports a single event as iCal format
+// @Summary Export event as iCal
+// @Description Exports a single event as an iCalendar file
+// @Tags Events
+// @Produce text/calendar
+// @Param id path string true "Event ID"
+// @Success 200 {file} binary "iCalendar file"
+// @Failure 400 {object} fiber.Map "Invalid event ID"
+// @Failure 404 {object} fiber.Map "Event not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /events/{id}/ical [get]
+func (h *EventHandler) ExportEventICal(c *fiber.Ctx) error {
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid event id",
+		})
+	}
+
+	event, err := h.eventService.GetEvent(c.Context(), eventID)
+	if err != nil {
+		if err == services.ErrEventNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "event not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get event",
+		})
+	}
+
+	ical := generateICal([]*models.Event{event})
+	filename := fmt.Sprintf("event-%s.ics", event.ID.String())
+
+	c.Set("Content-Type", "text/calendar; charset=utf-8")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	return c.SendString(ical)
+}
+
+// ExportServerEventsICal exports all server events as iCal
+// @Summary Export server events as iCal
+// @Description Exports all scheduled events for a server as an iCalendar file
+// @Tags Events
+// @Produce text/calendar
+// @Param id path string true "Server ID"
+// @Success 200 {file} binary "iCalendar file"
+// @Failure 400 {object} fiber.Map "Invalid server ID"
+// @Failure 403 {object} fiber.Map "Not a server member"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /servers/{id}/events/ical [get]
+func (h *EventHandler) ExportServerEventsICal(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+	serverID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid server id",
+		})
+	}
+
+	// Verify user is a member
+	member, err := h.serverService.GetMember(c.Context(), serverID, userID)
+	if err != nil || member == nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "not a server member",
+		})
+	}
+
+	events, err := h.eventService.ListEvents(c.Context(), serverID, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to list events",
+		})
+	}
+
+	ical := generateICal(events)
+	filename := fmt.Sprintf("server-%s-events.ics", serverID.String())
+
+	c.Set("Content-Type", "text/calendar; charset=utf-8")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	return c.SendString(ical)
+}
+
+// ExportUserEventsICal exports all events a user has RSVPed to as iCal
+// @Summary Export user events as iCal
+// @Description Exports all events a user has RSVPed to as an iCalendar file
+// @Tags Events
+// @Produce text/calendar
+// @Success 200 {file} binary "iCalendar file"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/me/events/ical [get]
+func (h *EventHandler) ExportUserEventsICal(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+
+	events, err := h.eventService.GetUserRSVPEvents(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to list user events",
+		})
+	}
+
+	ical := generateICal(events)
+	filename := fmt.Sprintf("my-events.ics")
+
+	c.Set("Content-Type", "text/calendar; charset=utf-8")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	return c.SendString(ical)
+}
+
+// generateICal generates an iCalendar string from a list of events
+func generateICal(events []*models.Event) string {
+	var ical string
+	ical = "BEGIN:VCALENDAR\r\n"
+	ical += "VERSION:2.0\r\n"
+	ical += "PRODID:-//Hearth//Hearth Events//EN\r\n"
+	ical += "CALSCALE:GREGORIAN\r\n"
+	ical += "METHOD:PUBLISH\r\n"
+
+	for _, event := range events {
+		ical += "BEGIN:VEVENT\r\n"
+		ical += fmt.Sprintf("UID:%s@hearth\r\n", event.ID.String())
+		ical += fmt.Sprintf("DTSTAMP:%s\r\n", formatICalTime(time.Now()))
+		ical += fmt.Sprintf("DTSTART:%s\r\n", formatICalTime(event.ScheduledStart))
+		if event.ScheduledEnd != nil {
+			ical += fmt.Sprintf("DTEND:%s\r\n", formatICalTime(*event.ScheduledEnd))
+		}
+		ical += fmt.Sprintf("SUMMARY:%s\r\n", escapeICalText(event.Name))
+		if event.Description != "" {
+			ical += fmt.Sprintf("DESCRIPTION:%s\r\n", escapeICalText(event.Description))
+		}
+		if event.Location != "" {
+			ical += fmt.Sprintf("LOCATION:%s\r\n", escapeICalText(event.Location))
+		}
+		ical += fmt.Sprintf("ORGANIZER;CN=Event Creator:mailto:noreply@hearth.app\r\n")
+		ical += "STATUS:"
+		switch event.Status {
+		case models.EventStatusScheduled:
+			ical += "CONFIRMED\r\n"
+		case models.EventStatusCancelled:
+			ical += "CANCELLED\r\n"
+		case models.EventStatusCompleted:
+			ical += "COMPLETED\r\n"
+		default:
+			ical += "TENTATIVE\r\n"
+		}
+		ical += fmt.Sprintf("END:VEVENT\r\n")
+	}
+
+	ical += "END:VCALENDAR\r\n"
+	return ical
+}
+
+// formatICalTime formats a time as iCalendar datetime string
+func formatICalTime(t time.Time) string {
+	return t.UTC().Format("20060102T150405Z")
+}
+
+// escapeICalText escapes special characters for iCalendar text fields
+func escapeICalText(s string) string {
+	s = fmt.Sprintf("%v", s)
+	s = replaceAll(s, "\\", "\\\\")
+	s = replaceAll(s, ",", "\\,")
+	s = replaceAll(s, ";", "\\;")
+	s = replaceAll(s, "\n", "\\n")
+	return s
+}
+
+// replaceAll is a simple helper to replace all occurrences
+func replaceAll(s, old, new string) string {
+	result := ""
+	for {
+		i := indexOf(s, old)
+		if i < 0 {
+			result += s
+			break
+		}
+		result += s[:i] + new
+		s = s[i+len(old):]
+	}
+	return result
+}
+
+// indexOf returns the index of the first occurrence of substr in s
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }
