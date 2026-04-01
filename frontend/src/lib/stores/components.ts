@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import { api, ApiError } from '$lib/api';
+import { api } from '$lib/api';
 import { gateway, onGatewayEvent } from './gateway';
 
 // Component interaction types
