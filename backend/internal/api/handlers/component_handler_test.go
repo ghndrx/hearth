@@ -56,22 +56,6 @@ func (m *mockComponentHandlerComponentService) RemoveAllComponents(ctx context.C
 	return nil
 }
 
-func (m *mockComponentHandlerComponentService) CreateModal(ctx context.Context, modal *models.ModalComponent) (*models.ModalComponent, error) {
-	return nil, nil
-}
-
-func (m *mockComponentHandlerComponentService) GetModalByCustomID(ctx context.Context, customID string) (*models.ModalComponent, error) {
-	return nil, nil
-}
-
-func (m *mockComponentHandlerComponentService) DeleteModal(ctx context.Context, id uuid.UUID) error {
-	return nil
-}
-
-func (m *mockComponentHandlerComponentService) HandleModalSubmit(ctx context.Context, userID, channelID, msgID, modalID, componentID uuid.UUID, customID string, values map[string]string) (*models.ModalInteraction, error) {
-	return nil, nil
-}
-
 // mockComponentHandlerMessageService mocks MessageServiceGetMessageInterface
 type mockComponentHandlerMessageService struct {
 	getMessageFunc func(ctx context.Context, messageID, userID uuid.UUID) (*models.Message, error)

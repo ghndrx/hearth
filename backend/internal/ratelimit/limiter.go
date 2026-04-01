@@ -50,6 +50,10 @@ var (
 	// Server rate limits
 	ServerCreate = Config{Limit: 10, Window: time.Hour}
 	InviteCreate = Config{Limit: 30, Window: time.Minute}
+
+	// Component interaction rate limits - tuned for rapid interactions (per-user)
+	ComponentInteraction = Config{Limit: 60, Window: time.Minute}  // 60 interactions per minute per user
+	ModalSubmit         = Config{Limit: 30, Window: time.Minute}   // 30 modal submissions per minute per user
 )
 
 // Check checks if the action is allowed

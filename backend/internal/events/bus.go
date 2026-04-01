@@ -235,4 +235,8 @@ const (
 	CommandExecuted     = "command.executed"
 	CommandResponseSent = "command.response_sent"
 	ModalSubmitted      = "modal.submitted"
+
+	// Component events
+	ComponentInteraction = "component.interaction"
+	ComponentUpdated    = "component.updated"
 )

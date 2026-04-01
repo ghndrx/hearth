@@ -45,6 +45,14 @@ type RateLimiter interface {
 	Reset(ctx context.Context, userID, channelID uuid.UUID) error
 }
 
+// ComponentRateLimiter defines rate limiting for component interactions
+type ComponentRateLimiter interface {
+	// CheckComponentInteraction checks rate limit for component interactions
+	CheckComponentInteraction(ctx context.Context, userID uuid.UUID) error
+	// CheckModalSubmit checks rate limit for modal submissions
+	CheckModalSubmit(ctx context.Context, userID uuid.UUID) error
+}
+
 // E2EEService defines E2EE operations
 type E2EEService interface {
 	// Validate that a payload is properly formatted encrypted content

@@ -88,12 +88,6 @@ const (
 	// Thread auto-archive events
 	EventThreadAutoArchiveUpdate = "THREAD_AUTO_ARCHIVE_UPDATE"
 	EventThreadAutoArchive      = "THREAD_AUTO_ARCHIVE"
-
-	// Component interaction events
-	EventComponentInteraction = "COMPONENT_INTERACTION"
-	EventComponentUpdate     = "COMPONENT_UPDATE"
-	EventModalSubmit         = "MODAL_SUBMIT"
-	EventModalClose          = "MODAL_CLOSE"
 )
 
 // DispatchEvent creates a dispatch message
@@ -215,39 +209,4 @@ type ReadStateUpdateData struct {
 	ChannelID     string  `json:"channel_id"`
 	LastMessageID *string `json:"last_message_id,omitempty"`
 	MentionCount  int     `json:"mention_count"`
-}
-
-// ComponentInteractionData represents a component interaction event
-type ComponentInteractionData struct {
-	ID          string   `json:"id"`
-	UserID      string   `json:"user_id"`
-	ChannelID   string   `json:"channel_id"`
-	MessageID   string   `json:"message_id"`
-	ComponentID string   `json:"component_id"`
-	CustomID    string   `json:"custom_id"`
-	Type        string   `json:"type"`
-	Values      []string `json:"values,omitempty"`
-	Component   interface{} `json:"component,omitempty"`
-	CreatedAt   string   `json:"created_at"`
-}
-
-// ModalSubmitData represents a modal submit event
-type ModalSubmitData struct {
-	ID           string            `json:"id"`
-	UserID       string            `json:"user_id"`
-	ChannelID    string            `json:"channel_id"`
-	MessageID    string            `json:"message_id"`
-	ModalID      string            `json:"modal_id"`
-	CustomID     string            `json:"custom_id"`
-	ComponentID  string            `json:"component_id"`
-	Values       map[string]string `json:"values"`
-	SubmittedAt  string            `json:"submitted_at"`
-}
-
-// ComponentUpdateData represents a component update event
-type ComponentUpdateData struct {
-	MessageID   string        `json:"message_id"`
-	ChannelID   string        `json:"channel_id"`
-	Components  []interface{} `json:"components"`
-	UpdatedBy   string        `json:"updated_by,omitempty"`
 }
