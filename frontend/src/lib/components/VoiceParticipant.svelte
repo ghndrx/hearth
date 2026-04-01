@@ -3,7 +3,6 @@
 	import Avatar from './Avatar.svelte';
 
 	export let user: VoiceUser;
-	// eslint-disable-next-line svelte/no-unused-export-let
 	export let _showControls = false;
 	export let isCurrentUser = false;
 
