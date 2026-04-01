@@ -36,6 +36,14 @@ type MessageRepository interface {
 	BulkDeleteMessages(ctx context.Context, messageIDs []uuid.UUID) error
 }
 
+// ForwardedMessageRepository defines the interface for forwarded message data access
+type ForwardedMessageRepository interface {
+	Create(ctx context.Context, message *models.ForwardedMessage) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.ForwardedMessage, error)
+	GetByOriginalMessageID(ctx context.Context, originalMessageID uuid.UUID) ([]*models.ForwardedMessage, error)
+	GetByDestinationChannelID(ctx context.Context, channelID uuid.UUID, limit, offset int) ([]*models.ForwardedMessage, int, error)
+}
+
 // AutoThreadThreshold is the number of replies to a message before
 // a thread is automatically created.
 const AutoThreadThreshold = 3

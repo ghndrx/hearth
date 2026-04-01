@@ -2,6 +2,39 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-04-01](https://github.com/ghndrx/hearth/compare/2026-03-31...HEAD)
+
+### Features
+* feat(competitive): add critical Discord feature gap PRDs and update task queue
+* feat(message): add message forwarding functionality
+* feat(websocket): add per-IP and per-user connection limits (Redis-backed) (#57)
+* feat(polls): implement PollRepository and wire up PollService (#56)
+* feat: implement enhanced server discovery and public directory
+* feat(rate limit): add per-user invite creation rate limit (5/hour) (#52)
+* feat(discovery): wire up DiscoverableServer service and repository
+* feat: add critical Discord feature gap PRDs for mobile parity and community management
+
+### Bug Fixes
+* fix(storage): G304 path traversal — use os.Root for atomic scope enforcement (#50)
+* fix(api): correct route param names in thread auto-archive tests (#51)
+* fix(security): prevent integer overflow in CheckMentionAbuse (G115) (#47)
+* fix: resolve go vet failures in thread auto-archive tests (#49)
+* fix(frontend): resolve CI type errors in discovery components (#48)
+* fix(backend): P0 security — G115 integer overflow guard, G118 context propagation
+
+### Other Changes
+* chore: fix critical permission check in EventDetail component
+* chore: remove dead legacy HTTP handler code (net/http style) (#58)
+* chore: address tech debt in main.go (#54)
+* test(api): add ComponentHandler tests and refactor to use interfaces (#55)
+* fix(api): correct route param names in thread auto-archive tests (#51)
+* fix: resolve go vet failures in thread auto-archive tests (#49)
+
+### Miscellaneous
+* coverage/improve 20260331 17 (#53)
+* security: fix P0 vulnerabilities G118, G115, G304 (#45)
+* security: fix P0 vulnerabilities G118, G115, G304 (#45)
+
 ## [2026-03-31](https://github.com/ghndrx/hearth/compare/2026-03-30...HEAD)
 
 ### Features
