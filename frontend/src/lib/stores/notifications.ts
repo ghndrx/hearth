@@ -282,8 +282,7 @@ function createReadStateStore() {
 	}
 
 	function getChannelMentionCount(channelId: string): number {
-		const state = get({ subscribe });
-		return state[channelId]?.mentionCount ?? 0;
+		return get(readState)[channelId]?.mentionCount ?? 0;
 	}
 
 	function reset() {
@@ -375,7 +374,6 @@ export function getNotificationPermission(): 'granted' | 'denied' | 'default' | 
 }
 
 // Standalone export for use in other components
-export function getChannelMentionCount(_channelId: string): number {
-	// TODO: implement actual mention count tracking based on notification data
-	return 0;
+export function getChannelMentionCount(channelId: string): number {
+	return get(readState)[channelId]?.mentionCount ?? 0;
 }
