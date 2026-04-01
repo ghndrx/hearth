@@ -27,7 +27,7 @@ describe('typing store', () => {
 	});
 
 	afterEach(() => {
-		vi.useRealTimers();
+		// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 	});
 
 	async function importTypingStore() {

@@ -275,8 +275,7 @@ describe('Cross-Module Integration Tests', () => {
 
 			clearTimeout_mock(t2);
 			expect(timers).toHaveLength(0);
-
-			vi.useRealTimers();
+			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		});
 	});
 
