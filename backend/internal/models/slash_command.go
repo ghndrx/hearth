@@ -117,6 +117,14 @@ const (
 	CallbackTypeAutocompleteResult InteractionCallbackType = 8
 	// CallbackTypeModal creates a modal popup
 	CallbackTypeModal InteractionCallbackType = 9
+
+	// Additional callback types for interactive components
+	// CallbackTypeMessageUpdate updates the message (edit)
+	CallbackTypeMessageUpdate InteractionCallbackType = 10
+	// CallbackTypeMessageDelete deletes the message
+	CallbackTypeMessageDelete InteractionCallbackType = 11
+	// CallbackTypeModalOpen opens a modal dialog (alias for CallbackTypeModal)
+	CallbackTypeModalOpen InteractionCallbackType = 12
 )
 
 // InteractionCallbackData contains the response data for an interaction

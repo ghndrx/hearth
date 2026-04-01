@@ -119,9 +119,39 @@ func (h *InteractionHandler) HandleInteraction(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-// RespondToInteraction creates a follow-up response
-// POST /api/v1/interactions/:token/callback
+// RespondToInteraction creates a follow-up response using interaction_id
+// POST /api/v1/interactions/:interaction_id/callback
 func (h *InteractionHandler) RespondToInteraction(c *fiber.Ctx) error {
+	interactionIDStr := c.Params("interaction_id")
+	if interactionIDStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "interaction_id is required",
+		})
+	}
+
+	// Parse as UUID first, then try as token string
+	token := interactionIDStr
+
+	var resp models.InteractionResponse
+	if err := c.BodyParser(&resp); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if err := h.interactionService.CreateResponse(c.Context(), token, &resp); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// RespondToInteractionWithToken creates a follow-up response using interaction_id and token
+// POST /api/v1/interactions/:interaction_id/callback/:token
+func (h *InteractionHandler) RespondToInteractionWithToken(c *fiber.Ctx) error {
+	_ = c.Params("interaction_id") // Could be used for validation
 	token := c.Params("token")
 	if token == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -146,9 +176,9 @@ func (h *InteractionHandler) RespondToInteraction(c *fiber.Ctx) error {
 }
 
 // EditInteractionResponse edits a follow-up response
-// PATCH /api/v1/interactions/:token/messages/:messageId
+// PATCH /api/v1/interactions/:interaction_id/messages/:messageId
 func (h *InteractionHandler) EditInteractionResponse(c *fiber.Ctx) error {
-	token := c.Params("token")
+	_ = c.Params("interaction_id") // Could be used for validation
 	messageID := c.Params("messageId")
 
 	var resp models.InteractionResponse
@@ -157,6 +187,9 @@ func (h *InteractionHandler) EditInteractionResponse(c *fiber.Ctx) error {
 			"error": "invalid request body",
 		})
 	}
+
+	// Get token from query param or body if needed, for now use interaction_id as token
+	token := c.Query("token", c.Params("interaction_id"))
 
 	if err := h.interactionService.EditResponse(c.Context(), token, &resp); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -171,10 +204,13 @@ func (h *InteractionHandler) EditInteractionResponse(c *fiber.Ctx) error {
 }
 
 // DeleteInteractionResponse deletes a follow-up response
-// DELETE /api/v1/interactions/:token/messages/:messageId
+// DELETE /api/v1/interactions/:interaction_id/messages/:messageId
 func (h *InteractionHandler) DeleteInteractionResponse(c *fiber.Ctx) error {
-	token := c.Params("token")
+	_ = c.Params("interaction_id") // Could be used for validation
 	messageID := c.Params("messageId")
+
+	// Get token from query param if needed
+	token := c.Query("token", c.Params("interaction_id"))
 
 	if err := h.interactionService.DeleteResponse(c.Context(), token, messageID); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
