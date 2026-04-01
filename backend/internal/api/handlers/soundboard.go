@@ -8,7 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"hearth/internal/models"
 	"hearth/internal/services"
 )
 
