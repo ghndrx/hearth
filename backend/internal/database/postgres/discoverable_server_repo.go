@@ -727,7 +727,7 @@ func (r *DiscoverableServerRepository) GetInviteCode(ctx context.Context, server
 // TrackActivity records a discovery activity event for a server
 func (r *DiscoverableServerRepository) TrackActivity(ctx context.Context, serverID uuid.UUID, userID *uuid.UUID, activityType, source string) error {
 	query := `
-		INSERT INTO server_discovery_activity (server_id, user_id, activity_type, source)
+		INSERT INTO discovery_activity (server_id, user_id, activity_type, source)
 		VALUES ($1, $2, $3, $4)
 	`
 	_, err := r.db.ExecContext(ctx, query, serverID, userID, activityType, source)
@@ -738,7 +738,7 @@ func (r *DiscoverableServerRepository) TrackActivity(ctx context.Context, server
 func (r *DiscoverableServerRepository) GetServerDailyStats(ctx context.Context, serverID uuid.UUID, days int) ([]*models.ServerDiscoveryDailyStats, error) {
 	query := `
 		SELECT id, server_id, stat_date, views, impressions, joins, search_clicks
-		FROM server_discovery_daily_stats
+		FROM discovery_daily_stats
 		WHERE server_id = $1 AND stat_date >= CURRENT_DATE - INTERVAL '1 day' * $2
 		ORDER BY stat_date DESC
 	`

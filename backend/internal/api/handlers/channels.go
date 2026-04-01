@@ -12,10 +12,11 @@ import (
 )
 
 type ChannelHandler struct {
-	channelService *services.ChannelService
-	messageService *services.MessageService
-	typingService  *services.TypingService
-	inviteService  *services.InviteService
+	channelService   *services.ChannelService
+	messageService   *services.MessageService
+	typingService    *services.TypingService
+	inviteService    *services.InviteService
+	componentService *services.ComponentService
 }
 
 func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService) *ChannelHandler {
@@ -47,6 +48,11 @@ func NewChannelHandlerFull(
 		typingService:  typingService,
 		inviteService:  inviteService,
 	}
+}
+
+// SetComponentService sets the component service for handling message components
+func (h *ChannelHandler) SetComponentService(componentService *services.ComponentService) {
+	h.componentService = componentService
 }
 
 // Get returns a channel by ID
@@ -310,9 +316,10 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Content   string     `json:"content"`
-		ReplyTo   *uuid.UUID `json:"reply_to"`
-		StickerID *uuid.UUID `json:"sticker_id"`
+		Content    string                          `json:"content"`
+		ReplyTo    *uuid.UUID                      `json:"reply_to"`
+		StickerID  *uuid.UUID                      `json:"sticker_id"`
+		Components []models.CreateComponentRequest `json:"components,omitempty"`
 		// Attachments handled separately via multipart
 	}
 
@@ -328,6 +335,44 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
+	}
+
+	// If components are provided and we have a component service, create them
+	if len(req.Components) > 0 && h.componentService != nil {
+		var components []*models.MessageComponent
+		for _, compReq := range req.Components {
+			comp := &models.MessageComponent{
+				Type:        compReq.Type,
+				Style:       compReq.Style,
+				Label:       compReq.Label,
+				CustomID:    compReq.CustomID,
+				URL:         compReq.URL,
+				Disabled:    compReq.Disabled,
+				EmojiName:   compReq.Emoji,
+				Options:     compReq.Options,
+				MinValues:   compReq.MinValues,
+				MaxValues:   compReq.MaxValues,
+				Placeholder: compReq.Placeholder,
+				Required:    compReq.Required,
+				Value:       compReq.Value,
+				MinLength:   compReq.MinLength,
+				MaxLength:   compReq.MaxLength,
+			}
+			components = append(components, comp)
+		}
+
+		createdComponents, err := h.componentService.UpdateMessageComponents(c.Context(), message.ID, components)
+		if err != nil {
+			// Log error but don't fail the message creation
+			log.Printf("Failed to create message components: %v", err)
+		} else {
+			// Convert pointer slice to value slice
+			componentsValue := make([]models.MessageComponent, len(createdComponents))
+			for i, comp := range createdComponents {
+				componentsValue[i] = *comp
+			}
+			message.Components = componentsValue
+		}
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(message)

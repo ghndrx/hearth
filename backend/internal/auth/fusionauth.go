@@ -16,6 +16,11 @@ import (
 	"hearth/internal/models"
 )
 
+const (
+	// DefaultTokenExpirySeconds is the default token expiry time in seconds (1 hour)
+	DefaultTokenExpirySeconds = 3600
+)
+
 // FusionAuthProvider implements Provider for FusionAuth
 type FusionAuthProvider struct {
 	config *FusionAuthConfig
@@ -320,7 +325,7 @@ func mapFAUserToModel(faU *faUser) *models.User {
 
 func tokenExpiresIn(expirationInstant int64) int {
 	if expirationInstant == 0 {
-		return 3600
+		return DefaultTokenExpirySeconds
 	}
 	remaining := time.UnixMilli(expirationInstant).Sub(time.Now())
 	secs := int(remaining.Seconds())
