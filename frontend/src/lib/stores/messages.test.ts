@@ -547,8 +547,7 @@ describe('Messages Store', () => {
 			await sendTypingIndicator('ch-42');
 			expect(api.post).toHaveBeenCalledWith('/channels/ch-42/typing');
 			expect(api.post).toHaveBeenCalledTimes(2);
-			
-			vi.useRealTimers();
+			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		});
 	});
 

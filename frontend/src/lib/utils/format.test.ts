@@ -17,7 +17,7 @@ describe('formatRelativeTime', () => {
 	});
 
 	afterEach(() => {
-		vi.useRealTimers();
+		// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 	});
 
 	it('should return "just now" for times within 60 seconds', () => {
@@ -89,7 +89,7 @@ describe('formatMessageDate', () => {
 	});
 
 	afterEach(() => {
-		vi.useRealTimers();
+		// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 	});
 
 	it('should return "Today" for current date', () => {
