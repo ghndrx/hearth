@@ -3,7 +3,7 @@
 	import { createEventDispatcher } from 'svelte';
 
 	export let servers: Array<{
-		id?: string;
+		id: string;
 		server_id?: string;
 		name: string;
 		description?: string;
@@ -89,7 +89,7 @@
 						</div>
 					{/if}
 					<ServerCard
-						server={server as any}
+						{server}
 						variant="featured"
 						onJoin={handleJoin}
 						{joiningServerId}
