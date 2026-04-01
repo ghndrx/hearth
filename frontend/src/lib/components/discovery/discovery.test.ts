@@ -19,12 +19,11 @@ const mockServer = {
 	is_verified: true
 };
 
-// Mock categories
+// Mock categories — pass without "All"; the component prepends it automatically
 const mockCategories = [
-	{ id: 'all', name: 'All', slug: 'all', icon: '🏠', server_count: 100 },
-	{ id: 'gaming', name: 'Gaming', slug: 'gaming', icon: '🎮', server_count: 25 },
-	{ id: 'music', name: 'Music', slug: 'music', icon: '🎵', server_count: 15 },
-	{ id: 'technology', name: 'Technology', slug: 'technology', icon: '💻', server_count: 12 },
+	{ name: 'Gaming', slug: 'gaming', icon: '🎮', server_count: 25 },
+	{ name: 'Music', slug: 'music', icon: '🎵', server_count: 15 },
+	{ name: 'Technology', slug: 'technology', icon: '💻', server_count: 12 },
 ];
 
 describe('ServerCard Component', () => {
@@ -35,8 +34,8 @@ describe('ServerCard Component', () => {
 
 	it('renders member count correctly', () => {
 		render(ServerCard, { props: { server: mockServer } });
-		// 12345 should be formatted as 12.3K
-		expect(screen.getByText(/12\.3K members/i)).toBeTruthy();
+		// Default variant shows formatted count without "members" suffix
+		expect(screen.getByText('12.3K')).toBeTruthy();
 	});
 
 	it('renders tags when provided', () => {
@@ -47,157 +46,160 @@ describe('ServerCard Component', () => {
 
 	it('handles join button click', async () => {
 		const joinHandler = vi.fn();
-		render(ServerCard, { 
-			props: { 
-				server: mockServer, 
-				onJoin: joinHandler 
-			} 
+		render(ServerCard, {
+			props: {
+				server: mockServer,
+				onJoin: joinHandler
+			}
 		});
-		
+
 		const joinButton = screen.getByRole('button', { name: /join/i });
 		await fireEvent.click(joinButton);
-		
+
 		expect(joinHandler).toHaveBeenCalledWith('server-456');
 	});
 
 	it('shows loading state when joining', () => {
-		render(ServerCard, { 
-			props: { 
-				server: mockServer, 
-				joiningServerId: 'server-456' 
-			} 
+		const { container } = render(ServerCard, {
+			props: {
+				server: mockServer,
+				joiningServerId: 'server-456'
+			}
 		});
-		
-		expect(screen.getByText(/loading.../i)).toBeTruthy();
+
+		// The component renders a spinner element when joining
+		expect(container.querySelector('.spinner')).toBeTruthy();
 	});
 
 	it('renders featured variant correctly', () => {
-		render(ServerCard, { 
-			props: { 
-				server: mockServer, 
-				variant: 'featured' 
-			} 
+		render(ServerCard, {
+			props: {
+				server: mockServer,
+				variant: 'featured'
+			}
 		});
-		
+
 		expect(screen.getByText('Join Server')).toBeTruthy();
 	});
 
 	it('renders compact variant correctly', () => {
-		render(ServerCard, { 
-			props: { 
-				server: mockServer, 
-				variant: 'compact' 
-			} 
+		render(ServerCard, {
+			props: {
+				server: mockServer,
+				variant: 'compact'
+			}
 		});
-		
+
 		expect(screen.getByText('A great server for gaming enthusiasts')).toBeTruthy();
 	});
 });
 
 describe('CategoryFilter Component', () => {
 	it('renders all categories', () => {
-		render(CategoryFilter, { 
-			props: { 
+		render(CategoryFilter, {
+			props: {
 				categories: mockCategories,
-				selectedCategory: 'all' 
-			} 
+				selectedCategory: 'all'
+			}
 		});
-		
+
+		// Component prepends "All" automatically when categories are provided
 		expect(screen.getByText('All')).toBeTruthy();
 		expect(screen.getByText('Gaming')).toBeTruthy();
 		expect(screen.getByText('Music')).toBeTruthy();
 	});
 
 	it('shows active state for selected category', () => {
-		render(CategoryFilter, { 
-			props: { 
+		render(CategoryFilter, {
+			props: {
 				categories: mockCategories,
-				selectedCategory: 'gaming' 
-			} 
+				selectedCategory: 'gaming'
+			}
 		});
-		
+
 		const gamingButton = screen.getByRole('button', { name: /gaming/i });
 		expect(gamingButton.className).toContain('active');
 	});
 
-	it('emits select event on category click', async () => {
-		const selectHandler = vi.fn();
-		const { component } = render(CategoryFilter, { 
-			props: { 
+	it('updates selected category on click', async () => {
+		render(CategoryFilter, {
+			props: {
 				categories: mockCategories,
 				selectedCategory: 'all'
-			} 
+			}
 		});
-		
-		// @ts-expect-error - Svelte 5 event handling compatibility
-		component.$on('select', selectHandler);
-		
+
 		const gamingButton = screen.getByRole('button', { name: /gaming/i });
 		await fireEvent.click(gamingButton);
-		
-		expect(selectHandler).not.toHaveBeenCalled();
+
+		// After clicking, the gaming button should become active
+		expect(gamingButton.getAttribute('aria-pressed')).toBe('true');
 	});
 
 	it('displays server counts when showCounts is true', () => {
-		render(CategoryFilter, { 
-			props: { 
+		render(CategoryFilter, {
+			props: {
 				categories: mockCategories,
-				showCounts: true 
-			} 
+				showCounts: true
+			}
 		});
-		
-		// Should show formatted counts
-		expect(screen.getByText('100')).toBeTruthy();
+
+		// Should show the count for Gaming category
+		expect(screen.getByText('25')).toBeTruthy();
 	});
 });
 
 describe('SearchBar Component', () => {
 	it('renders with placeholder', () => {
-		render(SearchBar, { 
-			props: { 
-				placeholder: 'Search servers...' 
-			} 
+		render(SearchBar, {
+			props: {
+				placeholder: 'Search servers...'
+			}
 		});
-		
+
 		const input = screen.getByPlaceholderText('Search servers...');
 		expect(input).toBeTruthy();
 	});
 
 	it('updates value on input', async () => {
 		render(SearchBar);
-		
+
 		const input = screen.getByRole('textbox') as HTMLInputElement;
 		await fireEvent.input(input, { target: { value: 'gaming' } });
-		
+
 		expect(input.value).toBe('gaming');
 	});
 
 	it('clears value when clear button is clicked', async () => {
-		render(SearchBar, { 
-			props: { 
-				value: 'test query' 
-			} 
+		render(SearchBar, {
+			props: {
+				value: 'test query'
+			}
 		});
-		
+
 		const clearButton = screen.getByRole('button', { name: /clear/i });
 		await fireEvent.click(clearButton);
-		
+
 		const input = screen.getByRole('textbox') as HTMLInputElement;
 		expect(input.value).toBe('');
 	});
 
-	it('shows suggestions when provided', () => {
+	it('shows suggestions when focused and suggestions provided', async () => {
 		const suggestions = [
 			{ type: 'server', value: 'Gaming Hub' },
 			{ type: 'category', value: 'gaming' }
 		];
-		
-		render(SearchBar, { 
-			props: { 
-				suggestions 
-			} 
+
+		render(SearchBar, {
+			props: {
+				suggestions
+			}
 		});
-		
+
+		// Suggestions only appear after focusing the input
+		const input = screen.getByRole('textbox');
+		await fireEvent.focus(input);
+
 		expect(screen.getByText('Gaming Hub')).toBeTruthy();
 		expect(screen.getByText('gaming')).toBeTruthy();
 	});
@@ -205,13 +207,13 @@ describe('SearchBar Component', () => {
 	it('emits search event with debounce', async () => {
 		const searchHandler = vi.fn();
 		render(SearchBar);
-		
+
 		const input = screen.getByRole('textbox') as HTMLInputElement;
 		await fireEvent.input(input, { target: { value: 'test' } });
-		
+
 		// Wait for debounce
 		await new Promise(resolve => setTimeout(resolve, 350));
-		
+
 		expect(searchHandler).not.toHaveBeenCalled();
 	});
 });
@@ -219,8 +221,9 @@ describe('SearchBar Component', () => {
 describe('Discovery Integration', () => {
 	it('formats large member counts correctly', () => {
 		const server = { ...mockServer, member_count: 1500000 };
-		render(ServerCard, { props: { server } });
-		
+		// Use featured variant which shows "X members" with the suffix
+		render(ServerCard, { props: { server, variant: 'featured' } });
+
 		// 1500000 should be formatted as 1.5M
 		expect(screen.getByText(/1\.5M members/i)).toBeTruthy();
 	});
@@ -228,14 +231,14 @@ describe('Discovery Integration', () => {
 	it('handles missing description gracefully', () => {
 		const server = { ...mockServer, description: undefined };
 		render(ServerCard, { props: { server } });
-		
+
 		expect(screen.getByText('Test Gaming Community')).toBeTruthy();
 	});
 
 	it('handles server without tags', () => {
 		const server = { ...mockServer, tags: [] };
 		render(ServerCard, { props: { server } });
-		
+
 		expect(screen.getByText('Test Gaming Community')).toBeTruthy();
 	});
 });
