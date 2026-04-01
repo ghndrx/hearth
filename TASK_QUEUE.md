@@ -14,13 +14,12 @@
 
 ### P0 Security Issues
 
-- [ ] **[P0] Security (Go stdlib)**: GO-2026-4602 — `os.File.ReadDir` / `os.ReadDir` can escape from Root — affects `hearth` binary — FIXED IN: go1.25.8 (current: go1.24.13) — https://pkg.go.dev/vuln/GO-2026-4602
-
-- [ ] **[P0] Security (Go stdlib)**: GO-2026-4601 — Incorrect parsing of IPv6 host literals in `net/url` (`url.Parse`, `url.ParseRequestURI`, `url.URL.Parse`, `url.URL.UnmarshalBinary`) — affects `hearth` binary — FIXED IN: go1.25.8 (current: go1.24.13) — https://pkg.go.dev/vuln/GO-2026-4601
+- [x] **[P0] Security (Go stdlib)**: GO-2026-4602 — `os.File.ReadDir` / `os.ReadDir` can escape from Root — FIXED: go1.25.8 deployed ✅ 2026-04-01
+- [x] **[P0] Security (Go stdlib)**: GO-2026-4601 — Incorrect parsing of IPv6 host literals in `net/url` — FIXED: go1.25.8 deployed ✅ 2026-04-01
 
 ## 2026-03-29 Competitive Pipeline
 
-- [ ] **[P0]** Feature: Enhanced Server Discovery — Public server directory with search, categories, and recommendations for user acquisition
+- [x] **[P0]** Feature: Enhanced Server Discovery — Public server directory with search, categories, and recommendations for user acquisition ✅ 2026-04-01 (commits f119f3e, db25cf9)
 - [ ] **[P0]** Feature: Scheduled Events — RSVP system, calendar integration, and event notifications for community building
 - [ ] **[P1]** Feature: Comprehensive Sticker System — Custom stickers, animated stickers, and premium sticker packs for engagement and monetization
 - [ ] **[P0]** Feature: Server Boosts & Premium Features — Subscription tiers with enhanced capabilities for monetization and sustainability
