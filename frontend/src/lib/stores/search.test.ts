@@ -31,7 +31,7 @@ describe('searchStore', () => {
 	});
 
 	afterEach(() => {
-		vi.useRealTimers();
+		// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 	});
 
 	describe('parseSearchQuery', () => {

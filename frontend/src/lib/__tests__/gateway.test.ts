@@ -49,7 +49,7 @@ describe('Gateway', () => {
 	afterEach(() => {
 		gateway.disconnect();
 		global.WebSocket = originalWebSocket;
-		vi.useRealTimers();
+		// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		vi.clearAllTimers();
 	});
 
@@ -160,8 +160,7 @@ describe('Gateway', () => {
 			const sendCountAfterDisconnect = mockWs.send.mock.calls.length;
 			vi.advanceTimersByTime(60000);
 			expect(mockWs.send.mock.calls.length).toBe(sendCountAfterDisconnect);
-
-			vi.useRealTimers();
+			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		});
 	});
 
@@ -214,8 +213,7 @@ describe('Gateway', () => {
 
 			// Verify WebSocket was called again for reconnection
 			expect((global.WebSocket as any).mock.calls.length).toBeGreaterThan(initialCallCount);
-
-			vi.useRealTimers();
+			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		});
 
 		it('should not reconnect on normal close (1000)', () => {
@@ -235,8 +233,7 @@ describe('Gateway', () => {
 			// Advance timer - no reconnection should happen
 			vi.advanceTimersByTime(5000);
 			expect((global.WebSocket as any).mock.calls.length).toBe(initialCallCount);
-
-			vi.useRealTimers();
+			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		});
 	});
 
