@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { get, type Writable } from 'svelte/store';
+import { get, writable, derived, type Writable } from 'svelte/store';
 import type { OnlineStatusState } from '$lib/stores/onlineStatus';
 
 // Type for queue items used in tests
@@ -45,9 +45,6 @@ vi.mock('$app/environment', () => ({
 }));
 
 vi.mock('$lib/sync/syncQueue', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { writable, derived } = require('svelte/store') as typeof import('svelte/store');
-  
   interface MockQueueItem { status: string; }
   const queueStore = writable<MockQueueItem[]>([]);
   
@@ -60,9 +57,6 @@ vi.mock('$lib/sync/syncQueue', () => {
 });
 
 vi.mock('$lib/sync/syncEngine', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { writable } = require('svelte/store') as typeof import('svelte/store');
-  
   return {
     syncEngineStatus: writable({
       state: 'idle',
@@ -76,9 +70,6 @@ vi.mock('$lib/sync/syncEngine', () => {
 });
 
 vi.mock('$lib/sync/serviceWorkerRegistration', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { writable } = require('svelte/store') as typeof import('svelte/store');
-  
   return {
     serviceWorkerStatus: writable({
       state: 'activated',
@@ -90,9 +81,6 @@ vi.mock('$lib/sync/serviceWorkerRegistration', () => {
 });
 
 vi.mock('$lib/stores/onlineStatus', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { writable } = require('svelte/store') as typeof import('svelte/store');
-  
   const store = writable<OnlineStatusState>({
     isOnline: true,
     wasOffline: false,
