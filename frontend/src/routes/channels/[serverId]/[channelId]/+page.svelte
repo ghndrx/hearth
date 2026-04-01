@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { currentServer, servers } from '$lib/stores/servers';
 	import { currentChannel, loadServerChannels, channels } from '$lib/stores/channels';
-	import { sendMessage } from '$lib/stores/messages';
+	import { sendMessage, loadMessages } from '$lib/stores/messages';
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import { fetchUnreadState, markChannelRead } from '$lib/stores/unread';
 	import MessageList from '$lib/components/MessageList.svelte';
@@ -106,10 +106,18 @@
 		}
 	}
 	
-	function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
+	async function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
 		console.log('[Page] Forum post created:', event.detail);
 		showForumPostModal = false;
-		// TODO: Navigate to the created post or refresh the list
+		// Reload messages to show the new forum post in the list
+		if ($currentChannel) {
+			try {
+				await loadMessages($currentChannel.id);
+				console.log('[Page] Reloaded messages after forum post creation');
+			} catch (err) {
+				console.error('[Page] Failed to reload messages after forum post creation:', err);
+			}
+		}
 	}
 </script>
 
