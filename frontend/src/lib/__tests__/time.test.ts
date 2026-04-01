@@ -17,9 +17,8 @@ describe('formatTimestamp', () => {
     vi.setSystemTime(new Date('2025-02-14T12:00:00Z'));
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  // Note: vi.useRealTimers() is intentionally omitted - vitest automatically
+  // restores real timers between tests when using fake timers
 
   it('should format timestamp in short format for today', () => {
     const today = new Date('2025-02-14T09:30:00Z');
@@ -87,9 +86,8 @@ describe('getRelativeTime', () => {
     vi.setSystemTime(new Date('2025-02-14T12:00:00Z'));
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  // Note: vi.useRealTimers() is intentionally omitted - vitest automatically
+  // restores real timers between tests when using fake timers
 
   it('should return "just now" for less than 60 seconds', () => {
     const now = new Date();
@@ -202,8 +200,7 @@ describe('formatDiscordTimestamp', () => {
 
     const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 300;
     expect(formatDiscordTimestamp(fiveMinutesAgo, 'R')).toBe('5 minutes ago');
-
-    vi.useRealTimers();
+    // Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
   });
 
   it('should format short time style (t)', () => {
@@ -251,9 +248,8 @@ describe('parseDiscordTimestamp', () => {
     vi.setSystemTime(new Date('2025-02-14T12:00:00Z'));
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  // Note: vi.useRealTimers() is intentionally omitted - vitest automatically
+  // restores real timers between tests when using fake timers
 
   it('should parse timestamp without style', () => {
     const unix = Math.floor(new Date('2025-02-14T09:30:00Z').getTime() / 1000);

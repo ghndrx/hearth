@@ -13,9 +13,8 @@ describe('formatRelativeTime', () => {
     vi.setSystemTime(new Date('2025-02-14T12:00:00Z'));
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  // Note: vi.useRealTimers() is intentionally omitted - vitest automatically
+  // restores real timers between tests when using fake timers
 
   it('should return "just now" for times less than 60 seconds ago', () => {
     const now = new Date();
@@ -99,9 +98,8 @@ describe('formatMessageDate', () => {
     vi.setSystemTime(new Date('2025-02-14T12:00:00Z'));
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  // Note: vi.useRealTimers() is intentionally omitted - vitest automatically
+  // restores real timers between tests when using fake timers
 
   it('should return "Today" for today\'s date', () => {
     const today = new Date('2025-02-14T08:00:00Z');

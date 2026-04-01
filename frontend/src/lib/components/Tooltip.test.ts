@@ -8,7 +8,7 @@ describe('Tooltip', () => {
 	});
 
 	afterEach(() => {
-		vi.useRealTimers();
+		// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 	});
 
 	it('renders slot content', () => {
