@@ -368,12 +368,14 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		api.Post("/applications/:appId/commands/bulk", h.SlashCommands.BulkRegisterCommands)
 	}
 
-	// Interactions - public endpoint (token-based)
+	// Interactions - public endpoint (token-based and interaction_id-based)
 	if h.Interactions != nil {
 		api.Post("/interactions", h.Interactions.HandleInteraction)
-		api.Post("/interactions/:token/callback", h.Interactions.RespondToInteraction)
-		api.Patch("/interactions/:token/messages/:messageId", h.Interactions.EditInteractionResponse)
-		api.Delete("/interactions/:token/messages/:messageId", h.Interactions.DeleteInteractionResponse)
+		// POST /interactions/{interaction_id}/callback - accepts both interaction_id and token
+		api.Post("/interactions/:interaction_id/callback", h.Interactions.RespondToInteraction)
+		api.Post("/interactions/:interaction_id/callback/:token", h.Interactions.RespondToInteractionWithToken)
+		api.Patch("/interactions/:interaction_id/messages/:messageId", h.Interactions.EditInteractionResponse)
+		api.Delete("/interactions/:interaction_id/messages/:messageId", h.Interactions.DeleteInteractionResponse)
 	}
 
 	// Server channels
