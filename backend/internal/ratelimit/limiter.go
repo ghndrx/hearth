@@ -52,8 +52,9 @@ var (
 	InviteCreate = Config{Limit: 30, Window: time.Minute}
 
 	// Component interaction rate limits - tuned for rapid interactions (per-user)
-	ComponentInteraction = Config{Limit: 60, Window: time.Minute}  // 60 interactions per minute per user
-	ModalSubmit         = Config{Limit: 30, Window: time.Minute}   // 30 modal submissions per minute per user
+	// 10 interactions per second = 600 per minute for component interactions
+	ComponentInteraction = Config{Limit: 600, Window: time.Minute} // 600 interactions per minute per user (10/second)
+	ModalSubmit          = Config{Limit: 600, Window: time.Minute}  // 600 modal submissions per minute per user (10/second)
 )
 
 // Check checks if the action is allowed
