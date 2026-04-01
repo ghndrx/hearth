@@ -346,8 +346,9 @@
       <div class="flex flex-wrap gap-4">
         {#if preferences?.frequency === 'weekly'}
           <div class="flex-1 min-w-[150px]">
-            <label class="block text-sm text-[var(--text-muted)] mb-1">Day</label>
+            <label for="digest-day" class="block text-sm text-[var(--text-muted)] mb-1">Day</label>
             <select 
+              id="digest-day"
               class="w-full px-3 py-2 rounded bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--bg-modifier-accent)] focus:border-[var(--brand-primary)] outline-none"
               value={preferences?.preferred_day ?? 1}
               on:change={updatePreferredDay}
@@ -361,8 +362,9 @@
         {/if}
         {#if preferences?.frequency !== 'hourly'}
           <div class="flex-1 min-w-[150px]">
-            <label class="block text-sm text-[var(--text-muted)] mb-1">Time</label>
-            <select 
+            <label for="digest-time" class="block text-sm text-[var(--text-muted)] mb-1">Time</label>
+            <select
+              id="digest-time"
               class="w-full px-3 py-2 rounded bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--bg-modifier-accent)] focus:border-[var(--brand-primary)] outline-none"
               value={preferences?.preferred_hour ?? 9}
               on:change={updatePreferredHour}
@@ -375,8 +377,9 @@
           </div>
         {/if}
         <div class="flex-1 min-w-[200px]">
-          <label class="block text-sm text-[var(--text-muted)] mb-1">Timezone</label>
-          <select 
+          <label for="digest-timezone" class="block text-sm text-[var(--text-muted)] mb-1">Timezone</label>
+          <select
+            id="digest-timezone"
             class="w-full px-3 py-2 rounded bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--bg-modifier-accent)] focus:border-[var(--brand-primary)] outline-none"
             value={preferences?.timezone ?? 'UTC'}
             on:change={updateTimezone}

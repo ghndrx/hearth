@@ -155,6 +155,7 @@
 								class="user-item"
 								on:click={() => startDM(user)}
 								role="option"
+								aria-selected="false"
 								type="button"
 							>
 								<div class="user-avatar">
@@ -185,6 +186,7 @@
 							class="user-item"
 							on:click={() => startDM(user)}
 							role="option"
+							aria-selected="false"
 							type="button"
 						>
 							<div class="user-avatar">
