@@ -125,8 +125,8 @@
 		<div class="form-section">
 			<label class="section-label" for="channel-type-group">CHANNEL TYPE</label>
 			<div id="channel-type-group" role="radiogroup" aria-label="Channel type">
-			<div class="type-options" role="radiogroup" aria-label="Channel type">
-				{#each channelTypes as type}
+				<div class="type-options" role="radiogroup" aria-label="Channel type">
+					{#each channelTypes as type}
 					<button
 						type="button"
 						class="type-option"
