@@ -136,7 +136,7 @@ describe('CategoryFilter Component', () => {
 			} 
 		});
 		
-		// @ts-ignore - Svelte 5 event handling compatibility
+		// @ts-expect-error - Svelte 5 event handling compatibility
 		component.$on('select', selectHandler);
 		
 		const gamingButton = screen.getByRole('button', { name: /gaming/i });
