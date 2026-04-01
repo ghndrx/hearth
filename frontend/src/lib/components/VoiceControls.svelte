@@ -88,7 +88,6 @@
 		//   await room.localParticipant.setScreenShareEnabled(true);
 		// }
 		// isScreenSharing = !isScreenSharing;
-		console.log('Screen sharing coming soon');
 	}
 
 	function handleOpenSettings() {

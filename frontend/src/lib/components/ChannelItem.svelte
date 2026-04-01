@@ -44,7 +44,6 @@
 	let contextMenuY = 0;
 
 	function handleSelect() {
-		console.log('[ChannelItem] handleSelect called for:', channel.id, channel.name);
 		dispatch('select', channel);
 	}
 

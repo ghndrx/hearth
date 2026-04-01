@@ -20,11 +20,6 @@
 	}
 
 	$: channelMessages = ($currentChannel?.id ? $messages[$currentChannel.id] : undefined) || [];
-	$: console.log('MessageList debug:', {
-		channelId: $currentChannel?.id,
-		messageCount: channelMessages.length,
-		allMessages: $messages
-	});
 
 	// Track when initial load completes so we only animate new messages
 	$: {
