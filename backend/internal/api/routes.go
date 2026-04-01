@@ -355,6 +355,12 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		channels.Get("/:id/messages/:messageId/components", h.Components.GetMessageComponents)
 		channels.Patch("/:id/messages/:messageId/components", h.Components.UpdateMessageComponents)
 		channels.Delete("/:id/messages/:messageId/components", h.Components.RemoveAllComponents)
+
+		// Modal endpoints
+		api.Post("/interactions/modals/submit", h.Components.HandleModalSubmit)
+		api.Post("/modals", h.Components.CreateModal)
+		api.Get("/modals/:customId", h.Components.GetModal)
+		api.Delete("/modals/:id", h.Components.DeleteModal)
 	}
 
 	// Slash commands (application commands) - authenticated
