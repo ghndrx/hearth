@@ -151,6 +151,7 @@
 		class="context-menu"
 		style="left: {contextMenuX}px; top: {contextMenuY}px;"
 		on:click|stopPropagation
+		on:keydown|stopPropagation
 		role="menu"
 		tabindex="-1"
 	>

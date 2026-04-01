@@ -64,7 +64,7 @@ export const PERMISSIONS = {
 
 export type PermissionKey = keyof typeof PERMISSIONS;
 
-const rolesMap = writable<Map<string, Role[]>>(new Map());
+export const rolesMap = writable<Map<string, Role[]>>(new Map());
 export const rolesLoading = writable(false);
 export const rolesError = writable<string | null>(null);
 
