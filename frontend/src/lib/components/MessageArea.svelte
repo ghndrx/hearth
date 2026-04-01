@@ -39,6 +39,7 @@
 		const input = e.target as HTMLInputElement;
 		if (input.files?.length) {
 			pendingFiles = [...pendingFiles, ...Array.from(input.files)];
+			// TODO: Show file preview and handle upload with message
 			console.log('Files selected:', pendingFiles);
 			input.value = ''; // Reset for next selection
 		}
