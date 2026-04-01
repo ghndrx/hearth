@@ -16,7 +16,7 @@ export default defineConfig({
     svelteTesting()
   ],
   test: {
-    environment: 'jsdom',
+    environment: 'happy-dom',
     globals: true,
     setupFiles: ['./src/lib/test-setup.ts'],
     include: ['src/**/*.{test,spec}.{js,ts}'],
