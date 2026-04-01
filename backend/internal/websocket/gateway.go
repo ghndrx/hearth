@@ -19,8 +19,9 @@ import (
 
 // GatewayConfig holds gateway configuration
 type GatewayConfig struct {
-	HeartbeatInterval time.Duration
-	SessionTimeout    time.Duration
+	HeartbeatInterval  time.Duration
+	SessionTimeout     time.Duration
+	ConnectionLimiter  *ConnectionLimiter
 }
 
 // DefaultGatewayConfig returns default configuration
@@ -28,6 +29,7 @@ func DefaultGatewayConfig() *GatewayConfig {
 	return &GatewayConfig{
 		HeartbeatInterval: 41250 * time.Millisecond, // ~41 seconds
 		SessionTimeout:    5 * time.Minute,
+		ConnectionLimiter: nil, // No connection limiting by default (opt-in)
 	}
 }
 
@@ -52,6 +54,9 @@ type Gateway struct {
 
 	// Prometheus metrics
 	wsMetrics *metrics.WebSocketMetrics
+
+	// Connection limiter (may be nil)
+	connLimiter *ConnectionLimiter
 
 	// Graceful shutdown state
 	draining atomic.Bool
@@ -80,11 +85,12 @@ func NewGateway(hub HubInterface, jwtService *auth.JWTService, config *GatewayCo
 	}
 
 	return &Gateway{
-		hub:        hub,
-		jwtService: jwtService,
-		config:     config,
-		sessions:   make(map[string]*Session),
-		wsMetrics:  metrics.GetMetrics(),
+		hub:         hub,
+		jwtService:  jwtService,
+		config:      config,
+		sessions:    make(map[string]*Session),
+		wsMetrics:   metrics.GetMetrics(),
+		connLimiter: config.ConnectionLimiter,
 	}
 }
 
@@ -125,6 +131,20 @@ func (g *Gateway) HandleConnection(conn *websocket.Conn) {
 		log.Printf("[Gateway] WebSocket auth failed: token validation error for user token: %v", err)
 		g.sendClose(conn, 4001, "authentication failed")
 		return
+	}
+
+	// Extract client IP for connection limiting
+	clientIP := ExtractClientIP(conn)
+
+	// Check per-IP and per-user connection limits (if limiter is configured)
+	if g.connLimiter != nil {
+		result := g.connLimiter.check(context.Background(), clientIP, claims.UserID)
+		if !result.Allowed {
+			log.Printf("[Gateway] Connection rejected for user %s from IP %s: %s (ip_count=%d, user_count=%d)",
+				claims.UserID, clientIP, result.Reason, result.CurrentIPCount, result.CurrentUserCount)
+			g.sendClose(conn, result.Code, result.Reason)
+			return
+		}
 	}
 
 	// Get connection metadata
@@ -174,6 +194,11 @@ func (g *Gateway) HandleConnection(conn *websocket.Conn) {
 	g.wsMetrics.SessionCreated()
 	connectionStart := time.Now()
 
+	// Increment connection counters in Redis (after successful connection setup)
+	if g.connLimiter != nil {
+		g.connLimiter.Increment(context.Background(), clientIP, claims.UserID)
+	}
+
 	defer func() {
 		g.connectionsMu.Lock()
 		g.activeConnections--
@@ -183,6 +208,11 @@ func (g *Gateway) HandleConnection(conn *websocket.Conn) {
 		duration := time.Since(connectionStart).Seconds()
 		g.wsMetrics.ConnectionClosed(clientType, duration)
 		g.wsMetrics.SessionDestroyed()
+
+		// Decrement connection counters in Redis
+		if g.connLimiter != nil {
+			g.connLimiter.Decrement(context.Background(), clientIP, claims.UserID)
+		}
 	}()
 
 	// Create client for hub
