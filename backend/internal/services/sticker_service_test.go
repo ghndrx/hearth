@@ -13,12 +13,16 @@ import (
 
 // mockStickerRepo is a mock implementation of StickerRepository for testing
 type mockStickerRepo struct {
-	stickers map[uuid.UUID]*models.Sticker
+	stickers       map[uuid.UUID]*models.Sticker
+	packs          map[uuid.UUID]*models.StickerPack
+	packStickers   map[uuid.UUID]map[uuid.UUID]*models.PackSticker
 }
 
 func newMockStickerRepo() *mockStickerRepo {
 	return &mockStickerRepo{
-		stickers: make(map[uuid.UUID]*models.Sticker),
+		stickers:     make(map[uuid.UUID]*models.Sticker),
+		packs:        make(map[uuid.UUID]*models.StickerPack),
+		packStickers: make(map[uuid.UUID]map[uuid.UUID]*models.PackSticker),
 	}
 }
 
@@ -88,6 +92,131 @@ func (m *mockStickerRepo) Search(ctx context.Context, query string, serverID *uu
 		// Simple name search
 		if s.Name == query {
 			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+// Sticker Pack methods
+func (m *mockStickerRepo) CreatePack(ctx context.Context, pack *models.StickerPack) error {
+	m.packs[pack.ID] = pack
+	m.packStickers[pack.ID] = make(map[uuid.UUID]*models.PackSticker)
+	return nil
+}
+
+func (m *mockStickerRepo) GetPackByID(ctx context.Context, id uuid.UUID) (*models.StickerPack, error) {
+	pack, ok := m.packs[id]
+	if !ok {
+		return nil, nil
+	}
+	return pack, nil
+}
+
+func (m *mockStickerRepo) UpdatePack(ctx context.Context, pack *models.StickerPack) error {
+	m.packs[pack.ID] = pack
+	return nil
+}
+
+func (m *mockStickerRepo) DeletePack(ctx context.Context, id uuid.UUID) error {
+	delete(m.packs, id)
+	delete(m.packStickers, id)
+	return nil
+}
+
+func (m *mockStickerRepo) GetPacksByServer(ctx context.Context, serverID uuid.UUID) ([]*models.StickerPack, error) {
+	var result []*models.StickerPack
+	for _, p := range m.packs {
+		if p.ServerID != nil && *p.ServerID == serverID {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStickerRepo) GetGlobalPacks(ctx context.Context) ([]*models.StickerPack, error) {
+	var result []*models.StickerPack
+	for _, p := range m.packs {
+		if p.IsGlobal {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStickerRepo) GetPacksByTier(ctx context.Context, tier models.StickerPackTier) ([]*models.StickerPack, error) {
+	var result []*models.StickerPack
+	for _, p := range m.packs {
+		if p.Tier == tier {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStickerRepo) GetAvailablePacks(ctx context.Context, serverID *uuid.UUID, userTier models.StickerPackTier) ([]*models.StickerPack, error) {
+	var result []*models.StickerPack
+	tierOrder := map[models.StickerPackTier]int{
+		models.StickerPackTierFree:    0,
+		models.StickerPackTierBasic:   1,
+		models.StickerPackTierPremium: 2,
+	}
+	userLevel := tierOrder[userTier]
+
+	for _, p := range m.packs {
+		if !p.IsActive {
+			continue
+		}
+		if p.IsGlobal || (serverID != nil && p.ServerID != nil && *p.ServerID == *serverID) {
+			if tierOrder[p.Tier] <= userLevel {
+				result = append(result, p)
+			}
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStickerRepo) AddStickerToPack(ctx context.Context, packID, stickerID uuid.UUID, position int, isDefault bool) error {
+	if _, ok := m.packStickers[packID]; !ok {
+		m.packStickers[packID] = make(map[uuid.UUID]*models.PackSticker)
+	}
+	m.packStickers[packID][stickerID] = &models.PackSticker{
+		ID:        uuid.New(),
+		PackID:    packID,
+		StickerID: stickerID,
+		Position:  position,
+		IsDefault: isDefault,
+	}
+	return nil
+}
+
+func (m *mockStickerRepo) RemoveStickerFromPack(ctx context.Context, packID, stickerID uuid.UUID) error {
+	if pack, ok := m.packStickers[packID]; ok {
+		delete(pack, stickerID)
+	}
+	return nil
+}
+
+func (m *mockStickerRepo) GetStickersInPack(ctx context.Context, packID uuid.UUID) ([]*models.Sticker, error) {
+	stickerIDs, ok := m.packStickers[packID]
+	if !ok {
+		return nil, nil
+	}
+	var result []*models.Sticker
+	for stickerID := range stickerIDs {
+		if sticker, ok := m.stickers[stickerID]; ok {
+			result = append(result, sticker)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStickerRepo) GetPacksContainingSticker(ctx context.Context, stickerID uuid.UUID) ([]*models.StickerPack, error) {
+	var result []*models.StickerPack
+	for packID, stickers := range m.packStickers {
+		if _, ok := stickers[stickerID]; ok {
+			if pack, ok := m.packs[packID]; ok {
+				result = append(result, pack)
+			}
 		}
 	}
 	return result, nil
@@ -260,11 +389,12 @@ func TestStickerService_Get(t *testing.T) {
 
 	ctx := context.Background()
 	sticker := &models.Sticker{
-		ID:     uuid.New(),
-		Name:   "TestSticker",
-		Tags:   []string{"test"},
-		URL:    "/stickers/test.png",
-		Format: models.StickerFormatPNG,
+		ID:           uuid.New(),
+		Name:         "TestSticker",
+		Tags:         []string{"test"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
 	}
 	mockRepo.Create(ctx, sticker)
 
@@ -295,13 +425,14 @@ func TestStickerService_GetByServer(t *testing.T) {
 	serverID := uuid.New()
 
 	sticker := &models.Sticker{
-		ID:        uuid.New(),
-		ServerID:  &serverID,
-		Name:      "TestSticker",
-		Tags:      []string{"test"},
-		URL:       "/stickers/test.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		ServerID:     &serverID,
+		Name:         "TestSticker",
+		Tags:         []string{"test"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, sticker)
 
@@ -320,26 +451,28 @@ func TestStickerService_GetGlobal(t *testing.T) {
 
 	// Add global sticker
 	globalSticker := &models.Sticker{
-		ID:        uuid.New(),
-		ServerID:  nil,
-		Name:      "GlobalSticker",
-		Tags:      []string{"global"},
-		URL:       "/stickers/global.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		ServerID:     nil,
+		Name:         "GlobalSticker",
+		Tags:         []string{"global"},
+		URL:          "/stickers/global.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, globalSticker)
 
 	// Add server-specific sticker
 	serverID := uuid.New()
 	serverSticker := &models.Sticker{
-		ID:        uuid.New(),
-		ServerID:  &serverID,
-		Name:      "ServerSticker",
-		Tags:      []string{"server"},
-		URL:       "/stickers/server.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		ServerID:     &serverID,
+		Name:         "ServerSticker",
+		Tags:         []string{"server"},
+		URL:          "/stickers/server.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, serverSticker)
 
@@ -359,29 +492,31 @@ func TestStickerService_GetAvailable(t *testing.T) {
 
 	// Add global sticker
 	globalSticker := &models.Sticker{
-		ID:        uuid.New(),
-		ServerID:  nil,
-		Name:      "GlobalSticker",
-		Tags:      []string{"global"},
-		URL:       "/stickers/global.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		ServerID:     nil,
+		Name:         "GlobalSticker",
+		Tags:         []string{"global"},
+		URL:          "/stickers/global.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, globalSticker)
 
 	// Add server-specific sticker
 	serverSticker := &models.Sticker{
-		ID:        uuid.New(),
-		ServerID:  &serverID,
-		Name:      "ServerSticker",
-		Tags:      []string{"server"},
-		URL:       "/stickers/server.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		ServerID:     &serverID,
+		Name:         "ServerSticker",
+		Tags:         []string{"server"},
+		URL:          "/stickers/server.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, serverSticker)
 
-	stickers, err := service.GetAvailable(ctx, &serverID)
+	stickers, err := service.GetAvailable(ctx, &serverID, models.StickerPackTierFree)
 
 	assert.NoError(t, err)
 	assert.Len(t, stickers, 2)
@@ -393,12 +528,13 @@ func TestStickerService_Update(t *testing.T) {
 
 	ctx := context.Background()
 	sticker := &models.Sticker{
-		ID:        uuid.New(),
-		Name:      "OldName",
-		Tags:      []string{"old"},
-		URL:       "/stickers/test.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		Name:         "OldName",
+		Tags:         []string{"old"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, sticker)
 
@@ -427,12 +563,13 @@ func TestStickerService_Update_NameTooLong(t *testing.T) {
 
 	ctx := context.Background()
 	sticker := &models.Sticker{
-		ID:        uuid.New(),
-		Name:      "OldName",
-		Tags:      []string{"old"},
-		URL:       "/stickers/test.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		Name:         "OldName",
+		Tags:         []string{"old"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, sticker)
 
@@ -453,12 +590,13 @@ func TestStickerService_Delete(t *testing.T) {
 
 	ctx := context.Background()
 	sticker := &models.Sticker{
-		ID:        uuid.New(),
-		Name:      "TestSticker",
-		Tags:      []string{"test"},
-		URL:       "/stickers/test.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		Name:         "TestSticker",
+		Tags:         []string{"test"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, sticker)
 
@@ -489,13 +627,14 @@ func TestStickerService_Search(t *testing.T) {
 	serverID := uuid.New()
 
 	sticker := &models.Sticker{
-		ID:        uuid.New(),
-		ServerID:  &serverID,
-		Name:      "TestSticker",
-		Tags:      []string{"test"},
-		URL:       "/stickers/test.png",
-		Format:    models.StickerFormatPNG,
-		CreatedBy: uuid.New(),
+		ID:           uuid.New(),
+		ServerID:     &serverID,
+		Name:         "TestSticker",
+		Tags:         []string{"test"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    uuid.New(),
 	}
 	mockRepo.Create(ctx, sticker)
 
@@ -504,4 +643,196 @@ func TestStickerService_Search(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, results, 1)
 	assert.Equal(t, sticker.ID, results[0].ID)
+}
+
+// Sticker Pack Tests
+
+func TestStickerService_CreatePack(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+	desc := "Test pack description"
+
+	pack, err := service.CreatePack(ctx, "Test Pack", &desc, nil, models.StickerPackTierFree, false, nil, userID)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, pack)
+	assert.Equal(t, "Test Pack", pack.Name)
+	assert.Equal(t, models.StickerPackTierFree, pack.Tier)
+	assert.True(t, pack.IsActive)
+}
+
+func TestStickerService_CreatePack_NoName(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+
+	pack, err := service.CreatePack(ctx, "", nil, nil, models.StickerPackTierFree, false, nil, userID)
+
+	assert.ErrorIs(t, err, ErrPackNameRequired)
+	assert.Nil(t, pack)
+}
+
+func TestStickerService_CreatePack_NameTooLong(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+
+	longName := ""
+	for i := 0; i < 105; i++ {
+		longName += "a"
+	}
+
+	pack, err := service.CreatePack(ctx, longName, nil, nil, models.StickerPackTierFree, false, nil, userID)
+
+	assert.ErrorIs(t, err, ErrPackNameTooLong)
+	assert.Nil(t, pack)
+}
+
+func TestStickerService_GetPack(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+
+	// Create a pack first
+	createdPack, _ := service.CreatePack(ctx, "Test Pack", nil, nil, models.StickerPackTierFree, false, nil, userID)
+
+	// Retrieve it
+	retrieved, err := service.GetPack(ctx, createdPack.ID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, createdPack.ID, retrieved.ID)
+	assert.Equal(t, "Test Pack", retrieved.Name)
+}
+
+func TestStickerService_GetPack_NotFound(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+
+	retrieved, err := service.GetPack(ctx, uuid.New())
+
+	assert.ErrorIs(t, err, ErrPackNotFound)
+	assert.Nil(t, retrieved)
+}
+
+func TestStickerService_GetPackWithStickers(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	// Create a sticker
+	sticker := &models.Sticker{
+		ID:           uuid.New(),
+		ServerID:     &serverID,
+		Name:         "TestSticker",
+		Tags:         []string{"test"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    userID,
+	}
+	mockRepo.Create(ctx, sticker)
+
+	// Create a pack
+	pack, _ := service.CreatePack(ctx, "Test Pack", nil, nil, models.StickerPackTierFree, false, &serverID, userID)
+
+	// Add sticker to pack
+	err := service.AddStickerToPack(ctx, pack.ID, sticker.ID, 0, false)
+	assert.NoError(t, err)
+
+	// Get pack with stickers
+	retrieved, err := service.GetPackWithStickers(ctx, pack.ID, models.StickerPackTierFree)
+
+	assert.NoError(t, err)
+	assert.Equal(t, pack.ID, retrieved.ID)
+	assert.Len(t, retrieved.Stickers, 1)
+	assert.Equal(t, sticker.ID, retrieved.Stickers[0].ID)
+}
+
+func TestStickerService_DeletePack(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+
+	// Create a pack
+	pack, _ := service.CreatePack(ctx, "Test Pack", nil, nil, models.StickerPackTierFree, false, nil, userID)
+
+	// Delete it
+	err := service.DeletePack(ctx, pack.ID)
+	assert.NoError(t, err)
+
+	// Try to retrieve it
+	retrieved, err := service.GetPack(ctx, pack.ID)
+	assert.ErrorIs(t, err, ErrPackNotFound)
+	assert.Nil(t, retrieved)
+}
+
+func TestStickerService_AddStickerToPack(t *testing.T) {
+	mockRepo := newMockStickerRepo()
+	service := NewStickerService(mockRepo, nil)
+
+	ctx := context.Background()
+	userID := uuid.New()
+	serverID := uuid.New()
+
+	// Create a sticker
+	sticker := &models.Sticker{
+		ID:           uuid.New(),
+		ServerID:     &serverID,
+		Name:         "TestSticker",
+		Tags:         []string{"test"},
+		URL:          "/stickers/test.png",
+		Format:       models.StickerFormatPNG,
+		RequiredTier: models.StickerPackTierFree,
+		CreatedBy:    userID,
+	}
+	mockRepo.Create(ctx, sticker)
+
+	// Create a pack
+	pack, _ := service.CreatePack(ctx, "Test Pack", nil, nil, models.StickerPackTierFree, false, &serverID, userID)
+
+	// Add sticker to pack
+	err := service.AddStickerToPack(ctx, pack.ID, sticker.ID, 0, true)
+	assert.NoError(t, err)
+}
+
+func TestTierMeetsRequirement(t *testing.T) {
+	testCases := []struct {
+		name         string
+		userTier     models.StickerPackTier
+		requiredTier models.StickerPackTier
+		expected     bool
+	}{
+		{"free user can access free", models.StickerPackTierFree, models.StickerPackTierFree, true},
+		{"free user cannot access basic", models.StickerPackTierFree, models.StickerPackTierBasic, false},
+		{"free user cannot access premium", models.StickerPackTierFree, models.StickerPackTierPremium, false},
+		{"basic user can access free", models.StickerPackTierBasic, models.StickerPackTierFree, true},
+		{"basic user can access basic", models.StickerPackTierBasic, models.StickerPackTierBasic, true},
+		{"basic user cannot access premium", models.StickerPackTierBasic, models.StickerPackTierPremium, false},
+		{"premium user can access free", models.StickerPackTierPremium, models.StickerPackTierFree, true},
+		{"premium user can access basic", models.StickerPackTierPremium, models.StickerPackTierBasic, true},
+		{"premium user can access premium", models.StickerPackTierPremium, models.StickerPackTierPremium, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := models.TierMeetsRequirement(tc.userTier, tc.requiredTier)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }
