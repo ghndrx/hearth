@@ -117,7 +117,7 @@ export const TIER_COMPARISONS: TierComparison[] = [
   {
     tier: 'basic',
     name: 'Basic',
-    price: 4.99,
+    price: 2.99,
     features: [
       '50MB file uploads',
       '100 custom emojis',

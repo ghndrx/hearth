@@ -570,6 +570,7 @@ func main() {
 	// Initialize Premium & Billing services
 	billingService := services.NewBillingService(repos.Premium, cfg.StripeSecretKey, cfg.IsProduction)
 	premiumService := services.NewPremiumService(repos.Premium, repos.Users, repos.Servers, billingService)
+	premiumService.SetEventBus(serviceBus)
 	h.SetPremiumHandler(premiumService, billingService)
 	log.Printf("✅ Premium & Billing services initialized")
 
