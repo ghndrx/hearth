@@ -833,23 +833,36 @@ func TestGetPremiumFeatures(t *testing.T) {
 	assert.Equal(t, int64(8*1024*1024), features.FileUploadSize)
 	assert.False(t, features.CrossServerEmojis)
 	assert.False(t, features.PremiumBadge)
+	assert.False(t, features.MessageEditHistory)
+	assert.False(t, features.PremiumStickers)
 
 	// Basic tier
 	features = models.GetPremiumFeatures(models.TierBasic)
 	assert.Equal(t, 2.99, features.MonthlyPrice)
 	assert.Equal(t, 2, features.ServerBoosts)
 	assert.Equal(t, int64(50*1024*1024), features.FileUploadSize)
+	assert.True(t, features.CrossServerEmojis)
+	assert.True(t, features.HighQualityVideo)
+	assert.True(t, features.CustomDiscriminator)
 	assert.True(t, features.PrioritySupport)
+	assert.False(t, features.PremiumBadge)
+	assert.False(t, features.NoAds)
+	assert.False(t, features.MessageEditHistory)
 
 	// Premium tier
 	features = models.GetPremiumFeatures(models.TierPremium)
 	assert.Equal(t, 9.99, features.MonthlyPrice)
 	assert.Equal(t, 2, features.ServerBoosts)
+	assert.Equal(t, int64(100*1024*1024), features.FileUploadSize)
 	assert.True(t, features.CrossServerEmojis)
 	assert.True(t, features.HighQualityVideo)
 	assert.True(t, features.CustomDiscriminator)
 	assert.True(t, features.PremiumBadge)
 	assert.True(t, features.NoAds)
+	assert.True(t, features.MessageEditHistory)
+	assert.True(t, features.PremiumStickers)
+	assert.True(t, features.CustomStatusEmoji)
+	assert.True(t, features.HDScreenShare)
 }
 
 func TestSubscriptionTierFromString(t *testing.T) {
