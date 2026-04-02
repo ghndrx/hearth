@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { currentServer, servers } from '$lib/stores/servers';
 	import { currentChannel, loadServerChannels, channels } from '$lib/stores/channels';
-	import { sendMessage, loadMessages } from '$lib/stores/messages';
+	import { sendMessage } from '$lib/stores/messages';
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import { fetchUnreadState, markChannelRead } from '$lib/stores/unread';
 	import MessageList from '$lib/components/MessageList.svelte';
