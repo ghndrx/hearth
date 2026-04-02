@@ -19,7 +19,32 @@ jobs:
   message-flow-test:
     name: Message Flow E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hearth
+          POSTGRES_PASSWORD: hearth_dev_password
+          POSTGRES_DB: hearth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -35,33 +60,167 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
+      - name: Build Backend
+        run: |
+          cd backend
+          go mod download
+          CGO_ENABLED=0 GOOS=linux go build -o hearth-server ./cmd/hearth
+
+      - name: Build Frontend
         working-directory: frontend
-        run: bun install
+        env:
+          VITE_API_URL: http://localhost:8080/api/v1
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Setup Frontend Proxy Server
+        run: |
+          cat > /tmp/proxy-server.mjs << 'PROXY_EOF'
+          import http from 'http';
+          import { readFileSync, existsSync, createReadStream } from 'fs';
+          import { extname, join } from 'path';
+          import { createInterface } from 'readline';
+
+          const FRONTEND_DIR = process.env.FRONTEND_DIR || 'frontend/build';
+          const BACKEND_HOST = process.env.BACKEND_HOST || '127.0.0.1';
+          const BACKEND_PORT = parseInt(process.env.BACKEND_PORT || '8080', 10);
+          const PORT = parseInt(process.env.PORT || '8081', 10);
+
+          const MIME_TYPES = {
+            '.html': 'text/html',
+            '.js': 'application/javascript',
+            '.css': 'text/css',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.svg': 'image/svg+xml',
+            '.ico': 'image/x-icon',
+            '.woff': 'font/woff',
+            '.woff2': 'font/woff2',
+            '.map': 'application/json',
+          };
+
+          function getContentType(ext) {
+            return MIME_TYPES[ext] || 'application/octet-stream';
+          }
+
+          async function serveStatic(req, res) {
+            let url = req.url.split('?')[0];
+            let filePath = join(FRONTEND_DIR, url === '/' ? '/index.html' : url);
+            
+            if (!existsSync(filePath)) {
+              filePath = join(FRONTEND_DIR, 'index.html');
+            }
+
+            try {
+              const ext = extname(filePath);
+              res.writeHead(200, { 'Content-Type': getContentType(ext) });
+              createReadStream(filePath).pipe(res);
+              return true;
+            } catch (e) {
+              res.writeHead(404, { 'Content-Type': 'text/plain' });
+              res.end('Not found');
+              return false;
+            }
+          }
+
+          const server = http.createServer(async (req, res) => {
+            const url = req.url.split('?')[0];
+
+            // Proxy API requests to backend
+            if (url.startsWith('/api/') || url.startsWith('/gateway/')) {
+              const options = {
+                hostname: BACKEND_HOST,
+                port: BACKEND_PORT,
+                path: url,
+                method: req.method,
+                headers: {
+                  ...req.headers,
+                  host: BACKEND_HOST + ':' + BACKEND_PORT,
+                },
+              };
+
+              try {
+                const proxyRes = await new Promise((resolve, reject) => {
+                  const proxyReq = http.request(options, resolve);
+                  proxyReq.on('error', reject);
+                  req.pipe(proxyReq);
+                  req.on('error', reject);
+                  proxyReq.end();
+                });
+
+                res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                proxyRes.pipe(res);
+              } catch (e) {
+                res.writeHead(502, { 'Content-Type': 'text/plain' });
+                res.end('Backend error: ' + e.message);
+              }
+              return;
+            }
+
+            // Serve static files
+            await serveStatic(req, res);
+          });
+
+          server.listen(PORT, '0.0.0.0', () => {
+            console.log(`Proxy server listening on port ${PORT}`);
+          });
+          PROXY_EOF
+
+      - name: Start Backend
+        env:
+          DATABASE_URL: postgres://hearth:hearth_dev_password@127.0.0.1:5432/hearth?sslmode=disable
+          REDIS_URL: redis://127.0.0.1:6379
+          PORT: 8080
+          HOST: 0.0.0.0
+        run: |
+          # Wait for postgres to be ready (simple wait since health check is configured)
+          echo "Waiting for services..."
+          sleep 10
+
+          # Run backend in background
+          cd backend
+          nohup ./hearth-server > /tmp/hearth-backend.log 2>&1 &
+          echo $! > /tmp/hearth-backend.pid
+          echo "Backend PID: $(cat /tmp/hearth-backend.pid)"
+
+      - name: Start Frontend Proxy
+        run: |
+          # Wait for backend to be ready
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:8080/ -o /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Waiting for backend... (attempt $i/30)"
+            sleep 2
+          done
+
+          # Start proxy server
+          FRONTEND_DIR=/home/runner/work/hearth/hearth/frontend/build node /tmp/proxy-server.mjs &
+          echo $! > /tmp/hearth-proxy.pid
+          echo "Proxy PID: $(cat /tmp/hearth-proxy.pid)"
+
+          # Wait for proxy to be ready
+          for i in {1..15}; do
+            if curl -sf http://127.0.0.1:8081/ > /dev/null 2>&1; then
+              echo "Frontend proxy is ready!"
+              break
+            fi
+            echo "Waiting for frontend proxy... (attempt $i/15)"
+            sleep 2
+          done
 
       - name: Install Playwright browsers
         working-directory: frontend
         run: bunx playwright install chromium --with-deps
 
-      - name: Wait for site to be ready
-        run: |
-          BASE_URL="${{ github.event.inputs.base_url || 'https://hearth.gregh.dev' }}"
-          echo "Testing against: $BASE_URL"
-          
-          # Wait up to 2 minutes for site to be ready
-          for i in {1..24}; do
-            if curl -sf "$BASE_URL" > /dev/null 2>&1; then
-              echo "Site is ready!"
-              break
-            fi
-            echo "Waiting for site... (attempt $i/24)"
-            sleep 5
-          done
-
       - name: Run Message Flow Tests
         working-directory: frontend
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || 'https://hearth.gregh.dev' }}
+          BASE_URL: http://127.0.0.1:8081
         run: |
           bunx playwright test tests/e2e/message-flow.spec.ts --reporter=list
 
@@ -85,3 +244,9 @@ jobs:
           else
             echo "❌ Some tests failed. Check artifacts for details." >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          [ -f /tmp/hearth-backend.pid ] && kill $(cat /tmp/hearth-backend.pid) 2>/dev/null || true
+          [ -f /tmp/hearth-proxy.pid ] && kill $(cat /tmp/hearth-proxy.pid) 2>/dev/null || true
