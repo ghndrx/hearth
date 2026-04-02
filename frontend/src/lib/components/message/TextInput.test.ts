@@ -89,8 +89,17 @@ describe('TextInput (Message Component)', () => {
       props: { required: true, label: 'Required Field' }
     });
 
-    const required = container.querySelector('.required');
-    expect(required).toBeInTheDocument();
+    const input = container.querySelector('input');
+    expect(input).toHaveAttribute('required');
+  });
+
+  it('does not show required attribute when not required', () => {
+    const { container } = render(TextInput, {
+      props: { required: false, label: 'Optional Field' }
+    });
+
+    const input = container.querySelector('input');
+    expect(input).not.toHaveAttribute('required');
   });
 
   it('dispatches submit event on button click', async () => {
