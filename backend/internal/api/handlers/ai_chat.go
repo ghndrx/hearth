@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -14,13 +15,35 @@ import (
 	"hearth/internal/models"
 )
 
+// ChatServiceInterface defines the interface for AI chat service operations.
+// This enables dependency injection and mock testing.
+type ChatServiceInterface interface {
+	CreateConversation(ctx context.Context, userID uuid.UUID, req *models.CreateConversationRequest) (*models.AIConversation, error)
+	GetConversationWithMessages(ctx context.Context, userID, conversationID uuid.UUID, limit int) (*models.AIConversationWithMessages, error)
+	ListConversations(ctx context.Context, params *models.ConversationListParams) ([]*models.AIConversation, error)
+	UpdateConversation(ctx context.Context, userID, conversationID uuid.UUID, req *models.UpdateConversationRequest) (*models.AIConversation, error)
+	DeleteConversation(ctx context.Context, userID, conversationID uuid.UUID) error
+	SendMessage(ctx context.Context, userID, conversationID uuid.UUID, req *models.SendChatMessageRequest) (*models.ConversationMessage, error)
+	SendMessageStream(ctx context.Context, userID, conversationID uuid.UUID, req *models.SendChatMessageRequest, callback func(*models.StreamChunk) error) (*models.ConversationMessage, error)
+	RegenerateMessage(ctx context.Context, userID, conversationID, messageID uuid.UUID, stream bool, callback func(*models.StreamChunk) error) (*models.ConversationMessage, error)
+	GetConversationMessages(ctx context.Context, userID, conversationID uuid.UUID, limit, offset int) ([]*models.ConversationMessage, error)
+	DeleteMessage(ctx context.Context, userID, conversationID, messageID uuid.UUID) error
+	GetTemplates(ctx context.Context, userID *uuid.UUID, category string) ([]*models.AIChatTemplate, error)
+	GetTemplate(ctx context.Context, id uuid.UUID) (*models.AIChatTemplate, error)
+	CreateTemplate(ctx context.Context, userID uuid.UUID, tmpl *models.AIChatTemplate) error
+	UpdateTemplate(ctx context.Context, userID uuid.UUID, tmpl *models.AIChatTemplate) error
+	DeleteTemplate(ctx context.Context, userID, templateID uuid.UUID) error
+	ShareConversation(ctx context.Context, userID, conversationID uuid.UUID, isPublic, canContinue bool, expiresIn *time.Duration) (*models.AIConversationShare, error)
+	GetSharedConversation(ctx context.Context, shareCode string) (*models.AIConversationWithMessages, error)
+}
+
 // AIChatHandler handles AI chat endpoints
 type AIChatHandler struct {
-	chatService *ai.ChatService
+	chatService ChatServiceInterface
 }
 
 // NewAIChatHandler creates a new AIChatHandler
-func NewAIChatHandler(chatService *ai.ChatService) *AIChatHandler {
+func NewAIChatHandler(chatService ChatServiceInterface) *AIChatHandler {
 	return &AIChatHandler{chatService: chatService}
 }
 
