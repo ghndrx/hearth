@@ -155,9 +155,21 @@
 		}
 	}
 
-	function handlePopoutCall(event: CustomEvent<{ userId: string; type: 'voice' | 'video' }>) {
-		// TODO: Initiate call with user
+	async function handlePopoutCall(event: CustomEvent<{ userId: string; type: 'voice' | 'video' }>) {
 		popoutStore.close();
+		try {
+			const channel = await createDM(event.detail.userId);
+			currentChannel.set(channel);
+			goto(`/channels/@me/${channel.id}`);
+			// Note: DM voice/video calls require server-based voice channel infrastructure.
+			// The call overlay will appear when the user joins a voice channel.
+			// Full DM call support (WebRTC signaling in DM context) is tracked separately.
+			if (event.detail.type === 'voice' || event.detail.type === 'video') {
+				console.info(`[Call] ${event.detail.type} call initiated with user ${event.detail.userId}. DM opened at channel ${channel.id}`);
+			}
+		} catch (error) {
+			console.error('Failed to initiate call:', error);
+		}
 	}
 
 	function handlePopoutServerClick(event: CustomEvent<{ serverId: string }>) {
