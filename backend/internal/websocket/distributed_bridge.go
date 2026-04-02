@@ -764,6 +764,16 @@ func (b *DistributedEventBridge) onGroupDMCreated(event events.Event) {
 	b.sendToChannelDistributed(data.Channel.ID, EventTypeChannelCreate, b.channelToWS(data.Channel))
 }
 
+func (b *DistributedEventBridge) onGroupDMUpdated(event events.Event) {
+	data, ok := event.Data.(*services.GroupDMUpdatedEvent)
+	if !ok {
+		log.Printf("[DistributedEventBridge] onGroupDMUpdated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[DistributedEventBridge] Broadcasting GROUP_DM_UPDATE for channel %s (distributed)", data.Channel.ID)
+	b.sendToChannelDistributed(data.Channel.ID, EventGroupDMUpdate, b.channelToWS(data.Channel))
+}
+
 func (b *DistributedEventBridge) onDMRecipientAdded(event events.Event) {
 	data, ok := event.Data.(*services.DMRecipientEvent)
 	if !ok {
