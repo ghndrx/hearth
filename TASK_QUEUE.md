@@ -10,6 +10,12 @@
 - [ ] **[LOW]** If federation in scope: add per-homeserver federation rate limits
 - [ ] **[FUTURE]** Graduated sanctions engine (rate limit → soft mute → temp ban → suspension)
 
+## 2026-04-02 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Group Direct Messages — Multi-user DM conversations for small friend groups (3-50 people), enabling casual group coordination outside server structure
+- [ ] **[P0]** Feature: Channel Categories — Hierarchical channel organization with collapsible categories for server structure and navigation at scale
+- [ ] **[P1]** Feature: Activity & Rich Presence System — Comprehensive activity detection including gaming, music, and custom activities for social engagement
+
 ## 2026-03-29 Vulnerability Findings
 
 ### P0 Security Issues
