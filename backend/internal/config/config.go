@@ -129,7 +129,7 @@ func Load() *Config {
 		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "./data/uploads"),
 
 		// Auth
-		SecretKey:     getEnv("SECRET_KEY", "change-me-in-production"),
+		SecretKey:     getRequiredEnv("SECRET_KEY"), // No default - must be set for security
 		TokenExpiry:   getEnvDuration("TOKEN_EXPIRY", 1*time.Hour),
 		RefreshExpiry: getEnvDuration("REFRESH_EXPIRY", 30*24*time.Hour),
 		AuthProvider:  getEnv("AUTH_PROVIDER", "native"),
@@ -274,4 +274,12 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		}
 	}
 	return defaultValue
+}
+
+func getRequiredEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		panic("required environment variable " + key + " is not set")
+	}
+	return value
 }
