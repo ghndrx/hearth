@@ -150,6 +150,66 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		notifications.Delete("/:id", h.Notifications.DeleteNotification)
 	}
 
+	// Smart Notifications
+	if h.SmartNotifications != nil {
+		smartNotifs := users.Group("/@me/notifications")
+		smartNotifs.Post("/score", h.SmartNotifications.ScoreNotification)
+		smartNotifs.Post("/snooze", h.SmartNotifications.SnoozeNotifications)
+		smartNotifs.Get("/snooze", h.SmartNotifications.GetSnoozeStatus)
+		smartNotifs.Delete("/snooze", h.SmartNotifications.UnsnoozeNotifications)
+		smartNotifs.Post("/mute", h.SmartNotifications.MuteNotifications)
+		smartNotifs.Get("/mute", h.SmartNotifications.GetMuteStatus)
+		smartNotifs.Get("/engagement", h.SmartNotifications.GetEngagement)
+		smartNotifs.Get("/preferences", h.SmartNotifications.GetPreferences)
+		smartNotifs.Patch("/preferences", h.SmartNotifications.UpdatePreferences)
+		smartNotifs.Get("/digests", h.SmartNotifications.ListDigests)
+		smartNotifs.Get("/digests/:id", h.SmartNotifications.GetDigest)
+		smartNotifs.Post("/digests/:id/read", h.SmartNotifications.MarkDigestRead)
+		smartNotifs.Post("/:id/click", h.SmartNotifications.TrackClick)
+		smartNotifs.Post("/:id/dismiss", h.SmartNotifications.DismissNotification)
+	}
+
+	// Push Notifications
+	if h.Push != nil {
+		push := api.Group("/push")
+		push.Post("/subscription", h.Push.RegisterSubscription)
+		push.Delete("/subscription", h.Push.UnregisterSubscription)
+		push.Get("/preferences", h.Push.GetPreferences)
+		push.Patch("/preferences", h.Push.UpdatePreferences)
+	}
+
+	// Digest Notifications
+	if h.Digest != nil {
+		digest := users.Group("/@me/digest")
+		digest.Get("/preferences", h.Digest.GetPreferences)
+		digest.Patch("/preferences", h.Digest.UpdatePreferences)
+		digest.Get("/channels", h.Digest.GetChannelPreferences)
+		digest.Get("/channels/:channelId", h.Digest.GetChannelPreference)
+		digest.Patch("/channels/:channelId", h.Digest.UpdateChannelPreference)
+		digest.Get("/servers", h.Digest.GetServerPreferences)
+		digest.Get("/servers/:serverId", h.Digest.GetServerPreference)
+		digest.Patch("/servers/:serverId", h.Digest.UpdateServerPreference)
+		digest.Get("/preview", h.Digest.GetDigestPreview)
+		digest.Delete("/queue", h.Digest.ClearDigestQueue)
+		digest.Get("/history", h.Digest.GetDigestHistory)
+		digest.Get("/history/:digestId", h.Digest.GetDigest)
+		digest.Post("/generate", h.Digest.GenerateDigestNow)
+	}
+
+	// Channel Notification Preferences
+	if h.ChannelNotificationPrefs != nil {
+		channelNotifPrefs := users.Group("/@me/channels/:channelId/notifications")
+		channelNotifPrefs.Get("/", h.ChannelNotificationPrefs.GetChannelNotificationPreference)
+		channelNotifPrefs.Patch("/", h.ChannelNotificationPrefs.UpdateChannelNotificationPreference)
+	}
+
+	// Server Notification Preferences
+	if h.ServerNotificationPrefs != nil {
+		serverNotifPrefs := users.Group("/@me/servers/:serverId/notifications")
+		serverNotifPrefs.Get("/", h.ServerNotificationPrefs.GetServerNotificationPreference)
+		serverNotifPrefs.Patch("/", h.ServerNotificationPrefs.UpdateServerNotificationPreference)
+	}
+
 	// Mentions
 	if h.Mentions != nil {
 		mentions := api.Group("/mentions")

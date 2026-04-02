@@ -48,10 +48,15 @@ type Handlers struct {
 	Interactions        *InteractionHandler
 	ServerAudioSettings *ServerAudioSettingsHandler
 	AppDirectory        *AppDirectoryHandler
-	Welcome             *WelcomeHandler
-	Soundboard          *SoundboardHandler
-	Premium             *PremiumHandler
-	ThreadAutoArchive   *ThreadAutoArchiveHandler
+	Welcome                      *WelcomeHandler
+	Soundboard                   *SoundboardHandler
+	Premium                      *PremiumHandler
+	ThreadAutoArchive            *ThreadAutoArchiveHandler
+	SmartNotifications            *SmartNotificationHandler
+	Push                         *PushHandler
+	Digest                       *DigestHandler
+	ChannelNotificationPrefs      *ChannelNotificationPreferenceHandler
+	ServerNotificationPrefs       *ServerNotificationPreferenceHandler
 }
 
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
@@ -325,4 +330,33 @@ func (h *Handlers) SetThreadAutoArchiveHandler(
 	autoArchiveService *services.ThreadAutoArchiveService,
 ) {
 	h.ThreadAutoArchive = NewThreadAutoArchiveHandler(autoArchiveService)
+}
+
+// SetSmartNotificationHandler sets the smart notification handler
+func (h *Handlers) SetSmartNotificationHandler(
+	smartNotifService *services.SmartNotificationService,
+) {
+	h.SmartNotifications = NewSmartNotificationHandler(smartNotifService)
+}
+
+// SetPushHandler sets the push notification handler
+func (h *Handlers) SetPushHandler(
+	pushService *services.PushDeliveryService,
+) {
+	h.Push = NewPushHandler(pushService)
+}
+
+// SetDigestHandler sets the digest handler
+func (h *Handlers) SetDigestHandler(
+	digestService *services.DigestService,
+) {
+	h.Digest = NewDigestHandler(digestService)
+}
+
+// SetNotificationCoordinatorHandler sets notification coordinator handlers
+func (h *Handlers) SetNotificationCoordinatorHandler(
+	coordinator *services.NotificationCoordinator,
+) {
+	h.ChannelNotificationPrefs = NewChannelNotificationPreferenceHandler(coordinator)
+	h.ServerNotificationPrefs = NewServerNotificationPreferenceHandler(coordinator)
 }
