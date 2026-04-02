@@ -126,8 +126,8 @@ func (h *DMHandler) CreateGroupDM(c *fiber.Ctx) error {
 	if len(req.RecipientIDs) == 0 {
 		return BadRequest(c, "at least one recipient is required")
 	}
-	if len(req.RecipientIDs) > 9 {
-		return BadRequest(c, "group DM can have at most 10 members")
+	if len(req.RecipientIDs) > 49 {
+		return BadRequest(c, "group DM can have at most 49 other members")
 	}
 
 	recipientIDs := make([]uuid.UUID, 0, len(req.RecipientIDs))
@@ -147,8 +147,11 @@ func (h *DMHandler) CreateGroupDM(c *fiber.Ctx) error {
 	}
 
 	name := ""
-	if req.Name != nil {
+	if req.Name != nil && *req.Name != "" {
 		name = *req.Name
+	} else {
+		// Auto-generate name from participant usernames
+		name = h.generateGroupDMName(c.Context(), userID, recipientIDs)
 	}
 
 	channel, err := h.channelService.CreateGroupDM(c.Context(), userID, name, recipientIDs)
@@ -479,4 +482,44 @@ func (h *DMHandler) resolveRecipients(ctx context.Context, recipientIDs []uuid.U
 		recipients = append(recipients, *toUserResponse(user))
 	}
 	return recipients
+}
+
+// generateGroupDMName creates an auto-generated name for a group DM based on participants
+func (h *DMHandler) generateGroupDMName(ctx context.Context, ownerID uuid.UUID, recipientIDs []uuid.UUID) string {
+	// Build list of all participants (owner + recipients)
+	allIDs := make([]uuid.UUID, 0, len(recipientIDs)+1)
+	allIDs = append(allIDs, ownerID)
+	allIDs = append(allIDs, recipientIDs...)
+
+	// Collect up to 4 usernames
+	var names []string
+	for i, id := range allIDs {
+		if i >= 4 {
+			break
+		}
+		user, err := h.userService.GetUser(ctx, id)
+		if err != nil {
+			continue
+		}
+		names = append(names, user.Username)
+	}
+
+	if len(names) == 0 {
+		return "Group DM"
+	}
+
+	// Build name like "User1, User2, User3"
+	result := names[0]
+	for i := 1; i < len(names); i++ {
+		if i == 3 {
+			// Truncate with "+N more" if too many
+			remaining := len(allIDs) - 3
+			if remaining > 0 {
+				result += fmt.Sprintf(" +%d", remaining)
+			}
+			break
+		}
+		result += ", " + names[i]
+	}
+	return result
 }
