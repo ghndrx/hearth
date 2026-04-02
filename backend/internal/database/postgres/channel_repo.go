@@ -23,13 +23,13 @@ func NewChannelRepository(db *sqlx.DB) *ChannelRepository {
 
 func (r *ChannelRepository) Create(ctx context.Context, channel *models.Channel) error {
 	query := `
-		INSERT INTO channels (id, server_id, name, topic, type, position, parent_id, slowmode, nsfw, e2ee_enabled, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO channels (id, server_id, name, topic, type, position, parent_id, slowmode, nsfw, e2ee_enabled, icon, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		channel.ID, channel.ServerID, channel.Name, channel.Topic, channel.Type,
 		channel.Position, channel.ParentID, channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
-		channel.CreatedAt,
+		channel.Icon, channel.CreatedAt,
 	)
 	if err != nil {
 		return err
@@ -85,12 +85,12 @@ func (r *ChannelRepository) Update(ctx context.Context, channel *models.Channel)
 	query := `
 		UPDATE channels SET
 			name = $2, topic = $3, position = $4, parent_id = $5,
-			slowmode_seconds = $6, nsfw = $7, e2ee_enabled = $8
+			slowmode_seconds = $6, nsfw = $7, e2ee_enabled = $8, icon = $9
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		channel.ID, channel.Name, channel.Topic, channel.Position, channel.ParentID,
-		channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
+		channel.Slowmode, channel.NSFW, channel.E2EEEnabled, channel.Icon,
 	)
 	return err
 }

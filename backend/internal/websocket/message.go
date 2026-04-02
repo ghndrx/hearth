@@ -71,6 +71,7 @@ const (
 	EventDMChannelCreate   = "DM_CHANNEL_CREATE"
 	EventDMRecipientAdd    = "DM_RECIPIENT_ADD"
 	EventDMRecipientRemove = "DM_RECIPIENT_REMOVE"
+	EventGroupDMUpdate     = "GROUP_DM_UPDATE"
 
 	// Stream events
 	EventStreamStart       = "STREAM_START"
