@@ -22,6 +22,19 @@ func NewPremiumHandler(premiumService *services.PremiumService, billingService *
 	}
 }
 
+// GetPlans returns all available subscription plans
+// @Summary Get subscription plans
+// @Description Returns all available premium subscription plans
+// @Tags Premium
+// @Produce json
+// @Success 200 {array} models.SubscriptionPlan
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /premium/plans [get]
+func (h *PremiumHandler) GetPlans(c *fiber.Ctx) error {
+	plans := models.GetSubscriptionPlans()
+	return c.JSON(plans)
+}
+
 // GetSubscription returns the current user's subscription
 // @Summary Get user subscription
 // @Description Returns the current user's premium subscription status
@@ -438,4 +451,83 @@ func (h *PremiumHandler) HandleBillingWebhook(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"received": true})
+}
+
+// GiftSubscription gifts a premium subscription to another user
+// @Summary Gift subscription
+// @Description Gifts a premium subscription to another user
+// @Tags Premium
+// @Accept json
+// @Produce json
+// @Param body body struct{RecipientID string `json:"recipient_id"`; Tier string `json:"tier"`; Months int `json:"months"`} true "Gift details"
+// @Success 201 {object} models.Subscription
+// @Failure 400 {object} fiber.Map "Invalid request"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /premium/gift [post]
+func (h *PremiumHandler) GiftSubscription(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return Unauthorized(c, "unauthorized")
+	}
+
+	var req struct {
+		RecipientID string `json:"recipient_id"`
+		Tier        string `json:"tier"`
+		Months      int    `json:"months"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return ParseError(c, err)
+	}
+
+	if req.RecipientID == "" {
+		return ValidationError(c, "recipient_id", "recipient user ID is required")
+	}
+
+	recipientUUID, err := uuid.Parse(req.RecipientID)
+	if err != nil {
+		return InvalidUUID(c, "recipient_id")
+	}
+
+	if req.Months <= 0 {
+		req.Months = 1 // Default to 1 month
+	}
+
+	tier := models.SubscriptionTierFromString(req.Tier)
+	if tier == models.TierFree {
+		return ValidationError(c, "tier", "must be 'basic' or 'premium'")
+	}
+
+	sub, err := h.billingService.GiftSubscription(c.Context(), userID, recipientUUID, tier, req.Months)
+	if err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(sub)
+}
+
+// GetBillingPortal returns the billing portal URL for managing subscription
+// @Summary Get billing portal
+// @Description Returns the URL to the billing portal for managing payment and subscription
+// @Tags Premium
+// @Produce json
+// @Success 200 {object} fiber.Map
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /premium/billing-portal [get]
+func (h *PremiumHandler) GetBillingPortal(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return Unauthorized(c, "unauthorized")
+	}
+
+	returnURL := c.Query("return_url", "https://hearth.example.com")
+
+	portalURL, err := h.billingService.CreateBillingPortalSession(c.Context(), userID, returnURL)
+	if err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"url": portalURL})
 }

@@ -437,6 +437,18 @@ func (s *PremiumService) CheckFeatureAccess(ctx context.Context, userID uuid.UUI
 		return features.ServerBoosts > 0, nil
 	case "larger_file_uploads":
 		return features.FileUploadSize > 8*1024*1024, nil
+	case "message_edit_history":
+		return features.MessageEditHistory, nil
+	case "custom_status_emoji":
+		return features.CustomStatusEmoji, nil
+	case "hd_screen_share":
+		return features.HDScreenShare, nil
+	case "premium_stickers":
+		return features.PremiumStickers, nil
+	case "no_ads":
+		return features.NoAds, nil
+	case "priority_support":
+		return features.PrioritySupport, nil
 	default:
 		return false, nil
 	}

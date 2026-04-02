@@ -94,20 +94,22 @@ type PremiumFeatures struct {
 	Tier         PremiumTier `json:"tier"`
 	MonthlyPrice float64     `json:"monthly_price"`
 
-	// Basic Tier ($2.99/month)
-	ServerBoosts   int   `json:"server_boosts"`    // 2 boosts
-	FileUploadSize int64 `json:"file_upload_size"` // 50MB vs 8MB
-
-	// Premium Tier ($9.99/month)
-	CrossServerEmojis   bool `json:"cross_server_emojis"`  // Use emojis across servers
+	// Basic Tier ($2.99/month) and Premium ($9.99/month)
+	ServerBoosts   int   `json:"server_boosts"`     // 2 boosts
+	FileUploadSize int64 `json:"file_upload_size"`  // 50MB basic, 100MB premium vs 8MB free
+	CrossServerEmojis   bool `json:"cross_server_emojis"`   // Use emojis across servers
 	HighQualityVideo    bool `json:"high_quality_video"`   // 1080p60 vs 720p30
 	CustomDiscriminator bool `json:"custom_discriminator"` // Choose your #1234
 	EarlyAccess         bool `json:"early_access"`         // Beta features
-	PremiumBadge        bool `json:"premium_badge"`        // Profile badge
+	PrioritySupport     bool `json:"priority_support"`
 
-	// Both tiers get
-	PrioritySupport bool `json:"priority_support"`
-	NoAds           bool `json:"no_ads"`
+	// Premium Tier ($9.99/month) only
+	PremiumBadge        bool `json:"premium_badge"`        // Profile badge
+	NoAds               bool `json:"no_ads"`
+	MessageEditHistory  bool `json:"message_edit_history"`  // Full edit history access
+	PremiumStickers     bool `json:"premium_stickers"`      // Premium sticker packs
+	CustomStatusEmoji   bool `json:"custom_status_emoji"`   // Emoji in custom status
+	HDScreenShare       bool `json:"hd_screen_share"`       // HD screen sharing
 }
 
 // PremiumStatus represents a user's overall premium status
@@ -207,10 +209,14 @@ func GetPremiumFeatures(tier PremiumTier) PremiumFeatures {
 	case TierBasic:
 		features.ServerBoosts = 2
 		features.FileUploadSize = 50 * 1024 * 1024 // 50MB
+		features.CrossServerEmojis = true
+		features.HighQualityVideo = true
+		features.CustomDiscriminator = true
 		features.PrioritySupport = true
+		features.EarlyAccess = true
 	case TierPremium:
 		features.ServerBoosts = 2
-		features.FileUploadSize = 50 * 1024 * 1024 // 50MB
+		features.FileUploadSize = 100 * 1024 * 1024 // 100MB
 		features.CrossServerEmojis = true
 		features.HighQualityVideo = true
 		features.CustomDiscriminator = true
@@ -218,6 +224,10 @@ func GetPremiumFeatures(tier PremiumTier) PremiumFeatures {
 		features.PremiumBadge = true
 		features.PrioritySupport = true
 		features.NoAds = true
+		features.MessageEditHistory = true
+		features.PremiumStickers = true
+		features.CustomStatusEmoji = true
+		features.HDScreenShare = true
 	default: // Free
 		features.ServerBoosts = 0
 		features.FileUploadSize = 8 * 1024 * 1024 // 8MB
@@ -266,5 +276,72 @@ func SubscriptionTierFromString(s string) PremiumTier {
 		return TierPremium
 	default:
 		return TierFree
+	}
+}
+
+// SubscriptionPlan represents a purchasable subscription plan
+type SubscriptionPlan struct {
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Description  string            `json:"description"`
+	Price        float64           `json:"price"` // dollars per month
+	PriceCents   int               `json:"price_cents"` // cents per month
+	Currency     string            `json:"currency"`
+	Tier         PremiumTier       `json:"tier"`
+	Features     []string          `json:"features"`
+	IsBestValue  bool              `json:"is_best_value"`
+	StripePriceID string           `json:"stripe_price_id,omitempty"`
+	Active       bool              `json:"active"`
+	SortOrder    int               `json:"sort_order"`
+}
+
+// GetSubscriptionPlans returns all available subscription plans
+func GetSubscriptionPlans() []*SubscriptionPlan {
+	return []*SubscriptionPlan{
+		{
+			ID:            "plan_basic",
+			Name:          "Hearth+ Basic",
+			Description:   "Essential premium features for an enhanced experience",
+			Price:         2.99,
+			PriceCents:    299,
+			Currency:      "USD",
+			Tier:          TierBasic,
+			Features: []string{
+				"Custom emoji across servers",
+				"50MB file uploads",
+				"HD video streaming",
+				"Custom tag (#0001-#9999)",
+				"Priority customer support",
+				"Early access to new features",
+			},
+			IsBestValue:   false,
+			StripePriceID: "price_basic_monthly",
+			Active:        true,
+			SortOrder:     1,
+		},
+		{
+			ID:            "plan_premium",
+			Name:          "Hearth+ Premium",
+			Description:   "The complete premium experience with server boosts",
+			Price:         9.99,
+			PriceCents:    999,
+			Currency:      "USD",
+			Tier:          TierPremium,
+			Features: []string{
+				"Everything in Basic",
+				"100MB file uploads",
+				"2 server boost slots",
+				"Premium sticker packs",
+				"Custom status with emoji",
+				"HD screen sharing",
+				"256kbps voice quality",
+				"Message editing history",
+				"No advertisements",
+			},
+			IsBestValue:   true,
+			StripePriceID: "price_premium_monthly",
+			Active:        true,
+			SortOrder:     2,
+		},
 	}
 }
