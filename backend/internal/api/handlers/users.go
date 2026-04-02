@@ -75,6 +75,7 @@ type ChannelServiceForUsersInterface interface {
 	GetUserDMs(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error)
 	GetOrCreateDM(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error)
 	CreateGroupDM(ctx context.Context, ownerID uuid.UUID, name string, recipientIDs []uuid.UUID) (*models.Channel, error)
+	UpdateGroupDM(ctx context.Context, channelID, requesterID uuid.UUID, updates *services.GroupDMUpdate) (*models.Channel, error)
 }
 
 // StorageServiceInterface defines the methods needed for file storage

@@ -186,6 +186,11 @@ type CreateDMRequest struct {
 
 // CreateGroupDMRequest is the input for creating a group DM
 type CreateGroupDMRequest struct {
-	RecipientIDs []string `json:"recipient_ids" validate:"required,min=1,max=9"`
+	RecipientIDs []string `json:"recipient_ids" validate:"required,min=2,max=49"`
 	Name         *string  `json:"name,omitempty" validate:"omitempty,max=100"`
+}
+
+// UpdateGroupDMRequest is the input for updating a group DM
+type UpdateGroupDMRequest struct {
+	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
 }
