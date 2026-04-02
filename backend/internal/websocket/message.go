@@ -89,6 +89,12 @@ const (
 	// Thread auto-archive events
 	EventThreadAutoArchiveUpdate = "THREAD_AUTO_ARCHIVE_UPDATE"
 	EventThreadAutoArchive      = "THREAD_AUTO_ARCHIVE"
+
+	// Premium & Server Boost events
+	EventServerBoostUpdate   = "SERVER_BOOST_UPDATE"
+	EventServerBoostLevelUp  = "SERVER_BOOST_LEVEL_UP"
+	EventServerBoostLevelDown = "SERVER_BOOST_LEVEL_DOWN"
+	EventPremiumSubscriptionUpdate = "PREMIUM_SUBSCRIPTION_UPDATE"
 )
 
 // DispatchEvent creates a dispatch message
@@ -210,4 +216,29 @@ type ReadStateUpdateData struct {
 	ChannelID     string  `json:"channel_id"`
 	LastMessageID *string `json:"last_message_id,omitempty"`
 	MentionCount  int     `json:"mention_count"`
+}
+
+// ServerBoostUpdateData represents a server boost being added or removed
+type ServerBoostUpdateData struct {
+	ServerID   string `json:"server_id"`
+	UserID     string `json:"user_id"`
+	BoosterTag string `json:"booster_tag,omitempty"`
+	Action     string `json:"action"` // "added" or "removed"
+}
+
+// ServerBoostLevelUpdateData represents a server's boost level change
+type ServerBoostLevelUpdateData struct {
+	ServerID     string `json:"server_id"`
+	Level        int    `json:"level"`
+	BoostCount   int    `json:"boost_count"`
+	BoostsRequired int  `json:"boosts_required,omitempty"` // for next level
+	Perks        interface{} `json:"perks,omitempty"`
+}
+
+// PremiumSubscriptionUpdateData represents a user's subscription change
+type PremiumSubscriptionUpdateData struct {
+	UserID    string `json:"user_id"`
+	Tier      string `json:"tier"`
+	Status    string `json:"status"`
+	ExpiresAt string `json:"expires_at,omitempty"`
 }

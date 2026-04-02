@@ -111,6 +111,10 @@ func (b *DistributedEventBridge) registerHandlers() {
 	b.bus.Subscribe(events.DMRecipientRemoved, b.onDMRecipientRemoved)
 	b.bus.Subscribe(events.GroupDMCreated, b.onGroupDMCreated)
 	b.bus.Subscribe(events.GroupDMUpdated, b.onGroupDMUpdated)
+
+	// Server boost events
+	b.bus.Subscribe("server.boost_added", b.onServerBoostAdded)
+	b.bus.Subscribe("server.boost_removed", b.onServerBoostRemoved)
 }
 
 // Message event handlers
@@ -661,6 +665,92 @@ func (b *DistributedEventBridge) onDMRecipientRemoved(event events.Event) {
 	}
 
 	b.sendToChannelDistributed(data.ChannelID, EventDMRecipientRemove, wsData)
+}
+
+// ServerBoostEvent represents a server boost change (for distributed bridge)
+type ServerBoostDistributedData struct {
+	ServerID    uuid.UUID `json:"server_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	BoostCount  int       `json:"boost_count"`
+	LevelBefore int       `json:"level_before"`
+	LevelAfter  int       `json:"level_after"`
+	Action      string    `json:"action"` // "added" or "removed"
+}
+
+func (b *DistributedEventBridge) onServerBoostAdded(event events.Event) {
+	data, ok := event.Data.(*services.ServerBoostEvent)
+	if !ok {
+		log.Printf("[DistributedEventBridge] onServerBoostAdded: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[DistributedEventBridge] Broadcasting SERVER_BOOST_UPDATE to server %s (distributed)", data.ServerID)
+
+	wsData := ServerBoostDistributedData{
+		ServerID:    data.ServerID,
+		UserID:      data.UserID,
+		BoostCount:  data.BoostCount,
+		LevelBefore: data.LevelBefore,
+		LevelAfter:  data.LevelAfter,
+		Action:      data.Action,
+	}
+
+	// Send to the server (distributed via Redis)
+	b.sendToServerDistributed(data.ServerID, EventServerBoostUpdate, wsData)
+
+	// If level changed, send level-specific events
+	if data.LevelBefore != data.LevelAfter {
+		if data.LevelAfter > data.LevelBefore {
+			b.sendToServerDistributed(data.ServerID, EventServerBoostLevelUp, map[string]interface{}{
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
+			})
+		} else {
+			b.sendToServerDistributed(data.ServerID, EventServerBoostLevelDown, map[string]interface{}{
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
+			})
+		}
+	}
+}
+
+func (b *DistributedEventBridge) onServerBoostRemoved(event events.Event) {
+	data, ok := event.Data.(*services.ServerBoostEvent)
+	if !ok {
+		log.Printf("[DistributedEventBridge] onServerBoostRemoved: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[DistributedEventBridge] Broadcasting SERVER_BOOST_UPDATE to server %s (distributed)", data.ServerID)
+
+	wsData := ServerBoostDistributedData{
+		ServerID:    data.ServerID,
+		UserID:      data.UserID,
+		BoostCount:  data.BoostCount,
+		LevelBefore: data.LevelBefore,
+		LevelAfter:  data.LevelAfter,
+		Action:      data.Action,
+	}
+
+	// Send to the server (distributed via Redis)
+	b.sendToServerDistributed(data.ServerID, EventServerBoostUpdate, wsData)
+
+	// If level changed, send level-specific events
+	if data.LevelBefore != data.LevelAfter {
+		if data.LevelAfter > data.LevelBefore {
+			b.sendToServerDistributed(data.ServerID, EventServerBoostLevelUp, map[string]interface{}{
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
+			})
+		} else {
+			b.sendToServerDistributed(data.ServerID, EventServerBoostLevelDown, map[string]interface{}{
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
+			})
+		}
+	}
 }
 
 // Ensure all types needed exist or are imported
