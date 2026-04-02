@@ -323,7 +323,7 @@ func (p *OpenAICompatibleProvider) parseError(statusCode int, body []byte) error
 		case 429:
 			return ErrRateLimitExceeded
 		case 400:
-			if strings.Contains(errResp.Error.Message, "context") {
+			if strings.Contains(strings.ToLower(errResp.Error.Message), "context") {
 				return ErrContextLengthExceeded
 			}
 			return fmt.Errorf("%w: %s", ErrInvalidRequest, errResp.Error.Message)

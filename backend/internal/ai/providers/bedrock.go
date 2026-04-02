@@ -419,7 +419,7 @@ func (p *BedrockProvider) parseError(statusCode int, body []byte) error {
 	case 429:
 		return ErrRateLimitExceeded
 	case 400:
-		if strings.Contains(errMsg, "context") || strings.Contains(errMsg, "token") {
+		if strings.Contains(strings.ToLower(errMsg), "context") || strings.Contains(strings.ToLower(errMsg), "token") {
 			return ErrContextLengthExceeded
 		}
 		return fmt.Errorf("%w: %s", ErrInvalidRequest, errMsg)
