@@ -110,9 +110,8 @@ func CheckSpamPatterns(content string) bool {
 		return true
 	}
 
-	// Check for repeated characters
-	repeated := regexp.MustCompile(`(.)\1{9,}`)
-	if repeated.MatchString(content) {
+	// Check for repeated characters (e.g., "Helloooooooo" = 10+ of same char)
+	if hasRepeatedChar(content, 10) {
 		return true
 	}
 
@@ -167,6 +166,25 @@ func CheckMentionAbuse(content string, mentionLimit int) bool {
 
 	roleMentionCount := strings.Count(content, "<@&")
 	return mentionCount+roleMentionCount > mentionLimit
+}
+
+// hasRepeatedChar checks if content has a character repeated `minCount` or more times consecutively.
+func hasRepeatedChar(content string, minCount int) bool {
+	if len(content) < minCount {
+		return false
+	}
+	count := 1
+	for i := 1; i < len(content); i++ {
+		if content[i] == content[i-1] {
+			count++
+			if count >= minCount {
+				return true
+			}
+		} else {
+			count = 1
+		}
+	}
+	return false
 }
 
 func isAlphanumeric(b byte) bool {
