@@ -241,3 +241,86 @@ func TestMemoryCache_DeleteChannel(t *testing.T) {
 	err := cache.DeleteChannel(ctx, uuid.New())
 	assert.NoError(t, err)
 }
+
+func TestMemoryCache_Cleanup(t *testing.T) {
+	cache := NewMemoryCache()
+	defer cache.Close()
+
+	ctx := context.Background()
+
+	// Add items with different expiries
+	cache.Set(ctx, "short-lived", []byte("value1"), 50*time.Millisecond)
+	cache.Set(ctx, "long-lived", []byte("value2"), 1*time.Minute)
+
+	// Verify both items exist initially
+	_, err := cache.Get(ctx, "short-lived")
+	require.NoError(t, err)
+	_, err = cache.Get(ctx, "long-lived")
+	require.NoError(t, err)
+
+	// Wait for the short-lived item to expire
+	time.Sleep(100 * time.Millisecond)
+
+	// The Get method should return cache miss for expired items
+	_, err = cache.Get(ctx, "short-lived")
+	assert.Equal(t, ErrCacheMiss, err)
+
+	// Long-lived should still be there
+	_, err = cache.Get(ctx, "long-lived")
+	require.NoError(t, err)
+
+	// Verify that we can still set and get new items (cache is functional)
+	cache.Set(ctx, "new-item", []byte("new-value"), 1*time.Minute)
+	result, err := cache.Get(ctx, "new-item")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("new-value"), result)
+}
+
+func TestMemoryCache_Close(t *testing.T) {
+	cache := NewMemoryCache()
+
+	// Should not error on close
+	err := cache.Close()
+	assert.NoError(t, err)
+
+	// Should be able to close again without issue
+	err = cache.Close()
+	assert.NoError(t, err)
+}
+
+func TestMemoryCache_EmptyValue(t *testing.T) {
+	cache := NewMemoryCache()
+	defer cache.Close()
+
+	ctx := context.Background()
+	key := "empty-key"
+	value := []byte{}
+
+	// Set empty value
+	err := cache.Set(ctx, key, value, 1*time.Minute)
+	require.NoError(t, err)
+
+	// Get empty value
+	result, err := cache.Get(ctx, key)
+	require.NoError(t, err)
+	assert.Equal(t, value, result)
+	assert.Empty(t, result)
+}
+
+func TestMemoryCache_NilValue(t *testing.T) {
+	cache := NewMemoryCache()
+	defer cache.Close()
+
+	ctx := context.Background()
+	key := "nil-key"
+	var value []byte
+
+	// Set nil value
+	err := cache.Set(ctx, key, value, 1*time.Minute)
+	require.NoError(t, err)
+
+	// Get nil value
+	result, err := cache.Get(ctx, key)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}

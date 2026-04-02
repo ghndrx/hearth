@@ -13,9 +13,10 @@ import (
 // MemoryCache implements a simple in-memory cache for single-instance deployments
 // or as a fallback when Redis is unavailable
 type MemoryCache struct {
-	mu    sync.RWMutex
-	items map[string]*cacheItem
-	stop  chan struct{}
+	mu     sync.RWMutex
+	items  map[string]*cacheItem
+	stop   chan struct{}
+	closed bool
 }
 
 type cacheItem struct {
@@ -58,7 +59,13 @@ func (c *MemoryCache) cleanup() {
 
 // Close stops the cleanup goroutine
 func (c *MemoryCache) Close() error {
-	close(c.stop)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.closed {
+		close(c.stop)
+		c.closed = true
+	}
 	return nil
 }
 

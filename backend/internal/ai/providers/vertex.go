@@ -473,7 +473,7 @@ func (p *VertexAIProvider) parseError(statusCode int, body []byte) error {
 		case 429:
 			return ErrRateLimitExceeded
 		case 400:
-			if strings.Contains(errResp.Error.Message, "context") || strings.Contains(errResp.Error.Message, "token") {
+			if strings.Contains(strings.ToLower(errResp.Error.Message), "context") || strings.Contains(strings.ToLower(errResp.Error.Message), "token") {
 				return ErrContextLengthExceeded
 			}
 			return fmt.Errorf("%w: %s", ErrInvalidRequest, errResp.Error.Message)
