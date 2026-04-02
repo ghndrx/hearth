@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { currentServer, servers } from '$lib/stores/servers';
 	import { currentChannel, loadServerChannels, channels } from '$lib/stores/channels';
-	import { sendMessage, loadMessages } from '$lib/stores/messages';
+	import { sendMessage } from '$lib/stores/messages';
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import { fetchUnreadState, markChannelRead } from '$lib/stores/unread';
 	import MessageList from '$lib/components/MessageList.svelte';
@@ -17,20 +17,11 @@
 	// Forum post modal state
 	let showForumPostModal = false;
 	
-	// Debug logging
-	$: console.log('[ChannelPage] State:', { 
-		serverId, channelId, 
-		serversCount: $servers.length, 
-		channelsCount: $channels.length,
-		currentServerId: $currentServer?.id,
-		currentChannelId: $currentChannel?.id 
-	});
 	
 	// Set currentServer from URL if not already set
 	$: if (serverId && serverId !== '@me' && $servers.length > 0) {
 		const server = $servers.find(s => s.id === serverId);
 		if (server && $currentServer?.id !== serverId) {
-			console.log('[ChannelPage] Setting currentServer:', server.name);
 			currentServer.set(server);
 		}
 	}
@@ -39,11 +30,9 @@
 	$: if (channelId) {
 		const channel = $channels.find(c => c.id === channelId);
 		if (channel && $currentChannel?.id !== channelId) {
-			console.log('[ChannelPage] Setting currentChannel:', channel.name);
 			currentChannel.set(channel);
 		} else if (!channel && serverId && serverId !== '@me') {
 			// Channel not in store - load server channels
-			console.log('[ChannelPage] Channel not found, loading server channels');
 			loadServerChannels(serverId);
 		}
 	}
@@ -89,35 +78,23 @@
 	}
 	
 	async function handleSend(event: CustomEvent<{ content: string; attachments: File[] }>) {
-		console.log('[Page] handleSend called, currentChannel:', $currentChannel?.id, $currentChannel?.name);
 		if (!$currentChannel) {
 			console.error('[Page] handleSend: No currentChannel!');
 			return;
 		}
-		
+
 		const { content, attachments } = event.detail;
-		console.log('[Page] Sending message:', { channelId: $currentChannel.id, content: content?.substring(0, 50) });
-		
+
 		try {
 			await sendMessage($currentChannel.id, content, attachments);
-			console.log('[Page] Message sent successfully');
 		} catch (error) {
 			console.error('[Page] Failed to send message:', error);
 		}
 	}
 	
-	async function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
-		console.log('[Page] Forum post created:', event.detail);
+	function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
 		showForumPostModal = false;
-		// Reload messages to show the new forum post in the list
-		if ($currentChannel) {
-			try {
-				await loadMessages($currentChannel.id);
-				console.log('[Page] Reloaded messages after forum post creation');
-			} catch (err) {
-				console.error('[Page] Failed to reload messages after forum post creation:', err);
-			}
-		}
+		// TODO: Navigate to the created post or refresh the list
 	}
 </script>
 
