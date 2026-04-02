@@ -68,7 +68,10 @@
       // Request permission first
       await navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
         stream.getTracks().forEach(track => track.stop());
-      }).catch(() => {});
+      }).catch(err => {
+        // User denied permission - that's fine, devices will be empty
+        console.debug('Media permission not granted:', err);
+      });
       
       const devices = await navigator.mediaDevices.enumerateDevices();
       audioInputDevices = devices.filter(d => d.kind === 'audioinput');
