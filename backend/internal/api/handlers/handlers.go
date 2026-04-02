@@ -80,8 +80,8 @@ func (h *Handlers) SetPollHandler(pollService *services.PollService) {
 }
 
 // SetStickerHandler sets the sticker handler
-func (h *Handlers) SetStickerHandler(stickerService *services.StickerService, serverService *services.ServerService, permService *services.PermissionService) {
-	h.Stickers = NewStickerHandler(stickerService, serverService, permService)
+func (h *Handlers) SetStickerHandler(stickerService *services.StickerService, serverService *services.ServerService, permService *services.PermissionService, premiumService *services.PremiumService) {
+	h.Stickers = NewStickerHandler(stickerService, serverService, permService, premiumService)
 }
 
 // SetAnnouncementHandler sets the announcement handler

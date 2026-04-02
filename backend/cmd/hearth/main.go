@@ -493,7 +493,6 @@ func main() {
 
 	// Initialize Sticker service and handler
 	stickerService := services.NewStickerService(repos.Stickers, nil)
-	h.SetStickerHandler(stickerService, serverService, permService)
 	log.Printf("✅ Sticker service initialized")
 
 	// Initialize Soundboard service and handler
@@ -572,6 +571,7 @@ func main() {
 	premiumService := services.NewPremiumService(repos.Premium, repos.Users, repos.Servers, billingService)
 	premiumService.SetEventBus(serviceBus)
 	h.SetPremiumHandler(premiumService, billingService)
+	h.SetStickerHandler(stickerService, serverService, permService, premiumService)
 	log.Printf("✅ Premium & Billing services initialized")
 
 
