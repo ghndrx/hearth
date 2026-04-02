@@ -40,7 +40,6 @@
 		if (input.files?.length) {
 			pendingFiles = [...pendingFiles, ...Array.from(input.files)];
 			// TODO: Show file preview and handle upload with message
-			console.log('Files selected:', pendingFiles);
 			input.value = ''; // Reset for next selection
 		}
 	}
@@ -54,12 +53,11 @@
 		: [];
 
 	$: if ($activeChannel) {
-		console.log('[MessageArea] Active channel changed:', $activeChannel.id);
 		loadMessages($activeChannel.id);
 		// Clear reply state when changing channels
 		replyingTo = null;
 		editingMessage = null;
-		
+
 		// Subscribe to channel for real-time updates
 		if (currentSubscribedChannel && currentSubscribedChannel !== $activeChannel.id) {
 			gateway.unsubscribeChannel(currentSubscribedChannel);
@@ -69,11 +67,8 @@
 	}
 
 	onMount(() => {
-		console.log('[MessageArea] Mounted, subscribing to gateway events');
-		
 		// Listen for new messages from gateway
 		unsubscribeWS = onGatewayEvent('MESSAGE_CREATE', (data) => {
-			console.log('[MessageArea] MESSAGE_CREATE event received:', data);
 			const message = data as Message;
 			// Only process messages for the current channel
 			if (message.channel_id === $activeChannel?.id) {
@@ -84,7 +79,6 @@
 	});
 
 	onDestroy(() => {
-		console.log('[MessageArea] Unmounting, cleaning up');
 		unsubscribeWS?.();
 		if (currentSubscribedChannel) {
 			gateway.unsubscribeChannel(currentSubscribedChannel);
@@ -115,16 +109,13 @@
 		const content = messageInput.trim();
 		const replyToId = replyingTo?.id;
 		const filesToSend = [...pendingFiles];
-		
-		console.log('[MessageArea] Sending message to channel:', $activeChannel.id, 'content:', content, 'files:', filesToSend.length);
-		
+
 		messageInput = '';
 		replyingTo = null;
 		pendingFiles = [];
-		
+
 		try {
-			const result = await sendMessageFn($activeChannel.id, content, filesToSend, replyToId);
-			console.log('[MessageArea] Message sent successfully:', result);
+			await sendMessageFn($activeChannel.id, content, filesToSend, replyToId);
 		} catch (error) {
 			console.error('[MessageArea] Failed to send message:', error);
 			// Restore pending files on error
