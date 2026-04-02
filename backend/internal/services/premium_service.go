@@ -20,6 +20,16 @@ var (
 	ErrPaymentFailed      = errors.New("payment processing failed")
 )
 
+// ServerBoostEvent is published when a server boost is added or removed
+type ServerBoostEvent struct {
+	ServerID    uuid.UUID `json:"server_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	BoostCount  int       `json:"boost_count"`
+	LevelBefore int       `json:"level_before"`
+	LevelAfter  int       `json:"level_after"`
+	Action      string    `json:"action"` // "added" or "removed"
+}
+
 // PremiumRepository defines the interface for premium data access
 type PremiumRepository interface {
 	// Subscription operations
@@ -62,6 +72,7 @@ type PremiumService struct {
 	userRepo   UserRepository
 	serverRepo ServerRepository
 	billing    *BillingService
+	eventBus   EventBus
 }
 
 // NewPremiumService creates a new premium service
@@ -77,6 +88,11 @@ func NewPremiumService(
 		serverRepo: serverRepo,
 		billing:    billing,
 	}
+}
+
+// SetEventBus sets the event bus for publishing boost events
+func (s *PremiumService) SetEventBus(eventBus EventBus) {
+	s.eventBus = eventBus
 }
 
 // GetUserPremiumStatus returns the full premium status for a user
@@ -289,6 +305,20 @@ func (s *PremiumService) BoostServer(ctx context.Context, userID, serverID uuid.
 		return err
 	}
 
+	// Publish boost added event
+	if s.eventBus != nil {
+		levelBefore := models.CalculateServerLevel(boostCount - 1)
+		levelAfter := models.CalculateServerLevel(boostCount)
+		s.eventBus.Publish("server.boost_added", &ServerBoostEvent{
+			ServerID:    serverID,
+			UserID:      userID,
+			BoostCount:  boostCount,
+			LevelBefore: levelBefore,
+			LevelAfter:  levelAfter,
+			Action:      "added",
+		})
+	}
+
 	return nil
 }
 
@@ -327,6 +357,20 @@ func (s *PremiumService) UnboostServer(ctx context.Context, userID, serverID uui
 	}
 	if err := s.repo.UpdateServerBoostLevel(ctx, serverID, boostCount); err != nil {
 		return err
+	}
+
+	// Publish boost removed event
+	if s.eventBus != nil {
+		levelBefore := models.CalculateServerLevel(boostCount + 1)
+		levelAfter := models.CalculateServerLevel(boostCount)
+		s.eventBus.Publish("server.boost_removed", &ServerBoostEvent{
+			ServerID:    serverID,
+			UserID:      userID,
+			BoostCount:  boostCount,
+			LevelBefore: levelBefore,
+			LevelAfter:  levelAfter,
+			Action:      "removed",
+		})
 	}
 
 	return nil

@@ -126,6 +126,10 @@ func (b *EventBridge) registerHandlers() {
 	b.bus.Subscribe(events.DMRecipientRemoved, b.onDMRecipientRemoved)
 	b.bus.Subscribe(events.GroupDMCreated, b.onGroupDMCreated)
 	b.bus.Subscribe(events.GroupDMUpdated, b.onGroupDMUpdated)
+
+	// Server boost events
+	b.bus.Subscribe("server.boost_added", b.onServerBoostAdded)
+	b.bus.Subscribe("server.boost_removed", b.onServerBoostRemoved)
 }
 
 // Message event handlers
@@ -802,6 +806,92 @@ func (b *EventBridge) onDMRecipientRemoved(event events.Event) {
 	}
 
 	b.sendToChannel(data.ChannelID, EventDMRecipientRemove, wsData)
+}
+
+// ServerBoostEvent represents a server boost change
+type ServerBoostWSData struct {
+	ServerID    uuid.UUID `json:"server_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	BoostCount  int       `json:"boost_count"`
+	LevelBefore int       `json:"level_before"`
+	LevelAfter  int       `json:"level_after"`
+	Action      string    `json:"action"` // "added" or "removed"
+}
+
+func (b *EventBridge) onServerBoostAdded(event events.Event) {
+	data, ok := event.Data.(*services.ServerBoostEvent)
+	if !ok {
+		log.Printf("[EventBridge] onServerBoostAdded: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting SERVER_BOOST_UPDATE to server %s", data.ServerID)
+
+	wsData := ServerBoostWSData{
+		ServerID:    data.ServerID,
+		UserID:      data.UserID,
+		BoostCount:  data.BoostCount,
+		LevelBefore: data.LevelBefore,
+		LevelAfter:  data.LevelAfter,
+		Action:      data.Action,
+	}
+
+	// Send to the server
+	b.sendToServer(data.ServerID, EventServerBoostUpdate, wsData)
+
+	// If level changed, send level-specific events
+	if data.LevelBefore != data.LevelAfter {
+		if data.LevelAfter > data.LevelBefore {
+			b.sendToServer(data.ServerID, EventServerBoostLevelUp, map[string]interface{}{
+				"server_id":      data.ServerID.String(),
+				"level":          data.LevelAfter,
+				"boost_count":    data.BoostCount,
+			})
+		} else {
+			b.sendToServer(data.ServerID, EventServerBoostLevelDown, map[string]interface{}{
+				"server_id":      data.ServerID.String(),
+				"level":          data.LevelAfter,
+				"boost_count":    data.BoostCount,
+			})
+		}
+	}
+}
+
+func (b *EventBridge) onServerBoostRemoved(event events.Event) {
+	data, ok := event.Data.(*services.ServerBoostEvent)
+	if !ok {
+		log.Printf("[EventBridge] onServerBoostRemoved: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting SERVER_BOOST_UPDATE to server %s", data.ServerID)
+
+	wsData := ServerBoostWSData{
+		ServerID:    data.ServerID,
+		UserID:      data.UserID,
+		BoostCount:  data.BoostCount,
+		LevelBefore: data.LevelBefore,
+		LevelAfter:  data.LevelAfter,
+		Action:      data.Action,
+	}
+
+	// Send to the server
+	b.sendToServer(data.ServerID, EventServerBoostUpdate, wsData)
+
+	// If level changed, send level-specific events
+	if data.LevelBefore != data.LevelAfter {
+		if data.LevelAfter > data.LevelBefore {
+			b.sendToServer(data.ServerID, EventServerBoostLevelUp, map[string]interface{}{
+				"server_id":      data.ServerID.String(),
+				"level":          data.LevelAfter,
+				"boost_count":    data.BoostCount,
+			})
+		} else {
+			b.sendToServer(data.ServerID, EventServerBoostLevelDown, map[string]interface{}{
+				"server_id":      data.ServerID.String(),
+				"level":          data.LevelAfter,
+				"boost_count":    data.BoostCount,
+			})
+		}
+	}
 }
 
 // Additional event types for websocket
