@@ -30,6 +30,14 @@ func (m *MockPremiumRepo) GetSubscription(ctx context.Context, userID uuid.UUID)
 	return args.Get(0).(*models.Subscription), args.Error(1)
 }
 
+func (m *MockPremiumRepo) GetSubscriptionByStripeID(ctx context.Context, stripeSubID string) (*models.Subscription, error) {
+	args := m.Called(ctx, stripeSubID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Subscription), args.Error(1)
+}
+
 func (m *MockPremiumRepo) UpdateSubscription(ctx context.Context, sub *models.Subscription) error {
 	args := m.Called(ctx, sub)
 	return args.Error(0)
@@ -828,7 +836,7 @@ func TestGetPremiumFeatures(t *testing.T) {
 
 	// Basic tier
 	features = models.GetPremiumFeatures(models.TierBasic)
-	assert.Equal(t, 4.99, features.MonthlyPrice)
+	assert.Equal(t, 2.99, features.MonthlyPrice)
 	assert.Equal(t, 2, features.ServerBoosts)
 	assert.Equal(t, int64(50*1024*1024), features.FileUploadSize)
 	assert.True(t, features.PrioritySupport)
@@ -850,4 +858,116 @@ func TestSubscriptionTierFromString(t *testing.T) {
 	assert.Equal(t, models.TierPremium, models.SubscriptionTierFromString("premium"))
 	assert.Equal(t, models.TierFree, models.SubscriptionTierFromString("invalid"))
 	assert.Equal(t, models.TierFree, models.SubscriptionTierFromString(""))
+}
+
+func TestUpdateSubscriptionTier_Upgrade(t *testing.T) {
+	svc, repo := newTestPremiumService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	sub := &models.Subscription{
+		ID:          uuid.New(),
+		UserID:      userID,
+		Tier:        models.TierBasic,
+		Status:      models.SubStatusActive,
+		BoostsUsed:  0,
+		BoostsTotal: 2,
+	}
+
+	repo.On("GetSubscription", ctx, userID).Return(sub, nil)
+	repo.On("UpdateSubscription", ctx, mock.AnythingOfType("*models.Subscription")).Return(nil)
+	repo.On("UpdateUserPremiumTier", ctx, userID, models.TierPremium).Return(nil)
+
+	err := svc.UpdateSubscriptionTier(ctx, userID, models.TierPremium)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestUpdateSubscriptionTier_Downgrade(t *testing.T) {
+	svc, repo := newTestPremiumService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	sub := &models.Subscription{
+		ID:          uuid.New(),
+		UserID:      userID,
+		Tier:        models.TierPremium,
+		Status:      models.SubStatusActive,
+		BoostsUsed:  0,
+		BoostsTotal: 2,
+	}
+
+	repo.On("GetSubscription", ctx, userID).Return(sub, nil)
+	repo.On("UpdateSubscription", ctx, mock.AnythingOfType("*models.Subscription")).Return(nil)
+	repo.On("UpdateUserPremiumTier", ctx, userID, models.TierBasic).Return(nil)
+
+	err := svc.UpdateSubscriptionTier(ctx, userID, models.TierBasic)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestUpdateSubscriptionTier_NoSubscription(t *testing.T) {
+	svc, repo := newTestPremiumService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	repo.On("GetSubscription", ctx, userID).Return(nil, nil)
+
+	err := svc.UpdateSubscriptionTier(ctx, userID, models.TierPremium)
+
+	assert.Error(t, err)
+	assert.Equal(t, ErrNoSubscription, err)
+	repo.AssertExpectations(t)
+}
+
+func TestReactivateSubscription(t *testing.T) {
+	svc, repo := newTestPremiumService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	now := time.Now()
+	sub := &models.Subscription{
+		ID:         uuid.New(),
+		UserID:     userID,
+		Tier:       models.TierBasic,
+		Status:     models.SubStatusCanceled,
+		CanceledAt: &now,
+	}
+
+	repo.On("GetSubscription", ctx, userID).Return(sub, nil)
+	repo.On("UpdateSubscription", ctx, mock.AnythingOfType("*models.Subscription")).Return(nil)
+	repo.On("UpdateUserPremiumTier", ctx, userID, models.TierBasic).Return(nil)
+
+	err := svc.ReactivateSubscription(ctx, userID)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestReactivateSubscription_NotCanceled(t *testing.T) {
+	svc, repo := newTestPremiumService()
+	ctx := context.Background()
+	userID := uuid.New()
+
+	sub := &models.Subscription{
+		ID:     uuid.New(),
+		UserID: userID,
+		Tier:   models.TierBasic,
+		Status: models.SubStatusActive,
+	}
+
+	repo.On("GetSubscription", ctx, userID).Return(sub, nil)
+
+	err := svc.ReactivateSubscription(ctx, userID)
+
+	assert.Error(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestPremiumPricing(t *testing.T) {
+	assert.Equal(t, 2.99, models.PremiumTierPricing[models.TierBasic])
+	assert.Equal(t, 9.99, models.PremiumTierPricing[models.TierPremium])
+	assert.Equal(t, float64(0), models.PremiumTierPricing[models.TierFree])
 }

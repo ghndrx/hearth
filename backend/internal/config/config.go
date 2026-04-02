@@ -101,6 +101,8 @@ type Config struct {
 	// Stripe Configuration (Premium/Billing)
 	StripeSecretKey     string // Stripe secret key
 	StripeWebhookSecret string // Stripe webhook signing secret
+	StripePriceBasic    string // Stripe Price ID for Basic tier ($2.99/month)
+	StripePricePremium  string // Stripe Price ID for Premium tier ($9.99/month)
 	IsProduction        bool   // Whether running in production
 }
 
@@ -183,6 +185,8 @@ func Load() *Config {
 		// Stripe (Premium & Billing)
 		StripeSecretKey:     getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		StripePriceBasic:    getEnv("STRIPE_PRICE_BASIC", ""),
+		StripePricePremium:  getEnv("STRIPE_PRICE_PREMIUM", ""),
 		IsProduction:        getEnvBool("PRODUCTION", false),
 
 		// AI Provider Configuration
