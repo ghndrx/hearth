@@ -1,4 +1,4 @@
-//go:build go1.25
+//go:build go1.24
 
 package storage
 
@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 )
 
 // LocalBackend implements StorageBackend for local filesystem.
-// All file I/O is scoped under basePath via os.Root (Go 1.24+) for
+// File I/O is scoped under basePath using os.Root (Go 1.24+) for
 // kernel-level enforcement against path traversal and symlink escapes.
 type LocalBackend struct {
 	basePath  string
@@ -71,69 +72,57 @@ func (b *LocalBackend) Upload(ctx context.Context, path string, file io.Reader, 
 	if err := b.validatePath(path); err != nil {
 		return "", err
 	}
-
-	// Create parent directories scoped under b.root
-	if err := b.root.MkdirAll(filepath.Dir(path), 0750); err != nil {
-		return "", fmt.Errorf("failed to create directory: %w", err)
+	cleanPath := filepath.Clean(path)
+	if err := b.ensureDirs(cleanPath); err != nil {
+		return "", err
 	}
-
-	// Create file scoped under b.root — kernel enforces no traversal
-	dst, err := b.root.Create(path)
+	f, err := b.root.Create(cleanPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	defer func() {
-		if err := dst.Close(); err != nil && retErr == nil {
-			retErr = fmt.Errorf("failed to close file: %w", err)
+		if closeErr := f.Close(); closeErr != nil && retErr == nil {
+			retErr = fmt.Errorf("failed to close file: %w", closeErr)
 		}
 	}()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		// Clean up partial file scoped under b.root
-		if removeErr := b.root.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
-			retErr = fmt.Errorf("failed to write file: %w (cleanup also failed: %v)", err, removeErr)
-		} else {
-			retErr = fmt.Errorf("failed to write file: %w", err)
+	if _, err := io.Copy(f, file); err != nil {
+		if removeErr := b.root.Remove(cleanPath); removeErr != nil {
+			log.Printf("Failed to remove partial file %s: %v", cleanPath, removeErr)
 		}
-		return "", retErr
+		return "", fmt.Errorf("failed to write file: %w", err)
 	}
-
 	return b.GetURL(path), nil
 }
 
-// Download retrieves a file from the local filesystem.
-// The path is scoped under b.root — kernel enforces no traversal.
+// Download retrieves a file scoped to basePath via root.Open.
 func (b *LocalBackend) Download(ctx context.Context, path string) (io.ReadCloser, error) {
 	if err := b.validatePath(path); err != nil {
 		return nil, err
 	}
-
-	file, err := b.root.Open(path)
+	f, err := b.root.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	return file, nil
+	return f, nil
 }
 
-// Delete removes a file from the local filesystem.
-// The path is scoped under b.root — kernel enforces no traversal.
+// Delete removes a file scoped to basePath via root.Remove.
 func (b *LocalBackend) Delete(ctx context.Context, path string) error {
 	if err := b.validatePath(path); err != nil {
 		return err
 	}
-
-	if err := b.root.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := b.root.Remove(filepath.Clean(path)); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
 	return nil
 }
 
-// GetURL returns a public URL for a file
+// GetURL returns a public URL for a file.
 func (b *LocalBackend) GetURL(path string) string {
 	return b.publicURL + "/" + path
 }
 
-// GetSignedURL returns a signed URL (not implemented for local storage)
+// GetSignedURL returns a signed URL (not implemented for local storage).
 func (b *LocalBackend) GetSignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
 	return b.GetURL(path), nil
 }
