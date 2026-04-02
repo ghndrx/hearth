@@ -180,9 +180,9 @@ func setupDMTestApp(
 			})
 		}
 
-		if len(req.RecipientIDs) > 9 {
+		if len(req.RecipientIDs) > 49 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "too many recipients (max 9)",
+				"error": "too many recipients (max 49)",
 			})
 		}
 
@@ -573,8 +573,8 @@ func TestCreateGroupDM_TooManyRecipients(t *testing.T) {
 	app := setupDMTestApp(&mockDMService{}, &mockDMChannelService{}, &mockDMMessageService{})
 	t.Cleanup(func() { _ = app.Shutdown() })
 
-	// Build 10 recipient IDs (exceeds max of 9)
-	ids := make([]string, 10)
+	// Build 50 recipient IDs (exceeds max of 49)
+	ids := make([]string, 50)
 	for i := range ids {
 		ids[i] = fmt.Sprintf(`"%s"`, uuid.New().String())
 	}

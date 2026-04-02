@@ -53,8 +53,8 @@ func (s *DMService) AddUserToGroupDM(ctx context.Context, channelID, requesterID
 		}
 	}
 
-	// Check group DM size limit (10 max)
-	if len(channel.Recipients) >= 10 {
+	// Check group DM size limit (MaxGroupDMUsers max)
+	if len(channel.Recipients) >= models.MaxGroupDMUsers {
 		return nil, ErrGroupDMFull
 	}
 
