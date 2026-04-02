@@ -22,7 +22,15 @@ vi.mock('$lib/stores/messages', () => {
 		editMessage: mockEditMessage,
 		deleteMessage: mockDeleteMessage,
 		addReaction: mockAddReaction,
-		removeReaction: mockRemoveReaction
+		removeReaction: mockRemoveReaction,
+		jumpToMessage: {
+			subscribe: (fn: (value: any) => void) => {
+				fn({ channelId: null, messageId: null });
+				return () => {};
+			},
+			jump: vi.fn(),
+			clear: vi.fn()
+		}
 	};
 });
 
