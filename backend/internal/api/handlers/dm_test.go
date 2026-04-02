@@ -22,6 +22,7 @@ type mockDMService struct {
 	addUserFunc    func(ctx context.Context, channelID, requesterID, userID uuid.UUID) (*models.Channel, error)
 	removeUserFunc func(ctx context.Context, channelID, requesterID, userID uuid.UUID) error
 	leaveDMFunc    func(ctx context.Context, channelID, userID uuid.UUID) error
+	transferFunc   func(ctx context.Context, channelID, currentOwnerID, newOwnerID uuid.UUID) (*models.Channel, error)
 }
 
 func (m *mockDMService) AddUserToGroupDM(ctx context.Context, channelID, requesterID, userID uuid.UUID) (*models.Channel, error) {
@@ -43,6 +44,13 @@ func (m *mockDMService) LeaveDM(ctx context.Context, channelID, userID uuid.UUID
 		return m.leaveDMFunc(ctx, channelID, userID)
 	}
 	return nil
+}
+
+func (m *mockDMService) TransferGroupDMOwnership(ctx context.Context, channelID, currentOwnerID, newOwnerID uuid.UUID) (*models.Channel, error) {
+	if m.transferFunc != nil {
+		return m.transferFunc(ctx, channelID, currentOwnerID, newOwnerID)
+	}
+	return nil, nil
 }
 
 type mockDMChannelService struct {
@@ -402,6 +410,75 @@ func setupDMTestApp(
 		}
 
 		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// PATCH /dms/:channelId/owner - Transfer Ownership
+	app.Patch("/dms/:channelId/owner", func(c *fiber.Ctx) error {
+		userID := c.Locals("userID").(uuid.UUID)
+
+		channelID, err := uuid.Parse(c.Params("channelId"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel ID",
+			})
+		}
+
+		var req struct {
+			UserID string `json:"user_id"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid request body",
+			})
+		}
+
+		if req.UserID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "user_id is required",
+			})
+		}
+
+		newOwnerID, err := uuid.Parse(req.UserID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid user_id",
+			})
+		}
+
+		// Verify user is participant
+		channels, err := channelSvc.GetUserDMs(c.Context(), userID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		isParticipant := false
+		for _, ch := range channels {
+			if ch.ID == channelID && ch.Type == models.ChannelTypeGroupDM {
+				isParticipant = true
+				break
+			}
+		}
+		if !isParticipant {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "you are not a participant of this group DM",
+			})
+		}
+
+		channel, err := dmSvc.TransferGroupDMOwnership(c.Context(), channelID, userID, newOwnerID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"id":         channel.ID,
+			"type":       channel.Type,
+			"owner_id":   channel.OwnerID,
+			"recipients": channel.Recipients,
+		})
 	})
 
 	return app
@@ -861,6 +938,129 @@ func TestLeaveDM_InvalidChannelID(t *testing.T) {
 	t.Cleanup(func() { _ = app.Shutdown() })
 
 	req := httptest.NewRequest("DELETE", "/dms/not-a-uuid", nil)
+	req.Header.Set("X-Test-User-ID", "11111111-1111-1111-1111-111111111111")
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.Contains(t, result["error"], "invalid channel ID")
+}
+
+// Test TransferOwnership - Success
+func TestTransferOwnership_Success(t *testing.T) {
+	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	channelID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	newOwnerID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	ownerPtr := newOwnerID
+
+	dmSvc := &mockDMService{
+		transferFunc: func(ctx context.Context, chID, currentOwnerID, newOwner uuid.UUID) (*models.Channel, error) {
+			assert.Equal(t, channelID, chID)
+			assert.Equal(t, testUserID, currentOwnerID)
+			assert.Equal(t, newOwnerID, newOwner)
+			return &models.Channel{
+				ID:         channelID,
+				Type:       models.ChannelTypeGroupDM,
+				OwnerID:    &ownerPtr,
+				Recipients: []uuid.UUID{testUserID, newOwnerID},
+			}, nil
+		},
+	}
+
+	channelSvc := &mockDMChannelService{
+		getUserDMsFunc: func(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
+			return []*models.Channel{
+				{ID: channelID, Type: models.ChannelTypeGroupDM},
+			}, nil
+		},
+	}
+
+	app := setupDMTestApp(dmSvc, channelSvc, &mockDMMessageService{})
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := fmt.Sprintf(`{"user_id":"%s"}`, newOwnerID.String())
+	req := httptest.NewRequest("PATCH", fmt.Sprintf("/dms/%s/owner", channelID.String()), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", testUserID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.Equal(t, channelID.String(), result["id"])
+}
+
+// Test TransferOwnership - Not participant
+func TestTransferOwnership_NotParticipant(t *testing.T) {
+	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	channelID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	newOwnerID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+
+	channelSvc := &mockDMChannelService{
+		getUserDMsFunc: func(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
+			return []*models.Channel{}, nil // Not a participant
+		},
+	}
+
+	app := setupDMTestApp(&mockDMService{}, channelSvc, &mockDMMessageService{})
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := fmt.Sprintf(`{"user_id":"%s"}`, newOwnerID.String())
+	req := httptest.NewRequest("PATCH", fmt.Sprintf("/dms/%s/owner", channelID.String()), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", testUserID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
+}
+
+// Test TransferOwnership - Missing user_id
+func TestTransferOwnership_MissingUserID(t *testing.T) {
+	testUserID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	channelID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+
+	channelSvc := &mockDMChannelService{
+		getUserDMsFunc: func(ctx context.Context, userID uuid.UUID) ([]*models.Channel, error) {
+			return []*models.Channel{
+				{ID: channelID, Type: models.ChannelTypeGroupDM},
+			}, nil
+		},
+	}
+
+	app := setupDMTestApp(&mockDMService{}, channelSvc, &mockDMMessageService{})
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{}`
+	req := httptest.NewRequest("PATCH", fmt.Sprintf("/dms/%s/owner", channelID.String()), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", testUserID.String())
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.Contains(t, result["error"], "user_id is required")
+}
+
+// Test TransferOwnership - Invalid channel ID
+func TestTransferOwnership_InvalidChannelID(t *testing.T) {
+	app := setupDMTestApp(&mockDMService{}, &mockDMChannelService{}, &mockDMMessageService{})
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"user_id":"22222222-2222-2222-2222-222222222222"}`
+	req := httptest.NewRequest("PATCH", "/dms/not-a-uuid/owner", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Test-User-ID", "11111111-1111-1111-1111-111111111111")
 
 	resp, err := app.Test(req, -1)
