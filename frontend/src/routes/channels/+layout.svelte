@@ -101,7 +101,6 @@
 	}
 
 	onMount(async () => {
-		console.log('[Layout] onMount, isAuthenticated:', $isAuthenticated);
 		if (!$isAuthenticated) {
 			goto('/login');
 			return;
@@ -109,13 +108,11 @@
 
 		// Force load servers and DM channels on mount
 		// Use await to ensure they complete before render
-		console.log('[Layout] Loading servers and DM channels...');
 		try {
 			await Promise.all([
 				loadServers(),
 				loadDMChannels()
 			]);
-			console.log('[Layout] Data loaded successfully');
 		} catch (error) {
 			console.error('[Layout] Failed to load data:', error);
 		}
@@ -160,7 +157,6 @@
 
 	function handlePopoutCall(event: CustomEvent<{ userId: string; type: 'voice' | 'video' }>) {
 		// TODO: Initiate call with user
-		console.log('Call user:', event.detail.userId, event.detail.type);
 		popoutStore.close();
 	}
 
