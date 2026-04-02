@@ -10,6 +10,12 @@
 - [ ] **[LOW]** If federation in scope: add per-homeserver federation rate limits
 - [ ] **[FUTURE]** Graduated sanctions engine (rate limit → soft mute → temp ban → suspension)
 
+## 2026-04-02 Critical Competitive Gaps
+
+- [ ] **[P0]** Feature: AI-Powered Smart Notifications — Context-aware notification intelligence for mobile engagement and reduced notification fatigue (8-12 weeks)
+- [ ] **[P0]** Feature: Community Growth Engine — AI-powered community discovery, member matching, and growth optimization for user acquisition (10-14 weeks)
+- [ ] **[P1]** Feature: Collaborative Content Tools — Real-time collaborative documents, whiteboards, and wikis to differentiate from Discord (8-10 weeks)
+
 ## 2026-04-02 Competitive Pipeline
 
 - [ ] **[P0]** Feature: Premium Subscription System — Tiered subscriptions (Basic $2.99, Premium $9.99) with server boosts for sustainable monetization and business model
