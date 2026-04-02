@@ -171,6 +171,22 @@ type StickerRepository interface {
 	GetGlobal(ctx context.Context) ([]*models.Sticker, error)
 	GetAvailable(ctx context.Context, serverID *uuid.UUID) ([]*models.Sticker, error)
 	Search(ctx context.Context, query string, serverID *uuid.UUID) ([]*models.Sticker, error)
+
+	// Sticker Pack operations
+	CreatePack(ctx context.Context, pack *models.StickerPack) error
+	GetPackByID(ctx context.Context, id uuid.UUID) (*models.StickerPack, error)
+	UpdatePack(ctx context.Context, pack *models.StickerPack) error
+	DeletePack(ctx context.Context, id uuid.UUID) error
+	GetPacksByServer(ctx context.Context, serverID uuid.UUID) ([]*models.StickerPack, error)
+	GetGlobalPacks(ctx context.Context) ([]*models.StickerPack, error)
+	GetPacksByTier(ctx context.Context, tier models.StickerPackTier) ([]*models.StickerPack, error)
+	GetAvailablePacks(ctx context.Context, serverID *uuid.UUID, userTier models.StickerPackTier) ([]*models.StickerPack, error)
+
+	// Pack-Sticker relationship operations
+	AddStickerToPack(ctx context.Context, packID, stickerID uuid.UUID, position int, isDefault bool) error
+	RemoveStickerFromPack(ctx context.Context, packID, stickerID uuid.UUID) error
+	GetStickersInPack(ctx context.Context, packID uuid.UUID) ([]*models.Sticker, error)
+	GetPacksContainingSticker(ctx context.Context, stickerID uuid.UUID) ([]*models.StickerPack, error)
 }
 
 type QuotaService struct {
