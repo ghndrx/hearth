@@ -16,6 +16,12 @@
 - [ ] **[P0]** Feature: Advanced Sticker System — Custom server stickers, animated stickers, and premium sticker packs for engagement and revenue
 - [ ] **[P0]** Feature: Stage Channels — Live audio broadcast channels with speaker management for large community events and content creation
 
+## 2026-04-02 Critical Feature Gaps Analysis
+
+- [ ] **[P0]** Feature: Private Threads — Thread visibility control for sensitive conversations within channel context for enterprise and community management
+- [ ] **[P0]** Feature: Temporary Bans — Auto-expiring server bans with duration-based moderation actions for proportional punishment
+- [ ] **[P1]** Feature: Message Edit History — Track and display complete edit history for transparency and accountability in communities
+
 ## 2026-03-29 Vulnerability Findings
 
 ### P0 Security Issues
