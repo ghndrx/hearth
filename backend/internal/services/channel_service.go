@@ -317,6 +317,10 @@ func (s *ChannelService) UpdateGroupDM(
 		channel.Name = *updates.Name
 	}
 
+	if updates.Icon != nil {
+		channel.Icon = updates.Icon
+	}
+
 	if err := s.channelRepo.Update(ctx, channel); err != nil {
 		return nil, err
 	}
@@ -326,7 +330,8 @@ func (s *ChannelService) UpdateGroupDM(
 		_ = s.cache.DeleteChannel(ctx, channelID)
 	}
 
-	s.eventBus.Publish("channel.updated", &ChannelUpdatedEvent{
+	// Publish group DM specific update event for WebSocket broadcast
+	s.eventBus.Publish(events.GroupDMUpdated, &GroupDMUpdatedEvent{
 		Channel: channel,
 	})
 
@@ -645,7 +650,13 @@ type GroupDMCreatedEvent struct {
 	Channel *models.Channel
 }
 
+// GroupDMUpdatedEvent is published when a group DM is updated
+type GroupDMUpdatedEvent struct {
+	Channel *models.Channel
+}
+
 // GroupDMUpdate describes fields that can be updated on a group DM
 type GroupDMUpdate struct {
 	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Icon *string `json:"icon,omitempty" validate:"omitempty,max=100"`
 }

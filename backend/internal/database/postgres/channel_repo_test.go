@@ -39,6 +39,7 @@ func TestChannelRepository_Create(t *testing.T) {
 		Slowmode:    0,
 		NSFW:        false,
 		E2EEEnabled: false,
+		Icon:        nil,
 		CreatedAt:   time.Now(),
 	}
 
@@ -46,7 +47,7 @@ func TestChannelRepository_Create(t *testing.T) {
 		WithArgs(
 			channel.ID, channel.ServerID, channel.Name, channel.Topic, channel.Type,
 			channel.Position, channel.ParentID, channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
-			channel.CreatedAt,
+			channel.Icon, channel.CreatedAt,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -66,6 +67,7 @@ func TestChannelRepository_Create_WithRecipients(t *testing.T) {
 		Type:        models.ChannelTypeDM,
 		E2EEEnabled: true,
 		Recipients:  []uuid.UUID{user1, user2},
+		Icon:        nil,
 		CreatedAt:   time.Now(),
 	}
 
@@ -73,7 +75,7 @@ func TestChannelRepository_Create_WithRecipients(t *testing.T) {
 		WithArgs(
 			channel.ID, channel.ServerID, channel.Name, channel.Topic, channel.Type,
 			channel.Position, channel.ParentID, channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
-			channel.CreatedAt,
+			channel.Icon, channel.CreatedAt,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -101,6 +103,7 @@ func TestChannelRepository_Create_RecipientInsertFails(t *testing.T) {
 		Type:        models.ChannelTypeDM,
 		E2EEEnabled: true,
 		Recipients:  []uuid.UUID{user1, user2},
+		Icon:        nil,
 		CreatedAt:   time.Now(),
 	}
 
@@ -108,7 +111,7 @@ func TestChannelRepository_Create_RecipientInsertFails(t *testing.T) {
 		WithArgs(
 			channel.ID, channel.ServerID, channel.Name, channel.Topic, channel.Type,
 			channel.Position, channel.ParentID, channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
-			channel.CreatedAt,
+			channel.Icon, channel.CreatedAt,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -139,6 +142,7 @@ func TestChannelRepository_Create_AllRecipientsInsertFail(t *testing.T) {
 		Type:        models.ChannelTypeDM,
 		E2EEEnabled: true,
 		Recipients:  []uuid.UUID{user1, user2},
+		Icon:        nil,
 		CreatedAt:   time.Now(),
 	}
 
@@ -146,7 +150,7 @@ func TestChannelRepository_Create_AllRecipientsInsertFail(t *testing.T) {
 		WithArgs(
 			channel.ID, channel.ServerID, channel.Name, channel.Topic, channel.Type,
 			channel.Position, channel.ParentID, channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
-			channel.CreatedAt,
+			channel.Icon, channel.CreatedAt,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -171,6 +175,7 @@ func TestChannelRepository_Create_ChannelInsertFails(t *testing.T) {
 	channel := &models.Channel{
 		ID:        uuid.New(),
 		Type:      models.ChannelTypeText,
+		Icon:      nil,
 		CreatedAt: time.Now(),
 	}
 
@@ -178,7 +183,7 @@ func TestChannelRepository_Create_ChannelInsertFails(t *testing.T) {
 		WithArgs(
 			channel.ID, channel.ServerID, channel.Name, channel.Topic, channel.Type,
 			channel.Position, channel.ParentID, channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
-			channel.CreatedAt,
+			channel.Icon, channel.CreatedAt,
 		).
 		WillReturnError(fmt.Errorf("insert failed"))
 
@@ -190,7 +195,7 @@ func TestChannelRepository_Create_ChannelInsertFails(t *testing.T) {
 
 var channelColumns = []string{
 	"id", "server_id", "parent_id", "owner_id", "type", "name", "topic",
-	"position", "slowmode", "nsfw", "e2ee_enabled", "bitrate", "user_limit",
+	"position", "slowmode", "nsfw", "e2ee_enabled", "icon", "bitrate", "user_limit",
 	"rtc_region", "last_message_id", "created_at",
 }
 
@@ -204,7 +209,7 @@ func TestChannelRepository_GetByID(t *testing.T) {
 
 	rows := sqlmock.NewRows(channelColumns).AddRow(
 		channelID, serverID, nil, nil, models.ChannelTypeText, "general", "General chat",
-		0, 0, false, false, nil, nil,
+		0, 0, false, false, nil, nil, nil,
 		nil, nil, now,
 	)
 
@@ -264,7 +269,7 @@ func TestChannelRepository_GetByID_DMLoadsRecipients(t *testing.T) {
 
 	channelRows := sqlmock.NewRows(channelColumns).AddRow(
 		channelID, nil, nil, nil, models.ChannelTypeDM, "", "",
-		0, 0, false, true, nil, nil,
+		0, 0, false, true, nil, nil, nil,
 		nil, nil, now,
 	)
 
@@ -302,7 +307,7 @@ func TestChannelRepository_GetByID_GroupDMLoadsRecipients(t *testing.T) {
 
 	channelRows := sqlmock.NewRows(channelColumns).AddRow(
 		channelID, nil, nil, &ownerID, models.ChannelTypeGroupDM, "Group Chat", "",
-		0, 0, false, false, nil, nil,
+		0, 0, false, false, nil, nil, nil,
 		nil, nil, now,
 	)
 
@@ -336,7 +341,7 @@ func TestChannelRepository_GetByID_RecipientLoadFails(t *testing.T) {
 
 	channelRows := sqlmock.NewRows(channelColumns).AddRow(
 		channelID, nil, nil, nil, models.ChannelTypeDM, "", "",
-		0, 0, false, true, nil, nil,
+		0, 0, false, true, nil, nil, nil,
 		nil, nil, now,
 	)
 
@@ -365,7 +370,7 @@ func TestChannelRepository_GetByID_TextChannelSkipsRecipients(t *testing.T) {
 
 	rows := sqlmock.NewRows(channelColumns).AddRow(
 		channelID, serverID, nil, nil, models.ChannelTypeText, "general", "",
-		0, 0, false, false, nil, nil,
+		0, 0, false, false, nil, nil, nil,
 		nil, nil, now,
 	)
 
@@ -394,12 +399,13 @@ func TestChannelRepository_Update(t *testing.T) {
 		Slowmode:    5,
 		NSFW:        true,
 		E2EEEnabled: true,
+		Icon:        nil,
 	}
 
 	mock.ExpectExec("UPDATE channels SET").
 		WithArgs(
 			channel.ID, channel.Name, channel.Topic, channel.Position, channel.ParentID,
-			channel.Slowmode, channel.NSFW, channel.E2EEEnabled,
+			channel.Slowmode, channel.NSFW, channel.E2EEEnabled, channel.Icon,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -433,8 +439,8 @@ func TestChannelRepository_GetByServerID(t *testing.T) {
 	now := time.Now()
 
 	rows := sqlmock.NewRows(channelColumns).
-		AddRow(ch1, serverID, nil, nil, models.ChannelTypeText, "general", "", 0, 0, false, false, nil, nil, nil, nil, now).
-		AddRow(ch2, serverID, nil, nil, models.ChannelTypeText, "random", "", 1, 0, false, false, nil, nil, nil, nil, now)
+		AddRow(ch1, serverID, nil, nil, models.ChannelTypeText, "general", "", 0, 0, false, false, nil, nil, nil, nil, nil, now).
+		AddRow(ch2, serverID, nil, nil, models.ChannelTypeText, "random", "", 1, 0, false, false, nil, nil, nil, nil, nil, now)
 
 	mock.ExpectQuery("SELECT \\* FROM channels WHERE server_id = \\$1 ORDER BY position").
 		WithArgs(serverID).
@@ -461,13 +467,13 @@ func TestChannelRepository_GetUserDMs(t *testing.T) {
 
 	dmColumns := []string{
 		"id", "server_id", "parent_id", "owner_id", "type", "name", "topic",
-		"position", "slowmode", "nsfw", "e2ee_enabled", "bitrate", "user_limit",
+		"position", "slowmode", "nsfw", "e2ee_enabled", "icon", "bitrate", "user_limit",
 		"rtc_region", "last_message_id", "created_at",
 	}
 
 	channelRows := sqlmock.NewRows(dmColumns).
-		AddRow(ch1, nil, nil, nil, models.ChannelTypeDM, "", "", 0, 0, false, true, nil, nil, nil, nil, now).
-		AddRow(ch2, nil, nil, nil, models.ChannelTypeGroupDM, "Group", "", 0, 0, false, false, nil, nil, nil, nil, now)
+		AddRow(ch1, nil, nil, nil, models.ChannelTypeDM, "", "", 0, 0, false, true, nil, nil, nil, nil, nil, now).
+		AddRow(ch2, nil, nil, nil, models.ChannelTypeGroupDM, "Group", "", 0, 0, false, false, nil, nil, nil, nil, nil, now)
 
 	mock.ExpectQuery("SELECT .+ FROM channels c").
 		WithArgs(userID, models.ChannelTypeDM, models.ChannelTypeGroupDM).
@@ -510,12 +516,12 @@ func TestChannelRepository_GetUserDMs_RecipientLoadFails(t *testing.T) {
 
 	dmColumns := []string{
 		"id", "server_id", "parent_id", "owner_id", "type", "name", "topic",
-		"position", "slowmode", "nsfw", "e2ee_enabled", "bitrate", "user_limit",
+		"position", "slowmode", "nsfw", "e2ee_enabled", "icon", "bitrate", "user_limit",
 		"rtc_region", "last_message_id", "created_at",
 	}
 
 	channelRows := sqlmock.NewRows(dmColumns).
-		AddRow(ch1, nil, nil, nil, models.ChannelTypeDM, "", "", 0, 0, false, true, nil, nil, nil, nil, now)
+		AddRow(ch1, nil, nil, nil, models.ChannelTypeDM, "", "", 0, 0, false, true, nil, nil, nil, nil, nil, now)
 
 	mock.ExpectQuery("SELECT .+ FROM channels c").
 		WithArgs(userID, models.ChannelTypeDM, models.ChannelTypeGroupDM).
@@ -583,7 +589,7 @@ func TestChannelRepository_GetDMChannel(t *testing.T) {
 	// Second query: GetByID
 	channelRows := sqlmock.NewRows(channelColumns).AddRow(
 		channelID, nil, nil, nil, models.ChannelTypeDM, "", "",
-		0, 0, false, true, nil, nil,
+		0, 0, false, true, nil, nil, nil,
 		nil, nil, now,
 	)
 	mock.ExpectQuery("SELECT \\* FROM channels WHERE id = \\$1").

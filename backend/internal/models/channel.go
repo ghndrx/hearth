@@ -45,7 +45,8 @@ type Channel struct {
 	UserLimit     *int        `json:"user_limit,omitempty" db:"user_limit"`
 	RTCRegion     *string     `json:"rtc_region,omitempty" db:"rtc_region"`
 	LastMessageID *uuid.UUID  `json:"last_message_id,omitempty" db:"last_message_id"`
-	CreatedAt     time.Time   `json:"created_at" db:"created_at"`
+	Icon           *string     `json:"icon,omitempty" db:"icon"` // For group DMs
+	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
 
 	// Populated from joins
 	PermissionOverrides []PermissionOverride `json:"permission_overrides,omitempty"`
@@ -193,4 +194,5 @@ type CreateGroupDMRequest struct {
 // UpdateGroupDMRequest is the input for updating a group DM
 type UpdateGroupDMRequest struct {
 	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Icon *string `json:"icon,omitempty" validate:"omitempty,max=100"`
 }

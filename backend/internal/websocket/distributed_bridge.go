@@ -110,6 +110,7 @@ func (b *DistributedEventBridge) registerHandlers() {
 	b.bus.Subscribe(events.DMRecipientAdded, b.onDMRecipientAdded)
 	b.bus.Subscribe(events.DMRecipientRemoved, b.onDMRecipientRemoved)
 	b.bus.Subscribe(events.GroupDMCreated, b.onGroupDMCreated)
+	b.bus.Subscribe(events.GroupDMUpdated, b.onGroupDMUpdated)
 }
 
 // Message event handlers
@@ -614,6 +615,16 @@ func (b *DistributedEventBridge) onGroupDMCreated(event events.Event) {
 	}
 	log.Printf("[DistributedEventBridge] Broadcasting GROUP_DM_CREATE for channel %s (distributed)", data.Channel.ID)
 	b.sendToChannelDistributed(data.Channel.ID, EventTypeChannelCreate, b.channelToWS(data.Channel))
+}
+
+func (b *DistributedEventBridge) onGroupDMUpdated(event events.Event) {
+	data, ok := event.Data.(*services.GroupDMUpdatedEvent)
+	if !ok {
+		log.Printf("[DistributedEventBridge] onGroupDMUpdated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[DistributedEventBridge] Broadcasting GROUP_DM_UPDATE for channel %s (distributed)", data.Channel.ID)
+	b.sendToChannelDistributed(data.Channel.ID, EventGroupDMUpdate, b.channelToWS(data.Channel))
 }
 
 func (b *DistributedEventBridge) onDMRecipientAdded(event events.Event) {

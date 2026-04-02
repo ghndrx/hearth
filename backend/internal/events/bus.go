@@ -244,4 +244,5 @@ const (
 	DMRecipientAdded   = "dm.recipient_add"
 	DMRecipientRemoved = "dm.recipient_remove"
 	GroupDMCreated     = "group_dm.created"
+	GroupDMUpdated     = "group_dm.updated"
 )
