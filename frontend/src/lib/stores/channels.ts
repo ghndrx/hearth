@@ -367,6 +367,18 @@ export async function leaveDM(channelId: string) {
 	}
 }
 
+export async function transferGroupDMOwnership(channelId: string, newOwnerId: string) {
+	try {
+		const response = await api.patch<BackendChannel>(`/dms/${channelId}/owner`, { user_id: newOwnerId });
+		const channel = normalizeChannel(response);
+		channels.update(c => c.map(ch => ch.id === channelId ? channel : ch));
+		return channel;
+	} catch (error) {
+		console.error('Failed to transfer group DM ownership:', error);
+		throw error;
+	}
+}
+
 // Announcement channel following
 export interface ChannelFollower {
 	id: string;

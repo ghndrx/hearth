@@ -16,6 +16,7 @@ type DMServiceInterface interface {
 	AddUserToGroupDM(ctx context.Context, channelID, requesterID, userID uuid.UUID) (*models.Channel, error)
 	RemoveUserFromGroupDM(ctx context.Context, channelID, requesterID, userID uuid.UUID) error
 	LeaveDM(ctx context.Context, channelID, userID uuid.UUID) error
+	TransferGroupDMOwnership(ctx context.Context, channelID, currentOwnerID, newOwnerID uuid.UUID) (*models.Channel, error)
 }
 
 // DMHandler handles DM-specific API endpoints
@@ -466,6 +467,66 @@ func (h *DMHandler) LeaveDM(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// TransferOwnership transfers ownership of a group DM to another member
+func (h *DMHandler) TransferOwnership(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+
+	channelIDStr := c.Params("channelId")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		return InvalidUUID(c, "channelId")
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return ParseError(c, err)
+	}
+
+	if req.UserID == "" {
+		return BadRequest(c, "user_id is required")
+	}
+
+	newOwnerID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return InvalidUUID(c, "user_id")
+	}
+
+	// Verify user is a participant in this group DM
+	channels, err := h.channelService.GetUserDMs(c.Context(), userID)
+	if err != nil {
+		return InternalError(c, "failed to verify DM membership")
+	}
+
+	found := false
+	for _, ch := range channels {
+		if ch.ID == channelID && ch.Type == models.ChannelTypeGroupDM {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return Forbidden(c, "you are not a participant in this group DM")
+	}
+
+	channel, err := h.dmService.TransferGroupDMOwnership(c.Context(), channelID, userID, newOwnerID)
+	if err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	recipients := h.resolveRecipients(c.Context(), channel.Recipients, uuid.Nil)
+	return c.JSON(DMChannelResponse{
+		ID:            channel.ID,
+		Type:          channel.Type,
+		Name:          channel.Name,
+		OwnerID:       channel.OwnerID,
+		Recipients:    recipients,
+		LastMessageID: channel.LastMessageID,
+		CreatedAt:     channel.CreatedAt,
+	})
 }
 
 // resolveRecipients converts recipient UUIDs to UserResponse objects
