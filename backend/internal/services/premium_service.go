@@ -25,6 +25,7 @@ type PremiumRepository interface {
 	// Subscription operations
 	CreateSubscription(ctx context.Context, sub *models.Subscription) error
 	GetSubscription(ctx context.Context, userID uuid.UUID) (*models.Subscription, error)
+	GetSubscriptionByStripeID(ctx context.Context, stripeSubID string) (*models.Subscription, error)
 	UpdateSubscription(ctx context.Context, sub *models.Subscription) error
 	DeleteSubscription(ctx context.Context, userID uuid.UUID) error
 

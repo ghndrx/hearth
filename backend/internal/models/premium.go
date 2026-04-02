@@ -11,7 +11,7 @@ type PremiumTier string
 
 const (
 	TierFree    PremiumTier = "free"
-	TierBasic   PremiumTier = "basic"   // $4.99/month - 2 server boosts
+	TierBasic   PremiumTier = "basic"   // $2.99/month - 2 server boosts
 	TierPremium PremiumTier = "premium" // $9.99/month - 2 boosts + premium features
 )
 
@@ -47,18 +47,21 @@ type PaymentMethod struct {
 
 // Subscription represents a user's premium subscription
 type Subscription struct {
-	ID            uuid.UUID      `json:"id" db:"id"`
-	UserID        uuid.UUID      `json:"user_id" db:"user_id"`
-	Tier          PremiumTier    `json:"tier" db:"tier"`
-	Status        SubStatus      `json:"status" db:"status"`
-	BoostsUsed    int            `json:"boosts_used" db:"boosts_used"`
-	BoostsTotal   int            `json:"boosts_total" db:"boosts_total"`
-	NextBilling   *time.Time     `json:"next_billing,omitempty" db:"next_billing"`
-	CanceledAt    *time.Time     `json:"canceled_at,omitempty" db:"canceled_at"`
-	PaymentMethod *PaymentMethod `json:"payment_method,omitempty"`
-	ExternalID    string         `json:"external_id,omitempty" db:"external_id"` // Stripe/Paddle customer ID
-	CreatedAt     time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at" db:"updated_at"`
+	ID                  uuid.UUID      `json:"id" db:"id"`
+	UserID              uuid.UUID      `json:"user_id" db:"user_id"`
+	Tier                PremiumTier    `json:"tier" db:"tier"`
+	Status              SubStatus      `json:"status" db:"status"`
+	BoostsUsed          int            `json:"boosts_used" db:"boosts_used"`
+	BoostsTotal         int            `json:"boosts_total" db:"boosts_total"`
+	NextBilling         *time.Time     `json:"next_billing,omitempty" db:"next_billing"`
+	CurrentPeriodStart  *time.Time     `json:"current_period_start,omitempty" db:"current_period_start"`
+	CurrentPeriodEnd    *time.Time     `json:"current_period_end,omitempty" db:"current_period_end"`
+	CanceledAt          *time.Time     `json:"canceled_at,omitempty" db:"canceled_at"`
+	PaymentMethod       *PaymentMethod `json:"payment_method,omitempty"`
+	StripeSubscriptionID string        `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
+	ExternalID          string         `json:"external_id,omitempty" db:"external_id"` // Stripe customer ID
+	CreatedAt           time.Time      `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at" db:"updated_at"`
 }
 
 // ServerBoost represents a user's boost applied to a server
@@ -91,7 +94,7 @@ type PremiumFeatures struct {
 	Tier         PremiumTier `json:"tier"`
 	MonthlyPrice float64     `json:"monthly_price"`
 
-	// Basic Tier ($4.99/month)
+	// Basic Tier ($2.99/month)
 	ServerBoosts   int   `json:"server_boosts"`    // 2 boosts
 	FileUploadSize int64 `json:"file_upload_size"` // 50MB vs 8MB
 
@@ -174,7 +177,7 @@ var ServerBoostPerks = map[int]ServerPerks{
 // PremiumTierPricing defines pricing for each tier
 var PremiumTierPricing = map[PremiumTier]float64{
 	TierFree:    0,
-	TierBasic:   4.99,
+	TierBasic:   2.99,
 	TierPremium: 9.99,
 }
 

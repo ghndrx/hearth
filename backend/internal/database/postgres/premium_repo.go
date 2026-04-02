@@ -23,13 +23,15 @@ func NewPremiumRepository(db *sqlx.DB) *PremiumRepository {
 
 func (r *PremiumRepository) CreateSubscription(ctx context.Context, sub *models.Subscription) error {
 	query := `
-		INSERT INTO subscriptions (id, user_id, tier, status, boosts_used, boosts_total, 
-			next_billing, canceled_at, external_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO subscriptions (id, user_id, tier, status, boosts_used, boosts_total,
+			next_billing, current_period_start, current_period_end, canceled_at,
+			stripe_subscription_id, external_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		sub.ID, sub.UserID, sub.Tier, sub.Status, sub.BoostsUsed, sub.BoostsTotal,
-		sub.NextBilling, sub.CanceledAt, sub.ExternalID, sub.CreatedAt, sub.UpdatedAt,
+		sub.NextBilling, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, sub.CanceledAt,
+		sub.StripeSubscriptionID, sub.ExternalID, sub.CreatedAt, sub.UpdatedAt,
 	)
 	return err
 }
@@ -37,8 +39,9 @@ func (r *PremiumRepository) CreateSubscription(ctx context.Context, sub *models.
 func (r *PremiumRepository) GetSubscription(ctx context.Context, userID uuid.UUID) (*models.Subscription, error) {
 	var sub models.Subscription
 	query := `
-		SELECT id, user_id, tier, status, boosts_used, boosts_total, next_billing, 
-			canceled_at, external_id, created_at, updated_at
+		SELECT id, user_id, tier, status, boosts_used, boosts_total, next_billing,
+			current_period_start, current_period_end, canceled_at,
+			stripe_subscription_id, external_id, created_at, updated_at
 		FROM subscriptions WHERE user_id = $1
 	`
 	err := r.db.GetContext(ctx, &sub, query, userID)
@@ -48,16 +51,33 @@ func (r *PremiumRepository) GetSubscription(ctx context.Context, userID uuid.UUI
 	return &sub, err
 }
 
+func (r *PremiumRepository) GetSubscriptionByStripeID(ctx context.Context, stripeSubID string) (*models.Subscription, error) {
+	var sub models.Subscription
+	query := `
+		SELECT id, user_id, tier, status, boosts_used, boosts_total, next_billing,
+			current_period_start, current_period_end, canceled_at,
+			stripe_subscription_id, external_id, created_at, updated_at
+		FROM subscriptions WHERE stripe_subscription_id = $1
+	`
+	err := r.db.GetContext(ctx, &sub, query, stripeSubID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &sub, err
+}
+
 func (r *PremiumRepository) UpdateSubscription(ctx context.Context, sub *models.Subscription) error {
 	query := `
-		UPDATE subscriptions SET 
+		UPDATE subscriptions SET
 			tier = $2, status = $3, boosts_used = $4, boosts_total = $5,
-			next_billing = $6, canceled_at = $7, updated_at = $8
+			next_billing = $6, current_period_start = $7, current_period_end = $8,
+			canceled_at = $9, stripe_subscription_id = $10, updated_at = $11
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		sub.ID, sub.Tier, sub.Status, sub.BoostsUsed, sub.BoostsTotal,
-		sub.NextBilling, sub.CanceledAt, time.Now(),
+		sub.NextBilling, sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
+		sub.CanceledAt, sub.StripeSubscriptionID, time.Now(),
 	)
 	return err
 }
