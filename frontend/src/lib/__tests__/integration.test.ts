@@ -12,13 +12,12 @@ describe('Cross-Module Integration Tests', () => {
 	});
 
 	afterEach(() => {
-		vi.resetModules();
+		vi.restoreAllMocks();
 	});
 
 	describe('API + Store integration', () => {
 		it('should handle API error in store context', async () => {
 			const mockFetch = vi.fn().mockRejectedValueOnce(new Error('Network error'));
-			vi.stubGlobal('fetch', mockFetch);
 
 			try {
 				await mockFetch('/test');
@@ -26,8 +25,6 @@ describe('Cross-Module Integration Tests', () => {
 			} catch (e) {
 				expect(e).toBeInstanceOf(Error);
 			}
-
-			vi.unstubAllGlobals();
 		});
 
 		it('should sync API response to store', async () => {
@@ -37,29 +34,17 @@ describe('Cross-Module Integration Tests', () => {
 			};
 
 			const mockFetch = vi.fn().mockResolvedValueOnce(mockResponse);
-			vi.stubGlobal('fetch', mockFetch);
 
 			const response = await mockFetch('/users/profile');
 			const data = await response.json();
 
 			expect(data.user).toBe('alice');
 			expect(data.status).toBe('online');
-
-			vi.unstubAllGlobals();
 		});
 	});
 
 	describe('Gateway + Store integration', () => {
 		it('should dispatch gateway events to stores', async () => {
-			const mockWs = {};
-			const MockWebSocket = vi.fn(() => mockWs) as any;
-			(MockWebSocket as any).OPEN = 1;
-			(MockWebSocket as any).CONNECTING = 0;
-			(MockWebSocket as any).CLOSING = 2;
-			MockWebSocket.OPEN = 1;
-			MockWebSocket.CONNECTING = 0;
-			vi.stubGlobal('WebSocket', MockWebSocket);
-
 			const messageData = {
 				id: '123',
 				content: 'Test message',
@@ -73,8 +58,6 @@ describe('Cross-Module Integration Tests', () => {
 
 			expect(eventPayload.t).toBe('MESSAGE_CREATE');
 			expect(eventPayload.d.content).toBe('Test message');
-
-			vi.unstubAllGlobals();
 		});
 	});
 
