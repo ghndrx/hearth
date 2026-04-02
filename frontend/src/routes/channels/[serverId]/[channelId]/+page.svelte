@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { currentServer, servers } from '$lib/stores/servers';
 	import { currentChannel, loadServerChannels, channels } from '$lib/stores/channels';
-	import { sendMessage } from '$lib/stores/messages';
+	import { sendMessage, loadMessages } from '$lib/stores/messages';
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import { fetchUnreadState, markChannelRead } from '$lib/stores/unread';
 	import MessageList from '$lib/components/MessageList.svelte';
@@ -92,9 +92,16 @@
 		}
 	}
 	
-	function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
+	async function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
 		showForumPostModal = false;
-		// TODO: Navigate to the created post or refresh the list
+		// Refresh the message list to show the new forum post
+		if ($currentChannel) {
+			try {
+				await loadMessages($currentChannel.id);
+			} catch (error) {
+				console.error('[Page] Failed to refresh messages after forum post creation:', error);
+			}
+		}
 	}
 </script>
 
