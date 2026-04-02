@@ -2,6 +2,60 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-04-02](https://github.com/ghndrx/hearth/compare/2026-04-01...HEAD)
+
+### Features
+* feat: implement group direct messages for 3-50 person conversations
+* feat: add critical competitive feature PRDs - group DMs, channel categories, activity presence
+* feat: implement interactive message components (buttons, dropdowns, modals)
+* feat(events): add scheduled events with RSVP system and notifications
+* feat(messages): add interactive message components (buttons, dropdowns, modals)
+* feat(messages): add interactive message components (buttons, dropdowns, modals)
+* feat: enhanced server discovery with search and recommendations
+* feat: add public server discovery, search, categories, and recommendations
+* feature/message file preview (#33)
+* feat(message): add message forwarding functionality (#59)
+
+### Bug Fixes
+* fix(frontend): replace empty catch blocks with debug logging for media permission denial (#71)
+* fix(frontend): use ES module imports in syncStatus test mocks (#68)
+* fix(frontend): switch test environment from jsdom to happy-dom (#66)
+* fix(frontend): remove invalid eslint-disable for non-existent svelte rule (#67)
+* fix(frontend): remove vi.useRealTimers() calls that cause test timeouts (#65)
+* fix: resolve CI failures from feat(messages) merge (run #231) (#62)
+* fix/permission checks 20260401 (#64)
+* fix(frontend): resolve TypeScript type error in EventDetail.svelte permissions check
+* fix(backend): add missing mock methods for ComponentServiceInterface in tests
+* fix(frontend): use @ts-expect-error instead of @ts-ignore in discovery test
+* fix(frontend): resolve TypeScript type errors in role-service-permission-checks
+* fix(discovery): link server verification from discoverable_servers table (#29)
+* fix: add thread auto-archive handler and tests, update errors
+* fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
+* fix(a11y): add tabindex to soundboard picker dialog (#34)
+* fix: add MANAGE_EVENTS permission check for event management (#31)
+
+### Other Changes
+* chore: Tech debt cleanup - Remove debug console.log statements (#69)
+* fix(frontend): use ES module imports in syncStatus test mocks (#68)
+* fix(frontend): switch test environment from jsdom to happy-dom (#66)
+* fix(frontend): remove vi.useRealTimers() calls that cause test timeouts (#65)
+* chore: mark resolved Go CVE and Enhanced Server Discovery items done in task queue
+* chore/tech debt 20260401 (#63)
+* fix(backend): add missing mock methods for ComponentServiceInterface in tests
+* chore: add GitHub issues analysis for 2026-04-01
+* fix(frontend): use @ts-expect-error instead of @ts-ignore in discovery test
+* chore(frontend): regenerate package-lock.json for npm ci compatibility
+* fix: add thread auto-archive handler and tests, update errors
+* test(coverage): add invite tracking handler tests (#36)
+* fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
+* chore/tech debt 20260401 (#60)
+
+### Miscellaneous
+* security: fix G304 path traversal in local storage via os.Root (Go 1.24+) (#70)
+* continue rebase
+* security: fix G304 path traversal in local storage via os.Root (Go 1.24+) (#38)
+* security: fix SQL injection vulnerability and tech debt analysis (#37)
+
 ## [2026-04-01](https://github.com/ghndrx/hearth/compare/2026-03-31...HEAD)
 
 ### Features
