@@ -173,6 +173,49 @@ func (s *BillingService) CreateBillingPortalSession(ctx context.Context, userID 
 	return "https://mock-billing-portal.example.com/session/" + uuid.New().String(), nil
 }
 
+// GiftSubscription gifts a subscription to a recipient user
+// STUB: Not implemented - integrate with real payment provider before production
+func (s *BillingService) GiftSubscription(ctx context.Context, gifterUserID, recipientUserID uuid.UUID, tier models.PremiumTier, months int) (*models.Subscription, error) {
+	if tier == models.TierFree {
+		return nil, ErrInvalidTier
+	}
+
+	// Create a gifted subscription for the recipient
+	now := time.Now()
+	sub := &models.Subscription{
+		ID:          uuid.New(),
+		UserID:      recipientUserID,
+		Tier:        tier,
+		Status:      models.SubStatusActive,
+		BoostsUsed:  0,
+		BoostsTotal: models.TierBoostsTotal[tier],
+		NextBilling: calculateNextBillingForMonths(tier, months),
+		ExternalID:  "mock_gift_" + uuid.New().String(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := s.repo.CreateSubscription(ctx, sub); err != nil {
+		return nil, fmt.Errorf("failed to create gift subscription: %w", err)
+	}
+
+	// Update recipient's premium tier
+	if err := s.repo.UpdateUserPremiumTier(ctx, recipientUserID, tier); err != nil {
+		return nil, err
+	}
+
+	return sub, nil
+}
+
+// calculateNextBillingForMonths returns the billing date after a given number of months
+func calculateNextBillingForMonths(tier models.PremiumTier, months int) *time.Time {
+	if tier == models.TierFree || months <= 0 {
+		return nil
+	}
+	next := time.Now().AddDate(0, months, 0)
+	return &next
+}
+
 // GetSubscriptionByExternalID looks up a subscription by its external (Stripe) ID
 // STUB: Not implemented - implement for real webhook handling
 func (s *BillingService) GetSubscriptionByExternalID(ctx context.Context, externalID string) (*models.Subscription, error) {

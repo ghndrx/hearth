@@ -661,6 +661,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 
 	// Premium & Server Boosts (if handler is configured)
 	if h.Premium != nil {
+		// Plans endpoint is public (no auth required)
+		v1.Get("/premium/plans", h.Premium.GetPlans)
+
 		premium := api.Group("/premium")
 		premium.Get("/subscription", h.Premium.GetSubscription)
 		premium.Post("/subscribe", h.Premium.CreateSubscription)
@@ -671,6 +674,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		premium.Get("/features/:feature/check", h.Premium.CheckFeatureAccess)
 		premium.Get("/invoices", h.Premium.GetBillingInvoices)
 		premium.Get("/payment-methods", h.Premium.GetPaymentMethods)
+		premium.Post("/gift", h.Premium.GiftSubscription)
+		premium.Get("/billing-portal", h.Premium.GetBillingPortal)
 
 		// Server boost routes
 		servers.Post("/:id/boost", h.Premium.BoostServer)
