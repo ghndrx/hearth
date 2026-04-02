@@ -91,7 +91,8 @@ var (
 	ErrNotGroupDMOwner    = errors.New("only the group DM owner can perform this action")
 	ErrAlreadyDMRecipient = errors.New("user is already a recipient of this DM")
 	ErrNotDMRecipient     = errors.New("user is not a recipient of this DM")
-	ErrGroupDMFull        = errors.New("group DM can have at most 50 members")
+	ErrGroupDMFull              = errors.New("group DM can have at most 50 members")
+	ErrCannotTransferToNonMember = errors.New("cannot transfer ownership to a non-member")
 
 	// Cache errors
 	ErrCacheNotFound = errors.New("key not found in cache")

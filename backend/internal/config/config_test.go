@@ -9,17 +9,19 @@ import (
 func TestLoad(t *testing.T) {
 	// Clear any existing env vars that might affect the test
 	oldVars := map[string]string{}
-	keysToClean := []string{"HOST", "PORT", "DATABASE_URL", "LOG_LEVEL"}
+	keysToClean := []string{"HOST", "PORT", "DATABASE_URL", "LOG_LEVEL", "SECRET_KEY"}
 	for _, k := range keysToClean {
 		oldVars[k] = os.Getenv(k)
 		os.Unsetenv(k)
 	}
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	defer func() {
 		for k, v := range oldVars {
 			if v != "" {
 				os.Setenv(k, v)
 			}
 		}
+		os.Unsetenv("SECRET_KEY")
 	}()
 
 	cfg := Load()
@@ -66,12 +68,14 @@ func TestLoad(t *testing.T) {
 
 func TestLoadWithEnvVars(t *testing.T) {
 	// Set test env vars
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	os.Setenv("HOST", "127.0.0.1")
 	os.Setenv("PORT", "9090")
 	os.Setenv("LOG_LEVEL", "debug")
 	os.Setenv("REGISTRATION_ENABLED", "false")
 	os.Setenv("INVITE_ONLY", "true")
 	defer func() {
+		os.Unsetenv("SECRET_KEY")
 		os.Unsetenv("HOST")
 		os.Unsetenv("PORT")
 		os.Unsetenv("LOG_LEVEL")
@@ -262,10 +266,15 @@ func TestLoadQuotaConfigUnlimited(t *testing.T) {
 }
 
 func TestRateLimitConfig_Defaults(t *testing.T) {
+	// Set required SECRET_KEY
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	// Clear any existing env vars
 	os.Unsetenv("RATE_LIMIT_ENABLED")
 	os.Unsetenv("RATE_LIMIT_MAX")
 	os.Unsetenv("RATE_LIMIT_WINDOW")
+	defer func() {
+		os.Unsetenv("SECRET_KEY")
+	}()
 
 	cfg := Load()
 
@@ -282,8 +291,12 @@ func TestRateLimitConfig_Defaults(t *testing.T) {
 }
 
 func TestRateLimitConfig_Disabled(t *testing.T) {
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	os.Setenv("RATE_LIMIT_ENABLED", "false")
-	defer os.Unsetenv("RATE_LIMIT_ENABLED")
+	defer func() {
+		os.Unsetenv("SECRET_KEY")
+		os.Unsetenv("RATE_LIMIT_ENABLED")
+	}()
 
 	cfg := Load()
 
@@ -293,10 +306,12 @@ func TestRateLimitConfig_Disabled(t *testing.T) {
 }
 
 func TestRateLimitConfig_CustomValues(t *testing.T) {
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	os.Setenv("RATE_LIMIT_ENABLED", "true")
 	os.Setenv("RATE_LIMIT_MAX", "200")
 	os.Setenv("RATE_LIMIT_WINDOW", "30s")
 	defer func() {
+		os.Unsetenv("SECRET_KEY")
 		os.Unsetenv("RATE_LIMIT_ENABLED")
 		os.Unsetenv("RATE_LIMIT_MAX")
 		os.Unsetenv("RATE_LIMIT_WINDOW")
@@ -316,10 +331,14 @@ func TestRateLimitConfig_CustomValues(t *testing.T) {
 }
 
 func TestBcryptPoolConfig_Defaults(t *testing.T) {
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	// Clear any existing env vars
 	os.Unsetenv("BCRYPT_POOL_WORKERS")
 	os.Unsetenv("BCRYPT_POOL_QUEUE")
 	os.Unsetenv("BCRYPT_POOL_TIMEOUT")
+	defer func() {
+		os.Unsetenv("SECRET_KEY")
+	}()
 
 	cfg := Load()
 
@@ -336,10 +355,12 @@ func TestBcryptPoolConfig_Defaults(t *testing.T) {
 }
 
 func TestBcryptPoolConfig_CustomValues(t *testing.T) {
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	os.Setenv("BCRYPT_POOL_WORKERS", "4")
 	os.Setenv("BCRYPT_POOL_QUEUE", "100")
 	os.Setenv("BCRYPT_POOL_TIMEOUT", "10s")
 	defer func() {
+		os.Unsetenv("SECRET_KEY")
 		os.Unsetenv("BCRYPT_POOL_WORKERS")
 		os.Unsetenv("BCRYPT_POOL_QUEUE")
 		os.Unsetenv("BCRYPT_POOL_TIMEOUT")
@@ -359,9 +380,13 @@ func TestBcryptPoolConfig_CustomValues(t *testing.T) {
 }
 
 func TestDrainConfig_Defaults(t *testing.T) {
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	// Clear any existing env vars
 	os.Unsetenv("DRAIN_TIMEOUT")
 	os.Unsetenv("DRAIN_GRACE_PERIOD")
+	defer func() {
+		os.Unsetenv("SECRET_KEY")
+	}()
 
 	cfg := Load()
 
@@ -374,9 +399,11 @@ func TestDrainConfig_Defaults(t *testing.T) {
 }
 
 func TestDrainConfig_CustomValues(t *testing.T) {
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
 	os.Setenv("DRAIN_TIMEOUT", "60s")
 	os.Setenv("DRAIN_GRACE_PERIOD", "10s")
 	defer func() {
+		os.Unsetenv("SECRET_KEY")
 		os.Unsetenv("DRAIN_TIMEOUT")
 		os.Unsetenv("DRAIN_GRACE_PERIOD")
 	}()
