@@ -223,3 +223,155 @@ func TestProviderInfoCapabilities(t *testing.T) {
 		t.Error("Ollama should not support function calling")
 	}
 }
+
+func TestProviderFactoryCreateUnknownType(t *testing.T) {
+	factory := NewProviderFactory()
+
+	_, err := factory.Create("unknown_provider", nil)
+	if err == nil {
+		t.Error("Create with unknown provider type should return error")
+	}
+
+	expectedMsg := "unknown provider type: unknown_provider"
+	if err.Error() != expectedMsg {
+		t.Errorf("Error message = %s, want %s", err.Error(), expectedMsg)
+	}
+}
+
+func TestProviderFactorySupportedProviders(t *testing.T) {
+	factory := NewProviderFactory()
+
+	supported := factory.SupportedProviders()
+	expected := []string{
+		"openai",
+		"anthropic",
+		"openrouter",
+		"bedrock",
+		"vertex_ai",
+		"ollama",
+		"lm_studio",
+		"vllm",
+		"local_ai",
+		"llama_cpp",
+	}
+
+	if len(supported) != len(expected) {
+		t.Errorf("SupportedProviders count = %d, want %d", len(supported), len(expected))
+	}
+
+	for i, provider := range expected {
+		if i >= len(supported) || supported[i] != provider {
+			t.Errorf("Expected provider %s at index %d, got %s", provider, i, supported[i])
+		}
+	}
+}
+
+func TestProviderFactoryCloudProviders(t *testing.T) {
+	factory := NewProviderFactory()
+
+	cloud := factory.CloudProviders()
+	expected := []string{
+		"openai",
+		"anthropic",
+		"openrouter",
+		"bedrock",
+		"vertex_ai",
+	}
+
+	if len(cloud) != len(expected) {
+		t.Errorf("CloudProviders count = %d, want %d", len(cloud), len(expected))
+	}
+
+	for i, provider := range expected {
+		if i >= len(cloud) || cloud[i] != provider {
+			t.Errorf("Expected cloud provider %s at index %d, got %s", provider, i, cloud[i])
+		}
+	}
+}
+
+func TestProviderFactoryLocalProviders(t *testing.T) {
+	factory := NewProviderFactory()
+
+	local := factory.LocalProviders()
+	expected := []string{
+		"ollama",
+		"lm_studio",
+		"vllm",
+		"local_ai",
+		"llama_cpp",
+	}
+
+	if len(local) != len(expected) {
+		t.Errorf("LocalProviders count = %d, want %d", len(local), len(expected))
+	}
+
+	for i, provider := range expected {
+		if i >= len(local) || local[i] != provider {
+			t.Errorf("Expected local provider %s at index %d, got %s", provider, i, local[i])
+		}
+	}
+}
+
+func TestProviderFactoryIsCloudProvider(t *testing.T) {
+	factory := NewProviderFactory()
+
+	cloudTests := []struct {
+		provider string
+		expected bool
+	}{
+		{"openai", true},
+		{"anthropic", true},
+		{"bedrock", true},
+		{"ollama", false},
+		{"lm_studio", false},
+		{"unknown", false},
+	}
+
+	for _, tt := range cloudTests {
+		t.Run(tt.provider, func(t *testing.T) {
+			result := factory.IsCloudProvider(tt.provider)
+			if result != tt.expected {
+				t.Errorf("IsCloudProvider(%s) = %v, want %v", tt.provider, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestProviderFactoryIsLocalProvider(t *testing.T) {
+	factory := NewProviderFactory()
+
+	localTests := []struct {
+		provider string
+		expected bool
+	}{
+		{"ollama", true},
+		{"lm_studio", true},
+		{"vllm", true},
+		{"openai", false},
+		{"anthropic", false},
+		{"unknown", false},
+	}
+
+	for _, tt := range localTests {
+		t.Run(tt.provider, func(t *testing.T) {
+			result := factory.IsLocalProvider(tt.provider)
+			if result != tt.expected {
+				t.Errorf("IsLocalProvider(%s) = %v, want %v", tt.provider, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestProviderFactoryCreateFromConfigEmptyBaseURL(t *testing.T) {
+	factory := NewProviderFactory()
+
+	emptyURL := ""
+	provider, err := factory.CreateFromConfig("ollama", &emptyURL, nil)
+	if err != nil {
+		t.Fatalf("CreateFromConfig() with empty URL error: %v", err)
+	}
+
+	if provider.Type() != "ollama" {
+		t.Errorf("Type() = %s, want ollama", provider.Type())
+	}
+}
