@@ -36,6 +36,13 @@ import (
 	"hearth/internal/websocket"
 )
 
+const (
+	// Server configuration constants
+	MaxBodySize     = 100 * 1024 * 1024 // 100MB
+	ReadTimeout     = 30 * time.Second
+	WriteTimeout    = 30 * time.Second
+)
+
 var (
 	Version = "1.0.0-dev"
 	Commit  = "unknown"
@@ -324,9 +331,9 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:               "Hearth",
 		DisableStartupMessage: true,
-		BodyLimit:             100 * 1024 * 1024, // 100MB
-		ReadTimeout:           30 * time.Second,
-		WriteTimeout:          30 * time.Second,
+		BodyLimit:             MaxBodySize,
+		ReadTimeout:           ReadTimeout,
+		WriteTimeout:          WriteTimeout,
 		// Security
 		EnableTrustedProxyCheck: true,
 		ProxyHeader:             "X-Forwarded-For",

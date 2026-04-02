@@ -216,7 +216,11 @@ func (c *Client) sendReady() {
 
 func (c *Client) sendError(message string) {
 	errorData := map[string]string{"message": message}
-	data, _ := json.Marshal(errorData)
+	data, err := json.Marshal(errorData)
+	if err != nil {
+		// Fallback to a simple error message if marshal fails
+		data = []byte(`{"message":"Internal error occurred"}`)
+	}
 	c.Send(&Message{
 		Op:   OpDispatch,
 		Type: "ERROR",

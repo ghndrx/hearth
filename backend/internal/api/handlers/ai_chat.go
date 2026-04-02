@@ -459,21 +459,31 @@ func (h *AIChatHandler) handleStreamingMessage(c *fiber.Ctx, userID, conversatio
 
 		msg, err := h.chatService.SendMessageStream(c.Context(), userID, conversationID, req, callback)
 		if err != nil {
-			errData, _ := json.Marshal(fiber.Map{
+			errData, marshalErr := json.Marshal(fiber.Map{
 				"error":   "stream_error",
 				"message": err.Error(),
 			})
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+			if marshalErr != nil {
+				// Fallback error response if JSON marshal fails
+				fmt.Fprintf(w, "event: error\ndata: {\"error\":\"stream_error\",\"message\":\"Internal error occurred\"}\n\n")
+			} else {
+				fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+			}
 			w.Flush()
 			return
 		}
 
 		// Send final message with complete data
-		finalData, _ := json.Marshal(fiber.Map{
+		finalData, err := json.Marshal(fiber.Map{
 			"message": msg,
 			"done":    true,
 		})
-		fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(finalData))
+		if err != nil {
+			// Fallback response if JSON marshal fails
+			fmt.Fprintf(w, "event: done\ndata: {\"done\":true}\n\n")
+		} else {
+			fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(finalData))
+		}
 		w.Flush()
 	})
 
@@ -530,21 +540,35 @@ func (h *AIChatHandler) RegenerateMessage(c *fiber.Ctx) error {
 
 		c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
 			callback := func(chunk *models.StreamChunk) error {
-				data, _ := json.Marshal(chunk)
+				data, err := json.Marshal(chunk)
+				if err != nil {
+					// Return error to stop streaming if marshal fails
+					return fmt.Errorf("failed to marshal stream chunk: %w", err)
+				}
 				fmt.Fprintf(w, "data: %s\n\n", string(data))
 				return w.Flush()
 			}
 
 			msg, err := h.chatService.RegenerateMessage(c.Context(), userID, conversationID, messageID, true, callback)
 			if err != nil {
-				errData, _ := json.Marshal(fiber.Map{"error": err.Error()})
-				fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+				errData, marshalErr := json.Marshal(fiber.Map{"error": err.Error()})
+				if marshalErr != nil {
+					// Fallback error response if JSON marshal fails
+					fmt.Fprintf(w, "event: error\ndata: {\"error\":\"Internal error occurred\"}\n\n")
+				} else {
+					fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+				}
 				w.Flush()
 				return
 			}
 
-			finalData, _ := json.Marshal(fiber.Map{"message": msg, "done": true})
-			fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(finalData))
+			finalData, err := json.Marshal(fiber.Map{"message": msg, "done": true})
+			if err != nil {
+				// Fallback response if JSON marshal fails
+				fmt.Fprintf(w, "event: done\ndata: {\"done\":true}\n\n")
+			} else {
+				fmt.Fprintf(w, "event: done\ndata: %s\n\n", string(finalData))
+			}
 			w.Flush()
 		})
 		return nil
