@@ -462,3 +462,112 @@ func TestLeaveDM_NotRecipient(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, ErrNotDMRecipient, err)
 }
+
+// Test TransferGroupDMOwnership - Success
+func TestTransferGroupDMOwnership_Success(t *testing.T) {
+	repo := &mockDMChannelRepo{channels: make(map[uuid.UUID]*models.Channel)}
+	eventBus := &mockDMEventBus{}
+	cache := &mockDMCache{}
+	svc := NewDMService(repo, eventBus, cache)
+
+	ownerID := uuid.New()
+	newOwnerID := uuid.New()
+	channel := createTestGroupDM(t, repo, ownerID, []uuid.UUID{newOwnerID})
+
+	repo.getByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+		return repo.channels[id], nil
+	}
+
+	result, err := svc.TransferGroupDMOwnership(context.Background(), channel.ID, ownerID, newOwnerID)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, newOwnerID, *result.OwnerID)
+	assert.Contains(t, eventBus.published, "dm.ownership_transfer")
+}
+
+// Test TransferGroupDMOwnership - Not owner
+func TestTransferGroupDMOwnership_NotOwner(t *testing.T) {
+	repo := &mockDMChannelRepo{channels: make(map[uuid.UUID]*models.Channel)}
+	eventBus := &mockDMEventBus{}
+	cache := &mockDMCache{}
+	svc := NewDMService(repo, eventBus, cache)
+
+	ownerID := uuid.New()
+	nonOwnerID := uuid.New()
+	newOwnerID := uuid.New()
+	channel := createTestGroupDM(t, repo, ownerID, []uuid.UUID{newOwnerID})
+
+	repo.getByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+		return repo.channels[id], nil
+	}
+
+	result, err := svc.TransferGroupDMOwnership(context.Background(), channel.ID, nonOwnerID, newOwnerID)
+	assert.Error(t, err)
+	assert.Equal(t, ErrNotGroupDMOwner, err)
+	assert.Nil(t, result)
+}
+
+// Test TransferGroupDMOwnership - Not a member
+func TestTransferGroupDMOwnership_NotMember(t *testing.T) {
+	repo := &mockDMChannelRepo{channels: make(map[uuid.UUID]*models.Channel)}
+	eventBus := &mockDMEventBus{}
+	cache := &mockDMCache{}
+	svc := NewDMService(repo, eventBus, cache)
+
+	ownerID := uuid.New()
+	nonMemberID := uuid.New()
+	channel := createTestGroupDM(t, repo, ownerID, []uuid.UUID{})
+
+	repo.getByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+		return repo.channels[id], nil
+	}
+
+	result, err := svc.TransferGroupDMOwnership(context.Background(), channel.ID, ownerID, nonMemberID)
+	assert.Error(t, err)
+	assert.Equal(t, ErrCannotTransferToNonMember, err)
+	assert.Nil(t, result)
+}
+
+// Test TransferGroupDMOwnership - Not a group DM
+func TestTransferGroupDMOwnership_NotGroupDM(t *testing.T) {
+	repo := &mockDMChannelRepo{channels: make(map[uuid.UUID]*models.Channel)}
+	eventBus := &mockDMEventBus{}
+	cache := &mockDMCache{}
+	svc := NewDMService(repo, eventBus, cache)
+
+	ownerID := uuid.New()
+	newOwnerID := uuid.New()
+	channel := &models.Channel{
+		ID:          uuid.New(),
+		Type:        models.ChannelTypeDM, // Not a group DM
+		OwnerID:     &ownerID,
+		Recipients:  []uuid.UUID{ownerID, newOwnerID},
+	}
+	repo.channels[channel.ID] = channel
+
+	repo.getByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+		return repo.channels[id], nil
+	}
+
+	result, err := svc.TransferGroupDMOwnership(context.Background(), channel.ID, ownerID, newOwnerID)
+	assert.Error(t, err)
+	assert.Equal(t, ErrNotGroupDM, err)
+	assert.Nil(t, result)
+}
+
+// Test TransferGroupDMOwnership - Channel not found
+func TestTransferGroupDMOwnership_ChannelNotFound(t *testing.T) {
+	repo := &mockDMChannelRepo{channels: make(map[uuid.UUID]*models.Channel)}
+	eventBus := &mockDMEventBus{}
+	cache := &mockDMCache{}
+	svc := NewDMService(repo, eventBus, cache)
+
+	repo.getByIDFunc = func(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
+		return nil, nil // Channel not found
+	}
+
+	result, err := svc.TransferGroupDMOwnership(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	assert.Error(t, err)
+	assert.Equal(t, ErrChannelNotFound, err)
+	assert.Nil(t, result)
+}

@@ -175,6 +175,58 @@ func (s *DMService) LeaveDM(ctx context.Context, channelID, userID uuid.UUID) er
 	return nil
 }
 
+// TransferGroupDMOwnership transfers ownership of a group DM to another member
+func (s *DMService) TransferGroupDMOwnership(ctx context.Context, channelID, currentOwnerID, newOwnerID uuid.UUID) (*models.Channel, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.Type != models.ChannelTypeGroupDM {
+		return nil, ErrNotGroupDM
+	}
+
+	// Only the current owner can transfer ownership
+	if channel.OwnerID == nil || *channel.OwnerID != currentOwnerID {
+		return nil, ErrNotGroupDMOwner
+	}
+
+	// New owner must be a recipient
+	found := false
+	for _, r := range channel.Recipients {
+		if r == newOwnerID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, ErrCannotTransferToNonMember
+	}
+
+	// Update ownership
+	channel.OwnerID = &newOwnerID
+	if err := s.channelRepo.Update(ctx, channel); err != nil {
+		return nil, err
+	}
+
+	// Invalidate cache
+	if s.cache != nil {
+		_ = s.cache.DeleteChannel(ctx, channelID)
+	}
+
+	// Publish ownership transfer event
+	s.eventBus.Publish("dm.ownership_transfer", &DMRecipientEvent{
+		ChannelID: channelID,
+		UserID:    newOwnerID,
+		Channel:   channel,
+	})
+
+	return channel, nil
+}
+
 // Events
 
 // DMRecipientEvent is published when a user is added/removed from a DM

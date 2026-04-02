@@ -198,6 +198,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		dms.Put("/:channelId/participants", h.DMs.AddParticipant)
 		dms.Delete("/:channelId/participants", h.DMs.RemoveParticipant)
 		dms.Delete("/:channelId/leave", h.DMs.LeaveDM)
+		dms.Patch("/:channelId/owner", h.DMs.TransferOwnership)
 
 		// Convenience route: create DM with a specific user
 		users.Post("/:id/dm", h.DMs.CreateDMWithUser)
