@@ -12,9 +12,9 @@
 
 ## 2026-04-02 Competitive Pipeline
 
-- [ ] **[P0]** Feature: Group Direct Messages — Multi-user DM conversations for small friend groups (3-50 people), enabling casual group coordination outside server structure
-- [ ] **[P0]** Feature: Channel Categories — Hierarchical channel organization with collapsible categories for server structure and navigation at scale
-- [ ] **[P1]** Feature: Activity & Rich Presence System — Comprehensive activity detection including gaming, music, and custom activities for social engagement
+- [ ] **[P0]** Feature: Premium Subscription System — Tiered subscriptions (Basic $2.99, Premium $9.99) with server boosts for sustainable monetization and business model
+- [ ] **[P0]** Feature: Advanced Sticker System — Custom server stickers, animated stickers, and premium sticker packs for engagement and revenue
+- [ ] **[P0]** Feature: Stage Channels — Live audio broadcast channels with speaker management for large community events and content creation
 
 ## 2026-03-29 Vulnerability Findings
 
@@ -74,3 +74,4 @@
 
 **Status**: No open issues found in repository
 **Action**: HEARTBEAT_OK - No unclaimed issues to process
+## 2026-04-02 Vulnerability Findings
