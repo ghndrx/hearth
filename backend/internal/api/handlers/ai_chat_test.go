@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -200,11 +202,9 @@ func setupAIChatTestApp(t testing.TB, handler *AIChatHandler) *fiber.App {
 // Tests for Conversations
 
 func TestListConversations(t *testing.T) {
-	_ = new(MockChatService) // TODO: use mock service when handler supports injection
+	// Use real ChatService for tests that don't need mock verification;
+	// use MockChatService for tests that verify specific service calls.
 	handler := NewAIChatHandler(&ai.ChatService{})
-	// We need to use reflection or expose the service - for now, test the interface
-
-	_ = uuid.New() // TODO: use for authenticated tests
 
 	t.Run("unauthorized without user ID", func(t *testing.T) {
 		app := setupAIChatTestApp(t, handler)
@@ -499,11 +499,82 @@ func TestDeleteMessage(t *testing.T) {
 
 func TestListTemplates(t *testing.T) {
 	t.Run("templates accessible without auth for public", func(t *testing.T) {
-		t.Skip("TODO: requires mock service with initialized dependencies")
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		publicTemplates := []*models.AIChatTemplate{
+			{
+				ID:          uuid.New(),
+				Name:        "Public Assistant",
+				SystemPrompt: "You are a helpful assistant",
+				Category:    stringPtr("general"),
+				IsPublic:    true,
+			},
+		}
+		mockSvc.On("GetTemplates", mock.Anything, (*uuid.UUID)(nil), "").Return(publicTemplates, nil)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/templates", nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+
+		body, _ := io.ReadAll(resp.Body)
+		var result map[string][]*models.AIChatTemplate
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+		assert.Len(t, result["templates"], 1)
+		assert.Equal(t, "Public Assistant", result["templates"][0].Name)
+		mockSvc.AssertExpectations(t)
 	})
 
 	t.Run("templates with category filter", func(t *testing.T) {
-		t.Skip("TODO: requires mock service with initialized dependencies")
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		userID := uuid.New()
+		filteredTemplates := []*models.AIChatTemplate{
+			{
+				ID:           uuid.New(),
+				Name:         "Coding Assistant",
+				SystemPrompt: "You are a coding expert",
+				Category:     stringPtr("programming"),
+				IsPublic:     true,
+			},
+		}
+		mockSvc.On("GetTemplates", mock.Anything, &userID, "programming").Return(filteredTemplates, nil)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/templates?category=programming", nil)
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+
+		body, _ := io.ReadAll(resp.Body)
+		var result map[string][]*models.AIChatTemplate
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+		assert.Len(t, result["templates"], 1)
+		assert.Equal(t, "Coding Assistant", result["templates"][0].Name)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("templates returns internal error on service failure", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("GetTemplates", mock.Anything, (*uuid.UUID)(nil), "").Return(nil, errors.New("database error"))
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/templates", nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
 	})
 }
 
