@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"hearth/internal/models"
+	"hearth/internal/services"
 )
 
 // DMServiceInterface defines the methods needed from DMService
@@ -392,6 +393,59 @@ func (h *DMHandler) RemoveParticipant(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// UpdateGroupDM updates a group DM's name
+func (h *DMHandler) UpdateGroupDM(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uuid.UUID)
+
+	channelIDStr := c.Params("channelId")
+	channelID, err := uuid.Parse(channelIDStr)
+	if err != nil {
+		return InvalidUUID(c, "channelId")
+	}
+
+	var req models.UpdateGroupDMRequest
+	if err := c.BodyParser(&req); err != nil {
+		return ParseError(c, err)
+	}
+
+	// Verify user is a participant in this group DM
+	channels, err := h.channelService.GetUserDMs(c.Context(), userID)
+	if err != nil {
+		return InternalError(c, "failed to verify DM membership")
+	}
+
+	found := false
+	for _, ch := range channels {
+		if ch.ID == channelID && ch.Type == models.ChannelTypeGroupDM {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return Forbidden(c, "you are not a participant in this group DM")
+	}
+
+	updates := &services.GroupDMUpdate{
+		Name: req.Name,
+	}
+
+	channel, err := h.channelService.UpdateGroupDM(c.Context(), channelID, userID, updates)
+	if err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	recipients := h.resolveRecipients(c.Context(), channel.Recipients, uuid.Nil)
+	return c.JSON(DMChannelResponse{
+		ID:            channel.ID,
+		Type:          channel.Type,
+		Name:          channel.Name,
+		OwnerID:       channel.OwnerID,
+		Recipients:    recipients,
+		LastMessageID: channel.LastMessageID,
+		CreatedAt:     channel.CreatedAt,
+	})
 }
 
 // LeaveDM removes the current user from a DM

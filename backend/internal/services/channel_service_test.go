@@ -554,12 +554,13 @@ func TestGetOrCreateDM_CreateNew(t *testing.T) {
 }
 
 func TestCreateGroupDM_Success(t *testing.T) {
-	service, channelRepo, _, _, _ := setupChannelService()
+	service, channelRepo, _, _, eventBus := setupChannelService()
 	ctx := context.Background()
 	ownerID := uuid.New()
 	recipientIDs := []uuid.UUID{uuid.New(), uuid.New()}
 
 	channelRepo.On("Create", ctx, mock.AnythingOfType("*models.Channel")).Return(nil)
+	eventBus.On("Publish", "group_dm.created", mock.AnythingOfType("*services.GroupDMCreatedEvent")).Return()
 
 	channel, err := service.CreateGroupDM(ctx, ownerID, "Friend Group", recipientIDs)
 
@@ -1662,11 +1663,12 @@ func TestGetOrCreateDM_CreateError(t *testing.T) {
 }
 
 func TestCreateGroupDM_EmptyRecipients(t *testing.T) {
-	service, channelRepo, _, _, _ := setupChannelService()
+	service, channelRepo, _, _, eventBus := setupChannelService()
 	ctx := context.Background()
 	ownerID := uuid.New()
 
 	channelRepo.On("Create", ctx, mock.AnythingOfType("*models.Channel")).Return(nil)
+	eventBus.On("Publish", "group_dm.created", mock.AnythingOfType("*services.GroupDMCreatedEvent")).Return()
 
 	channel, err := service.CreateGroupDM(ctx, ownerID, "Solo Group", []uuid.UUID{})
 

@@ -177,6 +177,14 @@ func (m *MockChannelServiceForUsers) CreateGroupDM(ctx context.Context, ownerID 
 	return args.Get(0).(*models.Channel), args.Error(1)
 }
 
+func (m *MockChannelServiceForUsers) UpdateGroupDM(ctx context.Context, channelID, requesterID uuid.UUID, updates *services.GroupDMUpdate) (*models.Channel, error) {
+	args := m.Called(ctx, channelID, requesterID, updates)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Channel), args.Error(1)
+}
+
 // testUserHandler creates a test user handler with mocks
 type testUserHandler struct {
 	handler        *UserHandler
