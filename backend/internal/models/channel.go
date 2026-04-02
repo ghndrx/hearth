@@ -20,6 +20,12 @@ const (
 	ChannelTypeGroupDM      ChannelType = "group_dm"
 )
 
+// Group DM limits
+const (
+	MinGroupDMUsers = 3  // Minimum users in a group DM (including owner)
+	MaxGroupDMUsers = 50 // Maximum users in a group DM (including owner)
+)
+
 // Voice channel limits
 const (
 	MinVoiceBitrate    = 8000   // 8 kbps minimum bitrate

@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	export let customId: string = '';
 	export let style: 'short' | 'paragraph' = 'short';
 	export let label: string = '';
@@ -10,8 +8,7 @@
 	export let maxLength: number | undefined = undefined;
 	export let required: boolean = false;
 	export let disabled: boolean = false;
-
-	const dispatch = createEventDispatcher();
+	export let onsubmit: ((event: CustomEvent<{ customId: string; value: string }>) => void) | undefined = undefined;
 
 	let inputValue = value;
 
@@ -21,7 +18,7 @@
 		if (minLength && inputValue.length < minLength) return;
 		if (maxLength && inputValue.length > maxLength) return;
 		
-		dispatch('submit', { customId, value: inputValue });
+		onsubmit?.({ customId, value: inputValue } as unknown as CustomEvent<{ customId: string; value: string }>);
 	}
 
 	function handleKeydown(event: KeyboardEvent) {

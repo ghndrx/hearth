@@ -253,6 +253,12 @@ func main() {
 		redisCache, // cache
 		serviceBus,
 	)
+	// DMService for group DM functionality
+	dmService := services.NewDMService(
+		repos.Channels,
+		serviceBus,
+		redisCache, // cache
+	)
 	messageService := services.NewMessageService(
 		repos.Messages,
 		repos.Channels,
@@ -414,6 +420,10 @@ func main() {
 
 	// Wire up Poll handler
 	h.SetPollHandler(pollService)
+
+	// Wire up DM handler for group DMs
+	h.SetDMHandler(dmService, channelService, userService, messageService)
+	log.Printf("✅ DM service initialized")
 
 	// Wire up OAuth service if available
 	if oauthService != nil {
