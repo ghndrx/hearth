@@ -14,6 +14,14 @@
 	let isOpen = false;
 	let loading = false;
 
+	// Initialize selectedValues from default options at mount (once options are available)
+	$: if (options.length > 0) {
+		const defaults = options.filter(o => o.default).map(o => o.value);
+		if (defaults.length > 0 && selectedValues.length === 0) {
+			selectedValues = defaults;
+		}
+	}
+
 	function toggleDropdown() {
 		if (disabled) return;
 		isOpen = !isOpen;
@@ -52,6 +60,11 @@
 		if (!target.closest('.select-menu-container')) {
 			isOpen = false;
 		}
+	}
+
+	// Initialize selectedValues from default options when options first appear
+	$: if (options.length > 0 && selectedValues.length === 0) {
+		selectedValues = options.filter(o => o.default).map(o => o.value);
 	}
 
 	$: selectedLabels = options
