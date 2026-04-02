@@ -94,12 +94,10 @@ describe('TextInput (Message Component)', () => {
   });
 
   it('dispatches submit event on button click', async () => {
-    const { container, component } = render(TextInput, {
-      props: { customId: 'my_text_input' }
-    });
-
     const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+    const { container } = render(TextInput, {
+      props: { customId: 'my_text_input', onsubmit: submitHandler }
+    });
 
     const input = container.querySelector('input');
     await fireEvent.input(input!, { target: { value: 'Test value' } });
@@ -111,12 +109,10 @@ describe('TextInput (Message Component)', () => {
   });
 
   it('dispatches submit event on Enter key', async () => {
-    const { container, component } = render(TextInput, {
-      props: { customId: 'my_text_input' }
-    });
-
     const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+    const { container } = render(TextInput, {
+      props: { customId: 'my_text_input', onsubmit: submitHandler }
+    });
 
     const input = container.querySelector('input');
     await fireEvent.input(input!, { target: { value: 'Test value' } });
@@ -124,17 +120,15 @@ describe('TextInput (Message Component)', () => {
 
     expect(submitHandler).toHaveBeenCalled();
     const event = submitHandler.mock.calls[0][0];
-    expect(event.detail.customId).toBe('my_text_input');
-    expect(event.detail.value).toBe('Test value');
+    expect(event.customId).toBe('my_text_input');
+    expect(event.value).toBe('Test value');
   });
 
   it('does not submit empty value when required', async () => {
-    const { container, component } = render(TextInput, {
-      props: { customId: 'my_text_input', required: true }
-    });
-
     const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+    const { container } = render(TextInput, {
+      props: { customId: 'my_text_input', required: true, onsubmit: submitHandler }
+    });
 
     const input = container.querySelector('input');
     await fireEvent.input(input!, { target: { value: '' } });
@@ -146,12 +140,10 @@ describe('TextInput (Message Component)', () => {
   });
 
   it('does not submit when below minLength', async () => {
-    const { container, component } = render(TextInput, {
-      props: { customId: 'my_text_input', minLength: 10 }
-    });
-
     const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+    const { container } = render(TextInput, {
+      props: { customId: 'my_text_input', minLength: 10, onsubmit: submitHandler }
+    });
 
     const input = container.querySelector('input');
     await fireEvent.input(input!, { target: { value: 'short' } });
@@ -163,12 +155,10 @@ describe('TextInput (Message Component)', () => {
   });
 
   it('submits when value meets minLength', async () => {
-    const { container, component } = render(TextInput, {
-      props: { customId: 'my_text_input', minLength: 5 }
-    });
-
     const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+    const { container } = render(TextInput, {
+      props: { customId: 'my_text_input', minLength: 5, onsubmit: submitHandler }
+    });
 
     const input = container.querySelector('input');
     await fireEvent.input(input!, { target: { value: 'long enough value' } });
@@ -180,12 +170,10 @@ describe('TextInput (Message Component)', () => {
   });
 
   it('respects disabled state for submission', async () => {
-    const { container, component } = render(TextInput, {
-      props: { customId: 'my_text_input', disabled: true }
-    });
-
     const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+    const { container } = render(TextInput, {
+      props: { customId: 'my_text_input', disabled: true, onsubmit: submitHandler }
+    });
 
     const input = container.querySelector('input');
     await fireEvent.input(input!, { target: { value: 'Test' } });
