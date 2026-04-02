@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"hearth/internal/events"
 	"hearth/internal/models"
 )
 
@@ -279,6 +280,55 @@ func (s *ChannelService) CreateGroupDM(
 	if err := s.channelRepo.Create(ctx, channel); err != nil {
 		return nil, err
 	}
+
+	// Publish group DM creation event for WebSocket broadcast to recipients
+	s.eventBus.Publish(events.GroupDMCreated, &GroupDMCreatedEvent{
+		Channel: channel,
+	})
+
+	return channel, nil
+}
+
+// UpdateGroupDM updates a group DM's name
+func (s *ChannelService) UpdateGroupDM(
+	ctx context.Context,
+	channelID uuid.UUID,
+	requesterID uuid.UUID,
+	updates *GroupDMUpdate,
+) (*models.Channel, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.Type != models.ChannelTypeGroupDM {
+		return nil, ErrNotGroupDM
+	}
+
+	// Only the owner can update group DM settings
+	if channel.OwnerID == nil || *channel.OwnerID != requesterID {
+		return nil, ErrNotGroupDMOwner
+	}
+
+	if updates.Name != nil {
+		channel.Name = *updates.Name
+	}
+
+	if err := s.channelRepo.Update(ctx, channel); err != nil {
+		return nil, err
+	}
+
+	// Invalidate cache
+	if s.cache != nil {
+		_ = s.cache.DeleteChannel(ctx, channelID)
+	}
+
+	s.eventBus.Publish("channel.updated", &ChannelUpdatedEvent{
+		Channel: channel,
+	})
 
 	return channel, nil
 }
@@ -588,4 +638,14 @@ type ChannelPermissionOverrideDeletedEvent struct {
 	ChannelID  uuid.UUID
 	TargetType string
 	TargetID   uuid.UUID
+}
+
+// GroupDMCreatedEvent is published when a group DM is created
+type GroupDMCreatedEvent struct {
+	Channel *models.Channel
+}
+
+// GroupDMUpdate describes fields that can be updated on a group DM
+type GroupDMUpdate struct {
+	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
 }

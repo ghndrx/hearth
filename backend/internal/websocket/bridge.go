@@ -120,6 +120,11 @@ func (b *EventBridge) registerHandlers() {
 	// Component events
 	b.bus.Subscribe(events.ComponentInteraction, b.onComponentInteraction)
 	b.bus.Subscribe(events.ComponentUpdated, b.onComponentUpdated)
+
+	// DM events
+	b.bus.Subscribe(events.DMRecipientAdded, b.onDMRecipientAdded)
+	b.bus.Subscribe(events.DMRecipientRemoved, b.onDMRecipientRemoved)
+	b.bus.Subscribe(events.GroupDMCreated, b.onGroupDMCreated)
 }
 
 // Message event handlers
@@ -735,6 +740,57 @@ func (b *EventBridge) onComponentUpdated(event events.Event) {
 		"channel_id":   data.ChannelID.String(),
 	}
 	b.sendToChannel(data.ChannelID, EventTypeComponentUpdate, wsData)
+}
+
+// DM event handlers
+
+func (b *EventBridge) onGroupDMCreated(event events.Event) {
+	data, ok := event.Data.(*services.GroupDMCreatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onGroupDMCreated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting GROUP_DM_CREATE for channel %s", data.Channel.ID)
+	// Send CHANNEL_CREATE event to all recipients via channel send
+	b.sendToChannel(data.Channel.ID, EventTypeChannelCreate, b.channelToWS(data.Channel))
+}
+
+func (b *EventBridge) onDMRecipientAdded(event events.Event) {
+	data, ok := event.Data.(*services.DMRecipientEvent)
+	if !ok {
+		log.Printf("[EventBridge] onDMRecipientAdded: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting DM_RECIPIENT_ADD for channel %s, user %s", data.ChannelID, data.UserID)
+
+	// Build recipient data for the event
+	wsData := map[string]interface{}{
+		"channel_id": data.ChannelID.String(),
+		"user_id":    data.UserID.String(),
+	}
+
+	// If channel data is available, include it for the new member to identify the group
+	if data.Channel != nil {
+		wsData["channel"] = b.channelToWS(data.Channel)
+	}
+
+	b.sendToChannel(data.ChannelID, EventDMRecipientAdd, wsData)
+}
+
+func (b *EventBridge) onDMRecipientRemoved(event events.Event) {
+	data, ok := event.Data.(*services.DMRecipientEvent)
+	if !ok {
+		log.Printf("[EventBridge] onDMRecipientRemoved: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting DM_RECIPIENT_REMOVE for channel %s, user %s", data.ChannelID, data.UserID)
+
+	wsData := map[string]interface{}{
+		"channel_id": data.ChannelID.String(),
+		"user_id":    data.UserID.String(),
+	}
+
+	b.sendToChannel(data.ChannelID, EventDMRecipientRemove, wsData)
 }
 
 // Additional event types for websocket

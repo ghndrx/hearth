@@ -239,4 +239,9 @@ const (
 	// Component events
 	ComponentInteraction = "component.interaction"
 	ComponentUpdated    = "component.updated"
+
+	// DM events
+	DMRecipientAdded   = "dm.recipient_add"
+	DMRecipientRemoved = "dm.recipient_remove"
+	GroupDMCreated     = "group_dm.created"
 )
