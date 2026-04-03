@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { currentServer, servers } from '$lib/stores/servers';
 	import { currentChannel, loadServerChannels, channels } from '$lib/stores/channels';
 	import { sendMessage, loadMessages } from '$lib/stores/messages';
@@ -10,12 +11,18 @@
 	import MessageInput from '$lib/components/MessageInput.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import ForumPostCreateModal from '$lib/components/forum/ForumPostCreateModal.svelte';
+	import ForumChannelView from '$lib/components/forum/ForumChannelView.svelte';
+	import ForumPostView from '$lib/components/forum/ForumPostView.svelte';
 	
 	$: serverId = $page.params.serverId;
 	$: channelId = $page.params.channelId;
+	$: threadId = $page.params.threadId;
 	
 	// Forum post modal state
 	let showForumPostModal = false;
+	
+	// Forum post view state - when a post is opened, show its thread
+	let activeThreadId: string | null = null;
 	
 	
 	// Set currentServer from URL if not already set
@@ -51,6 +58,22 @@
 	
 	// Channel type check
 	$: isForumChannel = $currentChannel?.type === 6;
+	
+	// When a forum post thread is opened via URL param, set activeThreadId
+	$: if (threadId && isForumChannel) {
+		activeThreadId = threadId;
+	}
+	
+	function handleOpenPost(event: CustomEvent<{ threadId: string }>) {
+		activeThreadId = event.detail.threadId;
+		// Navigate to the thread URL
+		goto(`/channels/${serverId}/${channelId}/${event.detail.threadId}`, { replaceState: false });
+	}
+	
+	function handleBackToForum() {
+		activeThreadId = null;
+		goto(`/channels/${serverId}/${channelId}`, { replaceState: false });
+	}
 	
 	function handleToggleSplitViewPin() {
 		if (!$currentChannel) return;
@@ -94,13 +117,11 @@
 	
 	async function handleForumPostCreated(event: CustomEvent<{ id: string; name: string }>) {
 		showForumPostModal = false;
-		// Refresh the message list to show the new forum post
-		if ($currentChannel) {
-			try {
-				await loadMessages($currentChannel.id);
-			} catch (error) {
-				console.error('[Page] Failed to refresh messages after forum post creation:', error);
-			}
+		// For forum channels, opening the post will show the new thread
+		// The ForumChannelView will refresh on next mount
+		if (isForumChannel) {
+			activeThreadId = event.detail.id;
+			goto(`/channels/${serverId}/${channelId}/${event.detail.id}`, { replaceState: false });
 		}
 	}
 </script>
@@ -169,12 +190,32 @@
 </div>
 
 <div class="messages-wrapper">
-	<MessageList />
+	{#if isForumChannel}
+		{#if activeThreadId}
+			<!-- Show the forum post thread view -->
+			<ForumPostView
+				channelId={channelId || ''}
+				threadId={activeThreadId}
+				on:back={handleBackToForum}
+			/>
+		{:else}
+			<!-- Show the forum channel view (post list) -->
+			<ForumChannelView
+				channelId={channelId || ''}
+				on:openPost={handleOpenPost}
+				on:createPost={() => (showForumPostModal = true)}
+			/>
+		{/if}
+	{:else}
+		<MessageList />
+	{/if}
 </div>
 
+{#if !isForumChannel}
 <div class="input-wrapper">
 	<MessageInput on:send={handleSend} />
 </div>
+{/if}
 </div>
 
 <!-- Forum Post Creation Modal -->

@@ -6,19 +6,26 @@ import (
 
 	"hearth/internal/models"
 	"hearth/internal/services"
+	"hearth/internal/websocket"
 )
 
 // ForumTagsHandler handles forum tag-related HTTP requests
 type ForumTagsHandler struct {
 	forumTagService *services.ForumTagService
 	threadService   *services.ThreadService
+	gateway         *websocket.Gateway
 }
 
 // NewForumTagsHandler creates a new forum tags handler
-func NewForumTagsHandler(forumTagService *services.ForumTagService, threadService *services.ThreadService) *ForumTagsHandler {
+func NewForumTagsHandler(
+	forumTagService *services.ForumTagService,
+	threadService *services.ThreadService,
+	gateway *websocket.Gateway,
+) *ForumTagsHandler {
 	return &ForumTagsHandler{
 		forumTagService: forumTagService,
 		threadService:   threadService,
+		gateway:         gateway,
 	}
 }
 
@@ -85,6 +92,16 @@ func (h *ForumTagsHandler) CreateTag(c *fiber.Ctx) error {
 		return HandleServiceError(c, err)
 	}
 
+	// Dispatch WebSocket event
+	if h.gateway != nil {
+		h.gateway.Hub().SendToChannel(channelID, &websocket.Event{
+			Op:       websocket.OpDispatch,
+			Type:     websocket.EventForumTagCreate,
+			Data:     tag,
+			ChannelID: &channelID,
+		})
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(tag)
 }
 
@@ -125,6 +142,16 @@ func (h *ForumTagsHandler) UpdateTag(c *fiber.Ctx) error {
 		return HandleServiceError(c, err)
 	}
 
+	// Dispatch WebSocket event
+	if h.gateway != nil {
+		h.gateway.Hub().SendToChannel(tag.ChannelID, &websocket.Event{
+			Op:       websocket.OpDispatch,
+			Type:     websocket.EventForumTagUpdate,
+			Data:     tag,
+			ChannelID: &tag.ChannelID,
+		})
+	}
+
 	return c.JSON(tag)
 }
 
@@ -150,8 +177,28 @@ func (h *ForumTagsHandler) DeleteTag(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get tag info before deleting to know the channel ID for the event
+	tag, _ := h.forumTagService.GetChannelTags(c.Context(), tagID)
+	var channelID uuid.UUID
+	for _, t := range tag {
+		if t.ID == tagID {
+			channelID = t.ChannelID
+			break
+		}
+	}
+
 	if err := h.forumTagService.DeleteTag(c.Context(), tagID, userID); err != nil {
 		return HandleServiceError(c, err)
+	}
+
+	// Dispatch WebSocket event
+	if h.gateway != nil && channelID != uuid.Nil {
+		h.gateway.Hub().SendToChannel(channelID, &websocket.Event{
+			Op:       websocket.OpDispatch,
+			Type:     websocket.EventForumTagDelete,
+			Data:     map[string]interface{}{"id": tagID, "channel_id": channelID},
+			ChannelID: &channelID,
+		})
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
@@ -193,6 +240,24 @@ func (h *ForumTagsHandler) ApplyTags(c *fiber.Ctx) error {
 
 	if err := h.forumTagService.ApplyTagsToThread(c.Context(), threadID, userID, body.TagIDs); err != nil {
 		return HandleServiceError(c, err)
+	}
+
+	// Dispatch WebSocket event for tag update on the thread
+	if h.gateway != nil {
+		// Get thread's channel ID to broadcast to the right channel
+		thread, _ := h.threadService.GetThread(c.Context(), threadID)
+		if thread != nil {
+			eventData := map[string]interface{}{
+				"thread_id": threadID,
+				"tag_ids":   body.TagIDs,
+			}
+			h.gateway.Hub().SendToChannel(thread.ParentChannelID, &websocket.Event{
+				Op:       websocket.OpDispatch,
+				Type:     websocket.EventForumPostUpdate,
+				Data:     eventData,
+				ChannelID: &thread.ParentChannelID,
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{"success": true})
@@ -334,6 +399,19 @@ func (h *ForumTagsHandler) PinThread(c *fiber.Ctx) error {
 
 	if err := h.forumTagService.PinThread(c.Context(), threadID, userID, body.Pin); err != nil {
 		return HandleServiceError(c, err)
+	}
+
+	// Dispatch WebSocket event
+	if h.gateway != nil {
+		eventType := websocket.EventForumPostPin
+		if !body.Pin {
+			eventType = websocket.EventForumPostUnpin
+		}
+		h.gateway.Hub().SendToChannel(threadID, &websocket.Event{
+			Op:   websocket.OpDispatch,
+			Type: eventType,
+			Data: map[string]interface{}{"thread_id": threadID, "pin": body.Pin},
+		})
 	}
 
 	return c.JSON(fiber.Map{"success": true})
