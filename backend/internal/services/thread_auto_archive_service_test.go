@@ -135,6 +135,10 @@ func (m *simpleMockThreadRepo) GetThreadCount(ctx context.Context, channelID uui
 	return 0, nil
 }
 
+func (m *simpleMockThreadRepo) GetTotalMessageCount(ctx context.Context, channelID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
 func (m *simpleMockThreadRepo) Archive(ctx context.Context, id uuid.UUID) error {
 	if m.thread != nil {
 		m.thread.Archived = true
