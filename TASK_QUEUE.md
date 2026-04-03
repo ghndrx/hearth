@@ -3,6 +3,12 @@
 **Analysis**: Updated competitive assessment focusing on adoption blockers
 **Status**: CRITICAL - Mobile-first strategy required for competitive positioning
 
+## 2026-04-03 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Forum Channels — Discord-style threaded discussions with tagging for organized communities (8-12 weeks)
+- [ ] **[P0]** Feature: Interactive Message Components — Buttons, select menus, and modals for bot interactions (10-14 weeks)
+- [ ] **[P0]** Feature: Slash Commands Framework — Type-safe application commands with autocomplete for bot platform (10-14 weeks)
+
 ## 2026-04-03 TOP COMPETITIVE PRIORITIES
 
 - [ ] **[P0]** Feature: Native Mobile Applications — CRITICAL USER ACQUISITION BLOCKER: 70% of Discord users mobile-first, no app store presence blocks mainstream adoption (12-16 weeks)
@@ -108,3 +114,45 @@
 **Action**: HEARTBEAT_OK - No unclaimed issues to process
 
 ## 2026-04-02 Vulnerability Findings
+
+## 2026-04-03 Hearth Tech Debt Hunter — Inline Findings
+
+**Scope**: Go backend (clean), Frontend TS/Svelte, Mobile iOS/Android, docs/research
+**No P1 items found inline — no commits/PRs opened this cycle.**
+
+### P1 — Fixed Inline (none this cycle)
+- No security or performance-related inline TODOs found in Go backend.
+- All Go source files clean of TODO/FIXME/HACK/XXX comments.
+
+### P2 — Queued in TASK_QUEUE.md (from codebase TODOs)
+
+**Frontend:**
+- `[P2]` `frontend/src/lib/e2ee/keys.ts:66` — Load and initialize libsignal-client WASM (E2EE)
+- `[P2]` `frontend/src/lib/e2ee/device-manager.ts:308` — Compute `identityKeyHash` properly
+- `[P2]` `frontend/src/lib/stores/settings.test.ts` — `fetchUserSettings` backend sync not implemented; settings use localStorage only
+- `[P2]` `frontend/src/lib/components/NotificationSettings.test.ts:188` — Same backend sync gap
+- `[P2]` `frontend/src/lib/stores/notifications.ts:263` — Check if message is from another user (unread logic gap)
+
+**Mobile Android:**
+- `[P2]` `mobile/android/.../ServerListScreen.kt:68` — Server creation/join dialog not wired up
+- `[P2]` `mobile/android/.../ChannelListScreen.kt:148` — Join voice channel not implemented
+
+**Mobile iOS:**
+- `[P2]` `mobile/ios/.../LoginView.swift:114,117,120` — GitHub, Google, Discord OAuth not implemented
+- `[P2]` `mobile/ios/.../DMListView.swift:46` — New DM flow missing
+- `[P2]` `mobile/ios/.../MessageComposerView.swift:30` — Attachment picker not implemented
+
+### P3 — Nice-to-Have (from docs/research)
+
+**Security Research TODOs (cross-reference to existing TASK_QUEUE items):**
+- `[P1/HIGH]` docs/research/security-permission-system.md:97 — Server-side permission enforcement (already tracked in Rate Limiting section above)
+- `[P1/HIGH]` docs/research/security-permission-system.md:98 — Rate-limit role/permission PATCH endpoints (already tracked)
+- `[MEDIUM]` docs/research/security-permission-system.md:99-102 — Various medium-priority spec gaps (audit bypass, role hierarchy, cache invalidation, bot scope)
+- `[MEDIUM]` docs/research/feature-file-sharing-media-handling.md:439-442 — ClamAV, EXIF stripping, SVG rejection, CDN domain (already tracked under P2 Security section)
+
+### Deprecated / Empty Catch / Hardcoded Values
+- **No deprecated function calls** found in Go or TypeScript source
+- **No empty catch blocks** found in Go or TypeScript source
+- **Hardcoded constants**: See existing P2 items around rate limiting for hardcoded magic numbers
+
+**HEARTBEAT_OK — No P1 inline fixes required. P2/P3 items queued above.**
