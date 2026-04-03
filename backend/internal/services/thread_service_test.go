@@ -18,6 +18,9 @@ type mockThreadRepository struct {
 	deleteFunc                func(ctx context.Context, id uuid.UUID) error
 	getByChannelIDFunc        func(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error)
 	getActiveByChannelIDFunc  func(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error)
+	getThreadsPaginatedFunc    func(ctx context.Context, channelID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error)
+	getThreadCountFunc         func(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error)
+	getTotalMessageCountFunc   func(ctx context.Context, channelID uuid.UUID) (int, error)
 	archiveFunc               func(ctx context.Context, id uuid.UUID) error
 	unarchiveFunc             func(ctx context.Context, id uuid.UUID) error
 	addMemberFunc             func(ctx context.Context, threadID, userID uuid.UUID) error
@@ -73,6 +76,27 @@ func (m *mockThreadRepository) GetActiveByChannelID(ctx context.Context, channel
 		return m.getActiveByChannelIDFunc(ctx, channelID)
 	}
 	return []*models.Thread{}, nil
+}
+
+func (m *mockThreadRepository) GetThreadsPaginated(ctx context.Context, channelID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error) {
+	if m.getThreadsPaginatedFunc != nil {
+		return m.getThreadsPaginatedFunc(ctx, channelID, sortOrder, limit, offset, includeArchived)
+	}
+	return nil, 0, nil
+}
+
+func (m *mockThreadRepository) GetThreadCount(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error) {
+	if m.getThreadCountFunc != nil {
+		return m.getThreadCountFunc(ctx, channelID, includeArchived)
+	}
+	return 0, nil
+}
+
+func (m *mockThreadRepository) GetTotalMessageCount(ctx context.Context, channelID uuid.UUID) (int, error) {
+	if m.getTotalMessageCountFunc != nil {
+		return m.getTotalMessageCountFunc(ctx, channelID)
+	}
+	return 0, nil
 }
 
 func (m *mockThreadRepository) Archive(ctx context.Context, id uuid.UUID) error {
