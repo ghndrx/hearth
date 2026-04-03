@@ -1,3 +1,9 @@
+## 2026-04-03 TOP COMPETITIVE PRIORITIES
+
+- [ ] **[P0]** Feature: Comprehensive Audit Logs & Moderation Analytics — Critical enterprise adoption blocker (8-10 weeks)
+- [ ] **[P0]** Feature: Advanced Voice Experience & Audio Intelligence — Voice quality competitive advantage with noise suppression, echo cancellation (10-12 weeks)
+- [ ] **[P0]** Feature: Native Mobile Push Notification System — Essential for mobile user engagement and retention (6-8 weeks)
+
 ## Rate Limiting & Abuse Prevention (from security-ratelimiting-abuse.md)
 
 - [ ] **[HIGH]** Add per-IP and per-user WebSocket connection count limits in gateway layer (Redis-backed)
