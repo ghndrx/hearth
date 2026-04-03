@@ -37,6 +37,7 @@ type ForumTagService struct {
 	channelRepo ChannelRepository
 	serverRepo  ServerRepository
 	permService *PermissionService
+	eventBus   EventBus
 }
 
 // NewForumTagService creates a new forum tag service
@@ -46,6 +47,7 @@ func NewForumTagService(
 	channelRepo ChannelRepository,
 	serverRepo ServerRepository,
 	permService *PermissionService,
+	eventBus EventBus,
 ) *ForumTagService {
 	return &ForumTagService{
 		tagRepo:     tagRepo,
@@ -53,6 +55,7 @@ func NewForumTagService(
 		channelRepo: channelRepo,
 		serverRepo:  serverRepo,
 		permService: permService,
+		eventBus:   eventBus,
 	}
 }
 
@@ -102,6 +105,12 @@ func (s *ForumTagService) CreateTag(ctx context.Context, channelID, userID uuid.
 		}
 	}
 
+	// Calculate position
+	position := len(existingTags) // Default to end
+	if req.Position != nil && *req.Position >= 0 && *req.Position <= len(existingTags) {
+		position = *req.Position
+	}
+
 	tag := &models.ForumTag{
 		ID:        uuid.New(),
 		ServerID:  *serverID,
@@ -110,12 +119,19 @@ func (s *ForumTagService) CreateTag(ctx context.Context, channelID, userID uuid.
 		Color:     req.Color,
 		EmojiName: req.EmojiName,
 		Moderated: req.Moderated,
+		Position:  position,
 		CreatedAt: time.Now().UTC(),
 	}
 
 	if err := s.tagRepo.Create(ctx, tag); err != nil {
 		return nil, err
 	}
+
+	// Publish forum.tag_created event
+	s.eventBus.Publish("forum.tag_created", &ForumTagCreatedEvent{
+		Tag:       tag,
+		ChannelID: channelID,
+	})
 
 	return tag, nil
 }
@@ -156,10 +172,19 @@ func (s *ForumTagService) UpdateTag(ctx context.Context, tagID, userID uuid.UUID
 	if req.Moderated != nil {
 		tag.Moderated = *req.Moderated
 	}
+	if req.Position != nil {
+		tag.Position = *req.Position
+	}
 
 	if err := s.tagRepo.Update(ctx, tag); err != nil {
 		return nil, err
 	}
+
+	// Publish forum.tag_updated event
+	s.eventBus.Publish("forum.tag_updated", &ForumTagUpdatedEvent{
+		Tag:       tag,
+		ChannelID: tag.ChannelID,
+	})
 
 	return tag, nil
 }
@@ -182,6 +207,12 @@ func (s *ForumTagService) DeleteTag(ctx context.Context, tagID, userID uuid.UUID
 	if perms&models.PermManageChannels == 0 {
 		return ErrForbidden
 	}
+
+	// Publish forum.tag_deleted event before deleting
+	s.eventBus.Publish("forum.tag_deleted", &ForumTagDeletedEvent{
+		TagID:     tagID,
+		ChannelID: tag.ChannelID,
+	})
 
 	return s.tagRepo.Delete(ctx, tagID)
 }
@@ -304,7 +335,35 @@ func (s *ForumTagService) PinThread(ctx context.Context, threadID, userID uuid.U
 	if pin && thread.PinWeight == 0 {
 		thread.PinWeight = 1
 	}
-	return s.threadRepo.Update(ctx, thread)
+	if err := s.threadRepo.Update(ctx, thread); err != nil {
+		return err
+	}
+
+	// Publish forum.thread_pinned event
+	s.eventBus.Publish("forum.thread_pinned", &ThreadPinnedEvent{
+		ThreadID:  threadID,
+		ChannelID: thread.ParentChannelID,
+		Pinned:   pin,
+	})
+
+	return nil
+}
+
+// Forum tag events
+
+type ForumTagCreatedEvent struct {
+	Tag       *models.ForumTag
+	ChannelID uuid.UUID
+}
+
+type ForumTagUpdatedEvent struct {
+	Tag       *models.ForumTag
+	ChannelID uuid.UUID
+}
+
+type ForumTagDeletedEvent struct {
+	TagID     uuid.UUID
+	ChannelID uuid.UUID
 }
 
 // MarkThreadSolved marks a forum post as solved/answered or unmarks it

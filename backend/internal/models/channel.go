@@ -55,10 +55,28 @@ type Channel struct {
 	CreatedAt     time.Time   `json:"created_at" db:"created_at"`
 	ForumConfig   []byte      `json:"forum_config,omitempty" db:"forum_config"` // JSONB for forum-specific settings
 
+	// Forum-specific fields (stored as JSONB in the database)
+	DefaultReactionEmoji *string    `json:"default_reaction_emoji,omitempty"`
+	DefaultSortOrder    int        `json:"default_sort_order"`    // 0=latest_activity, 1=creation_date, 2=pin_weight
+	DefaultAutoArchive  int        `json:"default_auto_archive"`  // minutes
+	RequireTag          bool       `json:"require_tag"`
+	DefaultLayout       int        `json:"default_layout"`       // 0=list, 1=gallery
+	PostGuidelines      *string    `json:"post_guidelines,omitempty"`
+	AvailableTags       []ForumTag `json:"available_tags,omitempty"`
+
+	// Thread counts (populated from joins)
+	ThreadCount    int `json:"thread_count,omitempty"`
+	MessageCount   int `json:"message_count,omitempty"`
+
 	// Populated from joins
 	PermissionOverrides []PermissionOverride `json:"permission_overrides,omitempty"`
 	Recipients          []uuid.UUID          `json:"recipients,omitempty"` // For DMs - user IDs
+
+	// ChannelType is a duplicate of Type for Discord API compatibility
+	ChannelType ChannelType `json:"channel_type,omitempty"`
 }
+
+// AutoArchiveDuration constants (in minutes)
 
 // AutoArchiveDuration constants (in minutes)
 const (
@@ -145,6 +163,7 @@ type Thread struct {
 	SolvedBy        *uuid.UUID  `json:"solved_by,omitempty" db:"solved_by"`
 	SolvedAt        *time.Time  `json:"solved_at,omitempty" db:"solved_at"`
 	SolvedMessageID *uuid.UUID  `json:"solved_message_id,omitempty" db:"solved_message_id"` // The message that solved the post
+	LastMessageAt   *time.Time  `json:"last_message_at,omitempty" db:"last_message_at"`
 
 	// Populated from joins
 	ParentChannel *Channel   `json:"parent_channel,omitempty"`

@@ -17,6 +17,12 @@
 - [ ] **[P0]** Feature: Interactive Message Components — Buttons, select menus, and modals for bot interactions (10-14 weeks)
 - [ ] **[P0]** Feature: Slash Commands Framework — Type-safe application commands with autocomplete for bot platform (10-14 weeks)
 
+## 2026-04-03 Competitive Pipeline
+
+- [ ] **[P0]** Feature: Forum Channels — Discord-style threaded discussions with tagging for organized communities (8-12 weeks)
+- [ ] **[P0]** Feature: Interactive Message Components — Buttons, select menus, and modals for bot interactions (10-14 weeks)
+- [ ] **[P0]** Feature: Slash Commands Framework — Type-safe application commands with autocomplete for bot platform (10-14 weeks)
+
 ## 2026-04-03 TOP COMPETITIVE PRIORITIES
 
 - [ ] **[P0]** Feature: Native Mobile Applications — CRITICAL USER ACQUISITION BLOCKER: 70% of Discord users mobile-first, no app store presence blocks mainstream adoption (12-16 weeks)

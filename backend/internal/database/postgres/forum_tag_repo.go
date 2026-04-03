@@ -24,11 +24,11 @@ func NewForumTagRepository(db *sqlx.DB) *ForumTagRepository {
 // Create creates a new forum tag
 func (r *ForumTagRepository) Create(ctx context.Context, tag *models.ForumTag) error {
 	query := `
-		INSERT INTO forum_tags (id, server_id, channel_id, name, color, emoji_name, moderated, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO forum_tags (id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		tag.ID, tag.ServerID, tag.ChannelID, tag.Name, tag.Color, tag.EmojiName, tag.Moderated, tag.CreatedAt,
+		tag.ID, tag.ServerID, tag.ChannelID, tag.Name, tag.Color, tag.EmojiName, tag.Moderated, tag.Position, tag.CreatedAt,
 	)
 	return err
 }
@@ -36,7 +36,7 @@ func (r *ForumTagRepository) Create(ctx context.Context, tag *models.ForumTag) e
 // GetByID retrieves a tag by ID
 func (r *ForumTagRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.ForumTag, error) {
 	var tag models.ForumTag
-	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, created_at FROM forum_tags WHERE id = $1`
+	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at FROM forum_tags WHERE id = $1`
 	err := r.db.GetContext(ctx, &tag, query, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -47,7 +47,7 @@ func (r *ForumTagRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 // GetByChannel retrieves all tags for a channel
 func (r *ForumTagRepository) GetByChannel(ctx context.Context, channelID uuid.UUID) ([]models.ForumTag, error) {
 	var tags []models.ForumTag
-	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, created_at FROM forum_tags WHERE channel_id = $1 ORDER BY name`
+	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at FROM forum_tags WHERE channel_id = $1 ORDER BY position, name`
 	err := r.db.SelectContext(ctx, &tags, query, channelID)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (r *ForumTagRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]m
 		return []models.ForumTag{}, nil
 	}
 	var tags []models.ForumTag
-	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, created_at FROM forum_tags WHERE id = ANY($1) ORDER BY name`
+	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at FROM forum_tags WHERE id = ANY($1) ORDER BY position, name`
 	err := r.db.SelectContext(ctx, &tags, query, ids)
 	if err != nil {
 		return nil, err
@@ -73,10 +73,10 @@ func (r *ForumTagRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]m
 func (r *ForumTagRepository) Update(ctx context.Context, tag *models.ForumTag) error {
 	query := `
 		UPDATE forum_tags
-		SET name = $2, color = $3, emoji_name = $4, moderated = $5
+		SET name = $2, color = $3, emoji_name = $4, moderated = $5, position = $6
 		WHERE id = $1
 	`
-	_, err := r.db.ExecContext(ctx, query, tag.ID, tag.Name, tag.Color, tag.EmojiName, tag.Moderated)
+	_, err := r.db.ExecContext(ctx, query, tag.ID, tag.Name, tag.Color, tag.EmojiName, tag.Moderated, tag.Position)
 	return err
 }
 
@@ -97,11 +97,11 @@ func (r *ForumTagRepository) ApplyTags(ctx context.Context, threadID uuid.UUID, 
 func (r *ForumTagRepository) GetThreadTags(ctx context.Context, threadID uuid.UUID) ([]models.ForumTag, error) {
 	var tags []models.ForumTag
 	query := `
-		SELECT ft.id, ft.server_id, ft.channel_id, ft.name, ft.color, ft.emoji_name, ft.moderated, ft.created_at
+		SELECT ft.id, ft.server_id, ft.channel_id, ft.name, ft.color, ft.emoji_name, ft.moderated, ft.position, ft.created_at
 		FROM forum_tags ft
 		JOIN threads t ON t.applied_tags @> ARRAY[ft.id]
 		WHERE t.id = $1
-		ORDER BY ft.name
+		ORDER BY ft.position, ft.name
 	`
 	err := r.db.SelectContext(ctx, &tags, query, threadID)
 	if err != nil {

@@ -167,6 +167,15 @@ func HandleServiceError(c *fiber.Ctx, err error) error {
 	case errors.Is(err, services.ErrChannelNotFound):
 		return httpErr(fiber.StatusNotFound, "not_found", "channel not found")
 
+	case errors.Is(err, services.ErrTagNotFound):
+		return httpErr(fiber.StatusNotFound, "not_found", "tag not found")
+
+	case errors.Is(err, services.ErrTagNameExists):
+		return httpErr(fiber.StatusConflict, "conflict", "tag with this name already exists in this channel")
+
+	case errors.Is(err, services.ErrTagLimitReached):
+		return httpErr(fiber.StatusBadRequest, "bad_request", "maximum tag limit reached for this channel")
+
 	case errors.Is(err, services.ErrNotChannelMember):
 		return httpErr(fiber.StatusForbidden, "forbidden", "not a member of this channel")
 
