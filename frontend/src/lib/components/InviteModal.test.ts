@@ -11,9 +11,8 @@ describe('InviteModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.assign(navigator, {
-      clipboard: mockClipboard
-    });
+    // Reset clipboard mocks - navigator.clipboard is polyfilled in test-setup.ts
+    navigator.clipboard.writeText = mockClipboard.writeText;
   });
 
   afterEach(() => {
