@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -26,7 +27,7 @@ type ForumTagRepositoryInterface interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	ApplyTags(ctx context.Context, threadID uuid.UUID, tagIDs []uuid.UUID) error
 	GetThreadTags(ctx context.Context, threadID uuid.UUID) ([]models.ForumTag, error)
-	FilterThreadsByTags(ctx context.Context, channelID uuid.UUID, tagIDs []uuid.UUID, sortOrder int, limit, offset int) ([]models.Thread, int, error)
+	FilterThreads(ctx context.Context, channelID uuid.UUID, filter *models.ForumPostFilter, limit, offset int) ([]models.Thread, int, error)
 }
 
 // ForumTagService handles forum tag business logic
@@ -245,7 +246,7 @@ func (s *ForumTagService) FilterForumPosts(ctx context.Context, channelID uuid.U
 		limit = 25
 	}
 
-	threads, total, err := s.tagRepo.FilterThreadsByTags(ctx, channelID, filter.TagIDs, filter.SortOrder, limit, offset)
+	threads, total, err := s.tagRepo.FilterThreads(ctx, channelID, filter, limit, offset)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -304,4 +305,152 @@ func (s *ForumTagService) PinThread(ctx context.Context, threadID, userID uuid.U
 		thread.PinWeight = 1
 	}
 	return s.threadRepo.Update(ctx, thread)
+}
+
+// MarkThreadSolved marks a forum post as solved/answered or unmarks it
+func (s *ForumTagService) MarkThreadSolved(ctx context.Context, threadID, userID uuid.UUID, solved bool, solvedMessageID *uuid.UUID) error {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return err
+	}
+	if thread == nil {
+		return ErrThreadNotFound
+	}
+
+	channel, err := s.channelRepo.GetByID(ctx, thread.ParentChannelID)
+	if err != nil {
+		return err
+	}
+	if channel == nil || channel.Type != models.ChannelTypeForum {
+		return errors.New("thread is not in a forum channel")
+	}
+
+	serverID := channel.ServerID
+	if serverID == nil {
+		return errors.New("forum channel must belong to a server")
+	}
+
+	// Check permissions - only post owner, mods with PermMarkForumSolved, or mods with PermManageForumPosts
+	perms, err := s.permService.GetMemberPermissions(ctx, *serverID, userID)
+	if err != nil {
+		return err
+	}
+
+	isOwner := thread.OwnerID == userID
+	canMarkSolved := perms&models.PermMarkForumSolved != 0
+	canManagePosts := perms&models.PermManageForumPosts != 0
+	canManageChannels := perms&models.PermManageChannels != 0
+
+	// Owner can mark their own posts as solved
+	// Mods with appropriate permissions can mark any post as solved
+	if !isOwner && !canMarkSolved && !canManagePosts && !canManageChannels {
+		return ErrForbidden
+	}
+
+	thread.IsSolved = solved
+	if solved {
+		thread.SolvedBy = &userID
+		thread.SolvedMessageID = solvedMessageID
+		now := time.Now()
+		thread.SolvedAt = &now
+	} else {
+		thread.SolvedBy = nil
+		thread.SolvedAt = nil
+		thread.SolvedMessageID = nil
+	}
+
+	return s.threadRepo.Update(ctx, thread)
+}
+
+// GetThreadSolvedMessage returns the message that solved the thread (if any)
+func (s *ForumTagService) GetThreadSolvedMessage(ctx context.Context, threadID uuid.UUID) (*models.ThreadMessage, error) {
+	thread, err := s.threadRepo.GetByID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if thread == nil {
+		return nil, ErrThreadNotFound
+	}
+
+	if !thread.IsSolved || thread.SolvedMessageID == nil {
+		return nil, nil
+	}
+
+	// We need to get the message from the thread_messages table
+	// This requires a method on thread repo to get a specific message
+	// For now, return nil if we don't have direct access
+	return nil, nil
+}
+
+// GetForumChannelConfig returns the forum configuration for a channel
+func (s *ForumTagService) GetForumChannelConfig(ctx context.Context, channelID uuid.UUID) (*models.ForumConfig, error) {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+	if channel.Type != models.ChannelTypeForum {
+		return nil, errors.New("channel is not a forum channel")
+	}
+
+	// Parse forum_config JSONB if present
+	if channel.ForumConfig == nil {
+		return &models.ForumConfig{
+			DefaultSortOrder: 0,
+			DefaultLayout:    0,
+			RequireTag:       false,
+		}, nil
+	}
+
+	var config models.ForumConfig
+	if err := json.Unmarshal(channel.ForumConfig, &config); err != nil {
+		return nil, err
+	}
+
+	// Load available tags
+	tags, err := s.tagRepo.GetByChannel(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	config.AvailableTags = tags
+
+	return &config, nil
+}
+
+// UpdateForumChannelConfig updates the forum configuration for a channel
+func (s *ForumTagService) UpdateForumChannelConfig(ctx context.Context, channelID, userID uuid.UUID, config *models.ForumConfig) error {
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return err
+	}
+	if channel == nil {
+		return ErrChannelNotFound
+	}
+	if channel.Type != models.ChannelTypeForum {
+		return errors.New("channel is not a forum channel")
+	}
+
+	serverID := channel.ServerID
+	if serverID == nil {
+		return errors.New("forum channel must belong to a server")
+	}
+
+	// Check permissions
+	perms, err := s.permService.GetMemberPermissions(ctx, *serverID, userID)
+	if err != nil {
+		return err
+	}
+	if perms&models.PermManageChannels == 0 {
+		return ErrForbidden
+	}
+
+	// Serialize config to JSONB
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	return s.channelRepo.UpdateForumConfig(ctx, channelID, configJSON)
 }

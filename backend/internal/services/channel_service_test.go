@@ -107,6 +107,11 @@ func (m *MockChannelRepository) BulkUpdatePositions(ctx context.Context, entries
 	return args.Error(0)
 }
 
+func (m *MockChannelRepository) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	args := m.Called(ctx, channelID, configJSON)
+	return args.Error(0)
+}
+
 // MockServerRepository for channel tests
 type MockServerRepository struct {
 	mock.Mock

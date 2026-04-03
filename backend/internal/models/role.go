@@ -72,6 +72,14 @@ const (
 	PermUseSoundboard    int64 = 1 << 48
 	PermManageEvents     int64 = 1 << 49
 
+	// Forum
+	PermCreateForumPosts   int64 = 1 << 50 // Create posts in forum channels
+	PermManageForumPosts   int64 = 1 << 51 // Manage (pin, lock, delete) forum posts
+	PermCreateForumTags    int64 = 1 << 52 // Create and manage forum tags
+	PermManageForumTags   int64 = 1 << 53 // Manage forum tags (rename, delete)
+	PermMarkForumSolved    int64 = 1 << 54 // Mark posts as solved/answered
+	PermReactForSolved    int64 = 1 << 55 // Use the solved reaction emoji
+
 	// Admin (bit 62 is max safe for int64)
 	PermAdministrator int64 = 1 << 62
 )
@@ -88,7 +96,9 @@ const PermissionAll int64 = PermViewChannels | PermManageChannels | PermManageRo
 	PermUseExternalStickers | PermManageStickers | PermAddReactions | PermUseSlashCommands |
 	PermConnect | PermSpeak | PermVideo | PermUseVoiceActivity |
 	PermPrioritySpeaker | PermMuteMembers | PermDeafenMembers |
-	PermMoveMembers | PermUseSoundboard | PermManageEvents
+	PermMoveMembers | PermUseSoundboard | PermManageEvents |
+	PermCreateForumPosts | PermManageForumPosts | PermCreateForumTags | PermManageForumTags |
+	PermMarkForumSolved | PermReactForSolved
 
 // DefaultPermissions for @everyone role
 const DefaultPermissions int64 = PermViewChannels | PermCreateInvite |
@@ -96,7 +106,8 @@ const DefaultPermissions int64 = PermViewChannels | PermCreateInvite |
 	PermCreatePublicThreads | PermEmbedLinks | PermAttachFiles |
 	PermReadMessageHistory | PermAddReactions | PermUseExternalEmoji |
 	PermUseExternalStickers | PermUseSlashCommands | PermConnect | PermSpeak | PermVideo |
-	PermUseVoiceActivity
+	PermUseVoiceActivity |
+	PermCreateForumPosts | PermCreateForumTags | PermMarkForumSolved | PermReactForSolved
 
 // HasPermission checks if a permission set includes a specific permission
 func HasPermission(perms, perm int64) bool {

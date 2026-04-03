@@ -110,8 +110,8 @@ func (r *ForumTagRepository) GetThreadTags(ctx context.Context, threadID uuid.UU
 	return tags, nil
 }
 
-// FilterThreadsByTags filters threads by tag IDs using the applied_tags array
-func (r *ForumTagRepository) FilterThreadsByTags(ctx context.Context, channelID uuid.UUID, tagIDs []uuid.UUID, sortOrder int, limit, offset int) ([]models.Thread, int, error) {
+// FilterThreads filters threads with full ForumPostFilter support
+func (r *ForumTagRepository) FilterThreads(ctx context.Context, channelID uuid.UUID, filter *models.ForumPostFilter, limit, offset int) ([]models.Thread, int, error) {
 	var threads []models.Thread
 	var total int
 
@@ -119,31 +119,61 @@ func (r *ForumTagRepository) FilterThreadsByTags(ctx context.Context, channelID 
 	threadQuery := `
 		SELECT id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count,
 		       archived, auto_archive, locked, created_at, archive_timestamp,
-		       applied_tags, is_pinned, pin_weight
+		       applied_tags, is_pinned, pin_weight, is_solved, solved_by, solved_at, solved_message_id
 		FROM threads
 		WHERE parent_channel_id = $1
 	`
 
 	args := []interface{}{channelID}
+	argIndex := 2
 
-	if len(tagIDs) > 0 {
-		countQuery += ` AND applied_tags && $2`
-		threadQuery += ` AND applied_tags && $2`
-		args = append(args, tagIDs)
+	// Filter by tags
+	if len(filter.TagIDs) > 0 {
+		countQuery += fmt.Sprintf(` AND applied_tags && $%d`, argIndex)
+		threadQuery += fmt.Sprintf(` AND applied_tags && $%d`, argIndex)
+		args = append(args, filter.TagIDs)
+		argIndex++
+	}
+
+	// Filter by author
+	if filter.AuthorID != nil {
+		countQuery += fmt.Sprintf(` AND owner_id = $%d`, argIndex)
+		threadQuery += fmt.Sprintf(` AND owner_id = $%d`, argIndex)
+		args = append(args, *filter.AuthorID)
+		argIndex++
+	}
+
+	// Filter by pinned only
+	if filter.PinnedOnly {
+		countQuery += ` AND is_pinned = TRUE`
+		threadQuery += ` AND is_pinned = TRUE`
+	}
+
+	// Filter by search query (searches in name)
+	if filter.SearchQuery != "" {
+		searchPattern := "%" + filter.SearchQuery + "%"
+		countQuery += fmt.Sprintf(` AND name ILIKE $%d`, argIndex)
+		threadQuery += fmt.Sprintf(` AND name ILIKE $%d`, argIndex)
+		args = append(args, searchPattern)
+		argIndex++
 	}
 
 	// Determine sort order
 	var orderClause string
-	switch sortOrder {
+	switch filter.SortOrder {
 	case 1: // creation_date
 		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, created_at DESC`
 	case 2: // pin_weight
 		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
+	case 3: // most_reactions (would need join with reactions table - for now use message_count as proxy)
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, message_count DESC, created_at DESC`
+	case 4: // solved_first
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, is_solved DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
 	default: // latest_activity (0)
 		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
 	}
 
-	threadQuery += orderClause + fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	threadQuery += orderClause + fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIndex, argIndex+1)
 
 	err := r.db.GetContext(ctx, &total, countQuery, args...)
 	if err != nil {
