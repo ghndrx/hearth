@@ -12,7 +12,7 @@ import (
 
 // ThreadServiceInterface defines the interface for thread service operations
 type ThreadServiceInterface interface {
-	CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID) (*models.Thread, error)
+	CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID, tagIDs []uuid.UUID) (*models.Thread, error)
 	UpdateThread(ctx context.Context, threadID, requesterID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error)
 	GetThread(ctx context.Context, threadID uuid.UUID) (*models.Thread, error)
 	GetThreadMessages(ctx context.Context, threadID, requesterID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
@@ -86,7 +86,7 @@ func (h *ThreadHandler) CreateThread(c *fiber.Ctx) error {
 		}
 	}
 
-	thread, err := h.threadService.CreateThread(c.Context(), channelID, userID, req.Name, req.AutoArchive, parentMessageID)
+	thread, err := h.threadService.CreateThread(c.Context(), channelID, userID, req.Name, req.AutoArchive, parentMessageID, req.TagIDs)
 	if err != nil {
 		switch err {
 		case services.ErrChannelNotFound:

@@ -23,7 +23,7 @@ import (
 // --- mockThreadServiceForCoverage implements ThreadServiceInterface for coverage tests ---
 
 type mockThreadServiceForCoverage struct {
-	createThreadFunc              func(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID) (*models.Thread, error)
+	createThreadFunc              func(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error)
 	updateThreadFunc              func(ctx context.Context, threadID, requesterID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error)
 	getThreadFunc                 func(ctx context.Context, threadID uuid.UUID) (*models.Thread, error)
 	getThreadMessagesFunc         func(ctx context.Context, threadID, requesterID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
@@ -42,11 +42,11 @@ type mockThreadServiceForCoverage struct {
 	heartbeatPresenceFunc         func(ctx context.Context, threadID, userID uuid.UUID) error
 }
 
-func (m *mockThreadServiceForCoverage) CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID) (*models.Thread, error) {
+func (m *mockThreadServiceForCoverage) CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID, tagIDs []uuid.UUID) (*models.Thread, error) {
 	if m.createThreadFunc != nil {
-		return m.createThreadFunc(ctx, channelID, creatorID, name, autoArchive, parentMessageID)
+		return m.createThreadFunc(ctx, channelID, creatorID, name, autoArchive, tagIDs)
 	}
-	return &models.Thread{ID: uuid.New(), ParentChannelID: channelID, OwnerID: creatorID, Name: name}, nil
+	return &models.Thread{ID: uuid.New(), ParentChannelID: channelID, OwnerID: creatorID, Name: name, AppliedTags: tagIDs}, nil
 }
 
 func (m *mockThreadServiceForCoverage) UpdateThread(ctx context.Context, threadID, requesterID uuid.UUID, req models.UpdateThreadRequest) (*models.Thread, error) {
@@ -185,7 +185,7 @@ func TestThreadHandler_CreateThread(t *testing.T) {
 			channelIDParam: channelID.String(),
 			body:           map[string]interface{}{"name": "My Thread"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
-				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, parentMsgID *uuid.UUID) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return &models.Thread{ID: uuid.New(), ParentChannelID: cID, OwnerID: crID, Name: name}, nil
 				}
 			},
@@ -217,7 +217,7 @@ func TestThreadHandler_CreateThread(t *testing.T) {
 			channelIDParam: channelID.String(),
 			body:           map[string]interface{}{"name": "My Thread"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
-				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, parentMsgID *uuid.UUID) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return nil, services.ErrChannelNotFound
 				}
 			},
@@ -228,7 +228,7 @@ func TestThreadHandler_CreateThread(t *testing.T) {
 			channelIDParam: channelID.String(),
 			body:           map[string]interface{}{"name": "My Thread"},
 			setupMock: func(m *mockThreadServiceForCoverage) {
-				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, parentMsgID *uuid.UUID) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return nil, services.ErrNotServerMember
 				}
 			},
@@ -239,7 +239,7 @@ func TestThreadHandler_CreateThread(t *testing.T) {
 			channelIDParam: channelID.String(),
 			body:           map[string]interface{}{"name": "My Thread", "auto_archive": 9999},
 			setupMock: func(m *mockThreadServiceForCoverage) {
-				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, parentMsgID *uuid.UUID) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return nil, services.ErrInvalidAutoArchive
 				}
 			},
@@ -250,7 +250,7 @@ func TestThreadHandler_CreateThread(t *testing.T) {
 			channelIDParam: channelID.String(),
 			body:           map[string]interface{}{"name": "My Thread", "auto_archive": 1440},
 			setupMock: func(m *mockThreadServiceForCoverage) {
-				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, parentMsgID *uuid.UUID) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return &models.Thread{ID: uuid.New(), ParentChannelID: cID, OwnerID: crID, Name: name, AutoArchive: *autoArchive}, nil
 				}
 			},
@@ -261,11 +261,8 @@ func TestThreadHandler_CreateThread(t *testing.T) {
 			channelIDParam: channelID.String(),
 			body:           map[string]interface{}{"name": "My Thread", "parent_message_id": uuid.New().String()},
 			setupMock: func(m *mockThreadServiceForCoverage) {
-				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, parentMsgID *uuid.UUID) (*models.Thread, error) {
-					if parentMsgID == nil {
-						t.Errorf("expected parent message ID to be set")
-					}
-					return &models.Thread{ID: uuid.New(), ParentChannelID: cID, OwnerID: crID, Name: name}, nil
+				m.createThreadFunc = func(ctx context.Context, cID, crID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
+					return &models.Thread{ID: uuid.New(), ParentChannelID: cID, OwnerID: crID, Name: name, AppliedTags: tagIDs}, nil
 				}
 			},
 			expectedStatus: fiber.StatusCreated,

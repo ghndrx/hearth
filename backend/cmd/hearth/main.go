@@ -543,7 +543,7 @@ func main() {
 
 	// Initialize Forum Tags service and handler
 	forumTagService := services.NewForumTagService(repos.ForumTags, repos.Threads, repos.Channels, repos.Servers, permService)
-	h.SetForumTagsHandler(forumTagService, threadService)
+	h.SetForumTagsHandler(forumTagService, threadService, wsGateway)
 	log.Printf("✅ Forum tags service initialized")
 
 	// Initialize Server Audio Settings service and handler
