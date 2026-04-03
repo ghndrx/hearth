@@ -299,3 +299,28 @@ func (s *QuotaService) CheckStorageQuota(ctx context.Context, userID uuid.UUID, 
 
 	return nil
 }
+
+// VoiceServiceInterface defines the interface for LiveKit voice operations
+type VoiceServiceInterface interface {
+	IsConfigured() bool
+	GenerateToken(ctx context.Context, userID uuid.UUID, channelID uuid.UUID, userName, displayName, avatarURL string) (*VoiceTokenResponse, error)
+	GetRoomParticipants(ctx context.Context, channelID uuid.UUID) ([]Participant, error)
+	DisconnectParticipant(ctx context.Context, channelID uuid.UUID, userID uuid.UUID) error
+	MuteParticipant(ctx context.Context, channelID uuid.UUID, userID uuid.UUID, muted bool) error
+}
+
+// UserServiceInterface defines the interface for user operations needed by voice handler
+type UserServiceInterface interface {
+	GetUser(ctx context.Context, userID uuid.UUID) (*models.User, error)
+}
+
+// ChannelServiceInterface defines the interface for channel operations needed by voice handler
+type ChannelServiceInterface interface {
+	GetChannel(ctx context.Context, channelID uuid.UUID) (*models.Channel, error)
+	GetServerChannels(ctx context.Context, serverID uuid.UUID, requesterID uuid.UUID) ([]*models.Channel, error)
+}
+
+// VoicePermissionServiceInterface defines the interface for permission operations needed by voice handler
+type VoicePermissionServiceInterface interface {
+	RequirePermission(ctx context.Context, serverID, userID uuid.UUID, permission int64) error
+}
