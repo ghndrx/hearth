@@ -159,7 +159,7 @@ func CheckMentionAbuse(content string, mentionLimit int) bool {
 		if r == '@' && !inWord {
 			mentionCount++
 			inWord = true
-		} else if r <= 255 && !isAlphanumeric(byte(r)) {
+		} else if r > 255 || !isAlphanumeric(byte(r)) {
 			inWord = false
 		}
 	}
