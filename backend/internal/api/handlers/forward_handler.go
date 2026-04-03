@@ -43,7 +43,7 @@ func (h *ForwardHandlers) ForwardMessage(c *fiber.Ctx) error {
 
 	var req struct {
 		DestinationChannelID string `json:"destination_channel_id"`
-		Comment               string `json:"comment,omitempty"`
+		Comment              string `json:"comment,omitempty"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return ParseError(c, err)

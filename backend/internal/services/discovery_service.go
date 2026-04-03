@@ -440,10 +440,10 @@ func (s *DiscoveryService) GetDiscoveryPage(ctx context.Context, userID uuid.UUI
 	}
 
 	return &models.DiscoveryPage{
-		Featured:    featured,
-		Trending:    trending,
-		Categories:  categories,
-		Stats:       stats,
+		Featured:   featured,
+		Trending:   trending,
+		Categories: categories,
+		Stats:      stats,
 	}, nil
 }
 

@@ -504,11 +504,11 @@ func TestListTemplates(t *testing.T) {
 
 		publicTemplates := []*models.AIChatTemplate{
 			{
-				ID:          uuid.New(),
-				Name:        "Public Assistant",
+				ID:           uuid.New(),
+				Name:         "Public Assistant",
 				SystemPrompt: "You are a helpful assistant",
-				Category:    stringPtr("general"),
-				IsPublic:    true,
+				Category:     stringPtr("general"),
+				IsPublic:     true,
 			},
 		}
 		mockSvc.On("GetTemplates", mock.Anything, (*uuid.UUID)(nil), "").Return(publicTemplates, nil)

@@ -141,56 +141,56 @@ func Migrate(ctx context.Context, db *sqlx.DB) error {
 
 // Repositories holds all database repositories
 type Repositories struct {
-	Users                *UserRepository
-	Servers              *ServerRepository
-	Channels             *ChannelRepository
-	Messages             *MessageRepository
-	Roles                *RoleRepository
-	Threads              *ThreadRepository
-	VoiceStates          *VoiceStateRepository
-	AI                   *AIRepository
-	Webhooks             *WebhookRepository
-	E2EE                 *E2EERepository
-	Components           *ComponentRepository
-	Events               *EventRepository
-	AutoMod              AutoModRepository
-	Templates            *TemplateRepository
-	Invites              *InviteRepo
-	Stickers             StickerRepository
-	Discovery            *DiscoveryRepository
-	DiscoverableServers  *DiscoverableServerRepository
-	ForumTags            *ForumTagRepository
-	ServerAudioSettings  *ServerAudioSettingsRepository
-	Premium              *PremiumRepository
-	Search               *SearchRepository
-	Polls                *PollRepository
+	Users               *UserRepository
+	Servers             *ServerRepository
+	Channels            *ChannelRepository
+	Messages            *MessageRepository
+	Roles               *RoleRepository
+	Threads             *ThreadRepository
+	VoiceStates         *VoiceStateRepository
+	AI                  *AIRepository
+	Webhooks            *WebhookRepository
+	E2EE                *E2EERepository
+	Components          *ComponentRepository
+	Events              *EventRepository
+	AutoMod             AutoModRepository
+	Templates           *TemplateRepository
+	Invites             *InviteRepo
+	Stickers            StickerRepository
+	Discovery           *DiscoveryRepository
+	DiscoverableServers *DiscoverableServerRepository
+	ForumTags           *ForumTagRepository
+	ServerAudioSettings *ServerAudioSettingsRepository
+	Premium             *PremiumRepository
+	Search              *SearchRepository
+	Polls               *PollRepository
 }
 
 // NewRepositories creates all repositories
 func NewRepositories(db *sqlx.DB) *Repositories {
 	return &Repositories{
-		Users:                NewUserRepository(db),
-		Servers:              NewServerRepository(db),
-		Channels:             NewChannelRepository(db),
-		Messages:             NewMessageRepository(db),
-		Roles:                NewRoleRepository(db),
-		Threads:              NewThreadRepository(db),
-		VoiceStates:          NewVoiceStateRepository(db.DB),
-		AI:                   NewAIRepository(db),
-		Webhooks:             NewWebhookRepository(db),
-		E2EE:                 NewE2EERepository(db.DB),
-		Components:           NewComponentRepository(db),
-		Events:               NewEventRepository(db),
-		AutoMod:              NewAutoModRepository(db.DB),
-		Templates:            NewTemplateRepository(db),
-		Invites:              NewInviteRepo(db.DB),
-		Stickers:             NewStickerRepository(db.DB),
-		Discovery:            NewDiscoveryRepository(db),
-		DiscoverableServers:  NewDiscoverableServerRepository(db),
-		ForumTags:            NewForumTagRepository(db),
-		ServerAudioSettings:  NewServerAudioSettingsRepository(db),
-		Premium:              NewPremiumRepository(db),
-		Search:               NewSearchRepository(db),
-		Polls:                NewPollRepository(db),
+		Users:               NewUserRepository(db),
+		Servers:             NewServerRepository(db),
+		Channels:            NewChannelRepository(db),
+		Messages:            NewMessageRepository(db),
+		Roles:               NewRoleRepository(db),
+		Threads:             NewThreadRepository(db),
+		VoiceStates:         NewVoiceStateRepository(db.DB),
+		AI:                  NewAIRepository(db),
+		Webhooks:            NewWebhookRepository(db),
+		E2EE:                NewE2EERepository(db.DB),
+		Components:          NewComponentRepository(db),
+		Events:              NewEventRepository(db),
+		AutoMod:             NewAutoModRepository(db.DB),
+		Templates:           NewTemplateRepository(db),
+		Invites:             NewInviteRepo(db.DB),
+		Stickers:            NewStickerRepository(db.DB),
+		Discovery:           NewDiscoveryRepository(db),
+		DiscoverableServers: NewDiscoverableServerRepository(db),
+		ForumTags:           NewForumTagRepository(db),
+		ServerAudioSettings: NewServerAudioSettingsRepository(db),
+		Premium:             NewPremiumRepository(db),
+		Search:              NewSearchRepository(db),
+		Polls:               NewPollRepository(db),
 	}
 }

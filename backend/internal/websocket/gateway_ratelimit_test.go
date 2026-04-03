@@ -101,10 +101,10 @@ func TestConnectionLimiterCheckIPLimit(t *testing.T) {
 	defer s.Close()
 
 	cfg := &ConnectionLimitConfig{
-		Enabled:              true,
-		MaxConnectionsPerIP:  3,
+		Enabled:               true,
+		MaxConnectionsPerIP:   3,
 		MaxConnectionsPerUser: 0, // unlimited
-		ConnectionTTL:        10 * time.Minute,
+		ConnectionTTL:         10 * time.Minute,
 	}
 
 	limiter := NewConnectionLimiter(redis.NewClient(&redis.Options{Addr: s.Addr()}), cfg)
@@ -141,10 +141,10 @@ func TestConnectionLimiterCheckUserLimit(t *testing.T) {
 	defer s.Close()
 
 	cfg := &ConnectionLimitConfig{
-		Enabled:              true,
-		MaxConnectionsPerIP:  0, // unlimited
+		Enabled:               true,
+		MaxConnectionsPerIP:   0, // unlimited
 		MaxConnectionsPerUser: 2,
-		ConnectionTTL:        10 * time.Minute,
+		ConnectionTTL:         10 * time.Minute,
 	}
 
 	limiter := NewConnectionLimiter(redis.NewClient(&redis.Options{Addr: s.Addr()}), cfg)
@@ -178,10 +178,10 @@ func TestConnectionLimiterIncrementDecrement(t *testing.T) {
 	defer s.Close()
 
 	cfg := &ConnectionLimitConfig{
-		Enabled:            true,
-		MaxConnectionsPerIP: 10,
+		Enabled:               true,
+		MaxConnectionsPerIP:   10,
 		MaxConnectionsPerUser: 10,
-		ConnectionTTL:      10 * time.Minute,
+		ConnectionTTL:         10 * time.Minute,
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: s.Addr()})
@@ -230,10 +230,10 @@ func TestConnectionLimiterDecrementToZero(t *testing.T) {
 	defer s.Close()
 
 	cfg := &ConnectionLimitConfig{
-		Enabled:            true,
-		MaxConnectionsPerIP: 10,
+		Enabled:               true,
+		MaxConnectionsPerIP:   10,
 		MaxConnectionsPerUser: 10,
-		ConnectionTTL:      10 * time.Minute,
+		ConnectionTTL:         10 * time.Minute,
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: s.Addr()})
@@ -272,10 +272,10 @@ func TestConnectionLimiterCheckIPBeforeUser(t *testing.T) {
 	defer s.Close()
 
 	cfg := &ConnectionLimitConfig{
-		Enabled:            true,
-		MaxConnectionsPerIP: 2, // IP limit reached first
+		Enabled:               true,
+		MaxConnectionsPerIP:   2, // IP limit reached first
 		MaxConnectionsPerUser: 1,
-		ConnectionTTL:      10 * time.Minute,
+		ConnectionTTL:         10 * time.Minute,
 	}
 
 	limiter := NewConnectionLimiter(redis.NewClient(&redis.Options{Addr: s.Addr()}), cfg)

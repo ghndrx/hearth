@@ -275,8 +275,8 @@ func (m *simpleMockChannelRepoForWorker) DeletePermissionOverride(ctx context.Co
 // simpleMockEventBusForWorker is a simple mock for EventBus
 type simpleMockEventBusForWorker struct{}
 
-func (m *simpleMockEventBusForWorker) Publish(event string, data interface{}) {}
-func (m *simpleMockEventBusForWorker) Subscribe(event string, handler func(data interface{})) {}
+func (m *simpleMockEventBusForWorker) Publish(event string, data interface{})                   {}
+func (m *simpleMockEventBusForWorker) Subscribe(event string, handler func(data interface{}))   {}
 func (m *simpleMockEventBusForWorker) Unsubscribe(event string, handler func(data interface{})) {}
 
 func TestThreadAutoArchiveWorker_ProcessThreadActivity(t *testing.T) {
@@ -296,7 +296,7 @@ func TestThreadAutoArchiveWorker_ProcessThreadActivity(t *testing.T) {
 	thread := &models.Thread{ID: threadID, ParentChannelID: channelID, OwnerID: userID, Archived: false}
 	channel := &models.Channel{ID: channelID, ServerID: &serverID}
 	meta := &models.ThreadAutoArchiveMeta{
-		ThreadID:     threadID,
+		ThreadID:       threadID,
 		LastActivityAt: time.Now().Add(-1 * time.Hour),
 	}
 

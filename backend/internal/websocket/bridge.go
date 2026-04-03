@@ -723,11 +723,11 @@ func (b *EventBridge) onComponentInteraction(event events.Event) {
 	}
 	if data.Component != nil {
 		wsData["component"] = map[string]interface{}{
-			"id":         data.Component.ID.String(),
-			"type":       data.Component.Type,
-			"custom_id":  data.Component.CustomID,
-			"label":      data.Component.Label,
-			"style":      data.Component.Style,
+			"id":        data.Component.ID.String(),
+			"type":      data.Component.Type,
+			"custom_id": data.Component.CustomID,
+			"label":     data.Component.Label,
+			"style":     data.Component.Style,
 		}
 	}
 	b.sendToChannel(data.ChannelID, EventTypeComponentInteraction, wsData)
@@ -741,8 +741,8 @@ func (b *EventBridge) onComponentUpdated(event events.Event) {
 	}
 	log.Printf("[EventBridge] Broadcasting COMPONENT_UPDATE to channel %s", data.ChannelID)
 	wsData := map[string]interface{}{
-		"message_id":   data.Message.ID.String(),
-		"channel_id":   data.ChannelID.String(),
+		"message_id": data.Message.ID.String(),
+		"channel_id": data.ChannelID.String(),
 	}
 	b.sendToChannel(data.ChannelID, EventTypeComponentUpdate, wsData)
 }
@@ -842,15 +842,15 @@ func (b *EventBridge) onServerBoostAdded(event events.Event) {
 	if data.LevelBefore != data.LevelAfter {
 		if data.LevelAfter > data.LevelBefore {
 			b.sendToServer(data.ServerID, EventServerBoostLevelUp, map[string]interface{}{
-				"server_id":      data.ServerID.String(),
-				"level":          data.LevelAfter,
-				"boost_count":    data.BoostCount,
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
 			})
 		} else {
 			b.sendToServer(data.ServerID, EventServerBoostLevelDown, map[string]interface{}{
-				"server_id":      data.ServerID.String(),
-				"level":          data.LevelAfter,
-				"boost_count":    data.BoostCount,
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
 			})
 		}
 	}
@@ -880,15 +880,15 @@ func (b *EventBridge) onServerBoostRemoved(event events.Event) {
 	if data.LevelBefore != data.LevelAfter {
 		if data.LevelAfter > data.LevelBefore {
 			b.sendToServer(data.ServerID, EventServerBoostLevelUp, map[string]interface{}{
-				"server_id":      data.ServerID.String(),
-				"level":          data.LevelAfter,
-				"boost_count":    data.BoostCount,
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
 			})
 		} else {
 			b.sendToServer(data.ServerID, EventServerBoostLevelDown, map[string]interface{}{
-				"server_id":      data.ServerID.String(),
-				"level":          data.LevelAfter,
-				"boost_count":    data.BoostCount,
+				"server_id":   data.ServerID.String(),
+				"level":       data.LevelAfter,
+				"boost_count": data.BoostCount,
 			})
 		}
 	}

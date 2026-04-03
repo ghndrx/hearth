@@ -124,9 +124,9 @@ func TestCheckRegexMatch(t *testing.T) {
 
 func TestCheckSpamPatterns(t *testing.T) {
 	tests := []struct {
-		name       string
-		content    string
-		wantSpam   bool
+		name     string
+		content  string
+		wantSpam bool
 	}{
 		{
 			name:     "not spam",
@@ -172,100 +172,100 @@ func TestCheckSpamPatterns(t *testing.T) {
 
 func TestCheckMentionAbuse(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
+		name         string
+		content      string
 		mentionLimit int
-		wantAbuse   bool
+		wantAbuse    bool
 	}{
 		{
-			name:        "no mentions",
-			content:     "Hello world",
+			name:         "no mentions",
+			content:      "Hello world",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "under limit",
-			content:     "@user1 @user2 @user3",
+			name:         "under limit",
+			content:      "@user1 @user2 @user3",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "at limit",
-			content:     "@user1 @user2 @user3 @user4 @user5",
+			name:         "at limit",
+			content:      "@user1 @user2 @user3 @user4 @user5",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "over limit",
-			content:     "@user1 @user2 @user3 @user4 @user5 @user6",
+			name:         "over limit",
+			content:      "@user1 @user2 @user3 @user4 @user5 @user6",
 			mentionLimit: 5,
-			wantAbuse:   true,
+			wantAbuse:    true,
 		},
 		{
-			name:        "role mentions count",
-			content:     "@user1 @user2 <@&123456>",
+			name:         "role mentions count",
+			content:      "@user1 @user2 <@&123456>",
 			mentionLimit: 3,
-			wantAbuse:   true,
+			wantAbuse:    true,
 		},
 		{
-			name:        "zero limit",
-			content:     "@user1",
+			name:         "zero limit",
+			content:      "@user1",
 			mentionLimit: 0,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "negative limit",
-			content:     "@user1",
+			name:         "negative limit",
+			content:      "@user1",
 			mentionLimit: -1,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "unicode in content - no crash",
-			content:     "Hello 👋🎉 @user1 🚀✨",
+			name:         "unicode in content - no crash",
+			content:      "Hello 👋🎉 @user1 🚀✨",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "emoji cluster with mention",
-			content:     "🎊🎉🎈🎁🎂✨ @user1 💫💫💫",
+			name:         "emoji cluster with mention",
+			content:      "🎊🎉🎈🎁🎂✨ @user1 💫💫💫",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "mixed unicode letters and mention",
-			content:     "Привет @user1",
+			name:         "mixed unicode letters and mention",
+			content:      "Привет @user1",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "chinese characters with mention",
-			content:     "你好 @user1 你好吗",
+			name:         "chinese characters with mention",
+			content:      "你好 @user1 你好吗",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "japanese characters with mention",
-			content:     "こんにちは @user1",
+			name:         "japanese characters with mention",
+			content:      "こんにちは @user1",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "arabic characters with mention",
-			content:     "مرحبا @user1",
+			name:         "arabic characters with mention",
+			content:      "مرحبا @user1",
 			mentionLimit: 5,
-			wantAbuse:   false,
+			wantAbuse:    false,
 		},
 		{
-			name:        "high unicode with mention abuse",
-			content:     "@user1 @user2 @user3 @user4 @user5 @user6 👨‍👩‍👧‍👦🔥💫",
+			name:         "high unicode with mention abuse",
+			content:      "@user1 @user2 @user3 @user4 @user5 @user6 👨‍👩‍👧‍👦🔥💫",
 			mentionLimit: 5,
-			wantAbuse:   true,
+			wantAbuse:    true,
 		},
 		{
-			name:        "many emoji clusters with mentions",
-			content:     "@user1 @user2 @user3 @user4 @user5 @user6 🌟💥🔥💫",
+			name:         "many emoji clusters with mentions",
+			content:      "@user1 @user2 @user3 @user4 @user5 @user6 🌟💥🔥💫",
 			mentionLimit: 5,
-			wantAbuse:   true,
+			wantAbuse:    true,
 		},
 	}
 
@@ -308,9 +308,9 @@ func TestIsAlphanumeric(t *testing.T) {
 
 func TestNormalizeForMatching(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    string
+		name  string
+		input string
+		want  string
 	}{
 		{"lowercase", "Hello", "hello"},
 		{"trim spaces", "  hello  ", "hello"},
@@ -332,9 +332,9 @@ func TestNormalizeForMatching(t *testing.T) {
 
 func TestPregQuote(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    string
+		name  string
+		input string
+		want  string
 	}{
 		{"no special chars", "hello", "hello"},
 		{"dot", "hello.world", `hello\.world`},

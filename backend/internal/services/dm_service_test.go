@@ -125,7 +125,7 @@ func (m *mockDMEventBus) Publish(event string, data interface{}) {
 	m.published = append(m.published, event)
 }
 
-func (m *mockDMEventBus) Subscribe(event string, handler func(data interface{})) {}
+func (m *mockDMEventBus) Subscribe(event string, handler func(data interface{}))   {}
 func (m *mockDMEventBus) Unsubscribe(event string, handler func(data interface{})) {}
 
 // Mock cache for DM service tests
@@ -172,11 +172,11 @@ func (m *mockDMCache) Delete(ctx context.Context, key string) error {
 func createTestGroupDM(t *testing.T, repo *mockDMChannelRepo, ownerID uuid.UUID, recipientIDs []uuid.UUID) *models.Channel {
 	ownerPtr := ownerID
 	channel := &models.Channel{
-		ID:          uuid.New(),
-		Type:        models.ChannelTypeGroupDM,
-		Name:        "Test Group DM",
-		OwnerID:     &ownerPtr,
-		Recipients:  append([]uuid.UUID{ownerID}, recipientIDs...),
+		ID:         uuid.New(),
+		Type:       models.ChannelTypeGroupDM,
+		Name:       "Test Group DM",
+		OwnerID:    &ownerPtr,
+		Recipients: append([]uuid.UUID{ownerID}, recipientIDs...),
 	}
 	repo.channels[channel.ID] = channel
 	return channel
@@ -301,10 +301,10 @@ func TestAddUserToGroupDM_NotGroupDM(t *testing.T) {
 
 	ownerID := uuid.New()
 	channel := &models.Channel{
-		ID:          uuid.New(),
-		Type:        models.ChannelTypeDM, // Not a group DM
-		OwnerID:     &ownerID,
-		Recipients:  []uuid.UUID{ownerID},
+		ID:         uuid.New(),
+		Type:       models.ChannelTypeDM, // Not a group DM
+		OwnerID:    &ownerID,
+		Recipients: []uuid.UUID{ownerID},
 	}
 	repo.channels[channel.ID] = channel
 
@@ -538,10 +538,10 @@ func TestTransferGroupDMOwnership_NotGroupDM(t *testing.T) {
 	ownerID := uuid.New()
 	newOwnerID := uuid.New()
 	channel := &models.Channel{
-		ID:          uuid.New(),
-		Type:        models.ChannelTypeDM, // Not a group DM
-		OwnerID:     &ownerID,
-		Recipients:  []uuid.UUID{ownerID, newOwnerID},
+		ID:         uuid.New(),
+		Type:       models.ChannelTypeDM, // Not a group DM
+		OwnerID:    &ownerID,
+		Recipients: []uuid.UUID{ownerID, newOwnerID},
 	}
 	repo.channels[channel.ID] = channel
 

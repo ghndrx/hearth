@@ -198,40 +198,40 @@ func TestNotificationCoordinator_isNotificationTypeEnabled(t *testing.T) {
 	coordinator := &NotificationCoordinator{}
 
 	tests := []struct {
-		name     string
+		name      string
 		notifType models.NotificationType
-		pref     *models.ChannelNotificationPreference
-		expected bool
+		pref      *models.ChannelNotificationPreference
+		expected  bool
 	}{
 		{
 			name:      "mention enabled",
 			notifType: models.NotificationTypeMention,
-			pref:     &models.ChannelNotificationPreference{EnableMentions: true},
-			expected: true,
+			pref:      &models.ChannelNotificationPreference{EnableMentions: true},
+			expected:  true,
 		},
 		{
 			name:      "mention disabled",
 			notifType: models.NotificationTypeMention,
-			pref:     &models.ChannelNotificationPreference{EnableMentions: false},
-			expected: false,
+			pref:      &models.ChannelNotificationPreference{EnableMentions: false},
+			expected:  false,
 		},
 		{
 			name:      "DM uses messages setting",
 			notifType: models.NotificationTypeDirectMessage,
-			pref:     &models.ChannelNotificationPreference{EnableMessages: true},
-			expected: true,
+			pref:      &models.ChannelNotificationPreference{EnableMessages: true},
+			expected:  true,
 		},
 		{
 			name:      "reaction uses reactions setting",
 			notifType: models.NotificationTypeReaction,
-			pref:     &models.ChannelNotificationPreference{EnableReactions: false},
-			expected: false,
+			pref:      &models.ChannelNotificationPreference{EnableReactions: false},
+			expected:  false,
 		},
 		{
 			name:      "unknown type defaults to enabled",
 			notifType: models.NotificationTypeSystem,
-			pref:     &models.ChannelNotificationPreference{EnableMentions: false},
-			expected: true,
+			pref:      &models.ChannelNotificationPreference{EnableMentions: false},
+			expected:  true,
 		},
 	}
 

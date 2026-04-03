@@ -38,9 +38,9 @@ import (
 
 const (
 	// Server configuration constants
-	MaxBodySize     = 100 * 1024 * 1024 // 100MB
-	ReadTimeout     = 30 * time.Second
-	WriteTimeout    = 30 * time.Second
+	MaxBodySize  = 100 * 1024 * 1024 // 100MB
+	ReadTimeout  = 30 * time.Second
+	WriteTimeout = 30 * time.Second
 )
 
 var (
@@ -581,7 +581,6 @@ func main() {
 	h.SetStickerHandler(stickerService, serverService, permService, premiumService)
 	log.Printf("✅ Premium & Billing services initialized")
 
-
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Wire up API rate limiter for per-endpoint rate limiting
@@ -675,4 +674,3 @@ func main() {
 	<-shutdownComplete
 	log.Println("✅ Graceful shutdown complete")
 }
-
