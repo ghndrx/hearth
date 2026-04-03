@@ -527,7 +527,12 @@ func (g *Gateway) handleIdentify(conn *websocket.Conn, client *Client, session *
 		},
 	}
 
-	readyData, _ := json.Marshal(ready)
+	readyData, err := json.Marshal(ready)
+	if err != nil {
+	log.Printf("[Gateway] Failed to marshal ready data: %v", err)
+		g.sendError(conn, "Internal server error")
+		return
+	}
 	g.sendMessage(conn, &Message{
 		Op:       OpDispatch,
 		Type:     EventReady,
@@ -564,7 +569,11 @@ func (g *Gateway) handlePresenceUpdate(conn *websocket.Conn, client *Client, ses
 		User:       userObj,
 	}
 
-	presenceData, _ := json.Marshal(presence)
+	presenceData, err := json.Marshal(presence)
+	if err != nil {
+	log.Printf("[Gateway] Failed to marshal presence data: %v", err)
+		return
+	}
 
 	// Broadcast to all servers the user is in
 	client.mu.RLock()
@@ -644,7 +653,12 @@ func (g *Gateway) handleRequestMembers(conn *websocket.Conn, client *Client, ses
 		"nonce":       data.Nonce,
 	}
 
-	chunkData, _ := json.Marshal(chunk)
+	chunkData, err := json.Marshal(chunk)
+	if err != nil {
+	log.Printf("[Gateway] Failed to marshal guild members chunk data: %v", err)
+		g.sendError(conn, "Failed to retrieve guild members")
+		return
+	}
 	g.sendMessage(conn, &Message{
 		Op:       OpDispatch,
 		Type:     EventGuildMembersChunk,
@@ -699,7 +713,12 @@ func (g *Gateway) sendHello(conn *websocket.Conn) {
 		HeartbeatInterval: int(g.config.HeartbeatInterval.Milliseconds()),
 	}
 
-	helloData, _ := json.Marshal(hello)
+	helloData, err := json.Marshal(hello)
+	if err != nil {
+	log.Printf("[Gateway] Failed to marshal hello data: %v", err)
+		conn.Close()
+		return
+	}
 	g.sendMessage(conn, &Message{
 		Op:   OpHello,
 		Data: helloData,
@@ -723,7 +742,12 @@ func (g *Gateway) sendError(conn *websocket.Conn, message string) {
 	if conn == nil {
 		return
 	}
-	errorData, _ := json.Marshal(map[string]string{"message": message})
+	errorData, err := json.Marshal(map[string]string{"message": message})
+	if err != nil {
+	log.Printf("[Gateway] Failed to marshal error data: %v", err)
+		conn.Close()
+		return
+	}
 	g.sendMessage(conn, &Message{
 		Op:   OpDispatch,
 		Type: "ERROR",
