@@ -10,18 +10,18 @@ import (
 
 // LiveKitVoiceHandler handles LiveKit voice channel operations
 type LiveKitVoiceHandler struct {
-	voiceService   *services.VoiceService
-	userService    *services.UserService
-	channelService *services.ChannelService
-	permService    *services.PermissionService
+	voiceService   services.VoiceServiceInterface
+	userService    services.UserServiceInterface
+	channelService services.ChannelServiceInterface
+	permService    services.VoicePermissionServiceInterface
 }
 
 // NewLiveKitVoiceHandler creates a new LiveKit voice handler
 func NewLiveKitVoiceHandler(
-	voiceService *services.VoiceService,
-	userService *services.UserService,
-	channelService *services.ChannelService,
-	permService *services.PermissionService,
+	voiceService services.VoiceServiceInterface,
+	userService services.UserServiceInterface,
+	channelService services.ChannelServiceInterface,
+	permService services.VoicePermissionServiceInterface,
 ) *LiveKitVoiceHandler {
 	return &LiveKitVoiceHandler{
 		voiceService:   voiceService,
