@@ -219,6 +219,10 @@ func (m *mockChannelRepoForThread) UpdateLastMessage(ctx context.Context, channe
 	return nil
 }
 
+func (m *mockChannelRepoForThread) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	return nil
+}
+
 func (m *mockChannelRepoForThread) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) {
 	return nil, nil
 }
