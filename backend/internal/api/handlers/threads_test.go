@@ -17,7 +17,7 @@ import (
 
 // mockThreadService mocks ThreadService for handler tests
 type mockThreadService struct {
-	createThreadFunc      func(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int) (*models.Thread, error)
+	createThreadFunc      func(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error)
 	getThreadFunc         func(ctx context.Context, threadID uuid.UUID) (*models.Thread, error)
 	getThreadMessagesFunc func(ctx context.Context, threadID, requesterID uuid.UUID, before *uuid.UUID, limit int) ([]*models.ThreadMessage, error)
 	sendThreadMessageFunc func(ctx context.Context, threadID, authorID uuid.UUID, content string) (*models.ThreadMessage, error)
@@ -29,11 +29,11 @@ type mockThreadService struct {
 	deleteThreadFunc      func(ctx context.Context, threadID, requesterID uuid.UUID) error
 }
 
-func (m *mockThreadService) CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int) (*models.Thread, error) {
+func (m *mockThreadService) CreateThread(ctx context.Context, channelID, creatorID uuid.UUID, name string, autoArchive *int, parentMessageID *uuid.UUID, tagIDs []uuid.UUID) (*models.Thread, error) {
 	if m.createThreadFunc != nil {
-		return m.createThreadFunc(ctx, channelID, creatorID, name, autoArchive)
+		return m.createThreadFunc(ctx, channelID, creatorID, name, autoArchive, tagIDs)
 	}
-	return &models.Thread{ID: uuid.New(), ParentChannelID: channelID, OwnerID: creatorID, Name: name}, nil
+	return &models.Thread{ID: uuid.New(), ParentChannelID: channelID, OwnerID: creatorID, Name: name, AppliedTags: tagIDs}, nil
 }
 
 func (m *mockThreadService) GetThread(ctx context.Context, threadID uuid.UUID) (*models.Thread, error) {
@@ -130,7 +130,7 @@ func setupThreadTestApp(svc *mockThreadService) *fiber.App {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name is required"})
 		}
 
-		thread, err := svc.CreateThread(c.Context(), channelID, userID, req.Name, req.AutoArchive)
+		thread, err := svc.CreateThread(c.Context(), channelID, userID, req.Name, req.AutoArchive, nil, req.TagIDs)
 		if err != nil {
 			switch err {
 			case services.ErrChannelNotFound:
@@ -387,7 +387,7 @@ func TestCreateThread(t *testing.T) {
 				"name": "Test Thread",
 			},
 			setupMock: func(m *mockThreadService) {
-				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return &models.Thread{
 						ID:              uuid.New(),
 						ParentChannelID: cID,
@@ -407,7 +407,7 @@ func TestCreateThread(t *testing.T) {
 				"auto_archive": 60,
 			},
 			setupMock: func(m *mockThreadService) {
-				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return &models.Thread{
 						ID:              uuid.New(),
 						ParentChannelID: cID,
@@ -441,7 +441,7 @@ func TestCreateThread(t *testing.T) {
 			channelID: channelID.String(),
 			body:      map[string]interface{}{"name": "Test Thread"},
 			setupMock: func(m *mockThreadService) {
-				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return nil, services.ErrChannelNotFound
 				}
 			},
@@ -453,7 +453,7 @@ func TestCreateThread(t *testing.T) {
 			channelID: channelID.String(),
 			body:      map[string]interface{}{"name": "Test Thread"},
 			setupMock: func(m *mockThreadService) {
-				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return nil, services.ErrNotServerMember
 				}
 			},
@@ -468,7 +468,7 @@ func TestCreateThread(t *testing.T) {
 				"auto_archive": 999,
 			},
 			setupMock: func(m *mockThreadService) {
-				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int) (*models.Thread, error) {
+				m.createThreadFunc = func(ctx context.Context, cID, uID uuid.UUID, name string, autoArchive *int, tagIDs []uuid.UUID) (*models.Thread, error) {
 					return nil, services.ErrInvalidAutoArchive
 				}
 			},
