@@ -22,13 +22,14 @@ func NewThreadRepository(db *sqlx.DB) *ThreadRepository {
 // Create creates a new thread
 func (r *ThreadRepository) Create(ctx context.Context, thread *models.Thread) error {
 	query := `
-		INSERT INTO threads (id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count, archived, auto_archive, locked, created_at, applied_tags, is_pinned, pin_weight)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO threads (id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count, archived, auto_archive, locked, created_at, applied_tags, is_pinned, pin_weight, is_solved, solved_by, solved_at, solved_message_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		thread.ID, thread.ParentChannelID, thread.ParentMessageID, thread.OwnerID, thread.Name,
 		thread.MessageCount, thread.MemberCount, thread.Archived, thread.AutoArchive,
 		thread.Locked, thread.CreatedAt, thread.AppliedTags, thread.IsPinned, thread.PinWeight,
+		thread.IsSolved, thread.SolvedBy, thread.SolvedAt, thread.SolvedMessageID,
 	)
 	if err != nil {
 		return err
@@ -45,7 +46,7 @@ func (r *ThreadRepository) Create(ctx context.Context, thread *models.Thread) er
 // GetByID retrieves a thread by ID
 func (r *ThreadRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Thread, error) {
 	var thread models.Thread
-	query := `SELECT id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count, archived, auto_archive, locked, created_at, archive_timestamp, applied_tags, is_pinned, pin_weight FROM threads WHERE id = $1`
+	query := `SELECT id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count, archived, auto_archive, locked, created_at, archive_timestamp, applied_tags, is_pinned, pin_weight, is_solved, solved_by, solved_at, solved_message_id FROM threads WHERE id = $1`
 	err := r.db.GetContext(ctx, &thread, query, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -62,13 +63,15 @@ func (r *ThreadRepository) Update(ctx context.Context, thread *models.Thread) er
 		UPDATE threads SET
 			name = $2, archived = $3, auto_archive = $4, locked = $5,
 			message_count = $6, member_count = $7, archive_timestamp = $8,
-			applied_tags = $9, is_pinned = $10, pin_weight = $11
+			applied_tags = $9, is_pinned = $10, pin_weight = $11,
+			is_solved = $12, solved_by = $13, solved_at = $14, solved_message_id = $15
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		thread.ID, thread.Name, thread.Archived, thread.AutoArchive,
 		thread.Locked, thread.MessageCount, thread.MemberCount, thread.ArchivedAt,
 		thread.AppliedTags, thread.IsPinned, thread.PinWeight,
+		thread.IsSolved, thread.SolvedBy, thread.SolvedAt, thread.SolvedMessageID,
 	)
 	return err
 }
@@ -82,7 +85,7 @@ func (r *ThreadRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // GetByChannelID retrieves all threads for a channel
 func (r *ThreadRepository) GetByChannelID(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error) {
 	var threads []*models.Thread
-	query := `SELECT id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count, archived, auto_archive, locked, created_at, archive_timestamp, applied_tags, is_pinned, pin_weight FROM threads WHERE parent_channel_id = $1 ORDER BY is_pinned DESC, pin_weight DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
+	query := `SELECT id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count, archived, auto_archive, locked, created_at, archive_timestamp, applied_tags, is_pinned, pin_weight, is_solved, solved_by, solved_at, solved_message_id FROM threads WHERE parent_channel_id = $1 ORDER BY is_pinned DESC, pin_weight DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
 	err := r.db.SelectContext(ctx, &threads, query, channelID)
 	return threads, err
 }
