@@ -61,8 +61,8 @@
 <div class="thread-view">
 	{#if isForumChannel && threadId}
 		<ForumPostView
-			{channelId}
-			threadId={threadId}
+			channelId={channelId!}
+			threadId={threadId!}
 			on:back={handleBackToForum}
 		/>
 	{:else}
