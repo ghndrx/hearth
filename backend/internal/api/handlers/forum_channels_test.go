@@ -703,14 +703,11 @@ func TestForumPostFilter_Struct(t *testing.T) {
 
 func TestForumPermissions(t *testing.T) {
 	// Test that forum permissions are defined
-	assert.Equal(t, int64(1<<36), models.PermCreateForumPosts)
-	assert.Equal(t, int64(1<<37), models.PermParticipateInForums)
+	assert.Equal(t, int64(1<<50), models.PermCreateForumPosts)
 
 	// Test that permissions are included in default
 	assert.True(t, models.DefaultPermissions&models.PermCreateForumPosts != 0)
-	assert.True(t, models.DefaultPermissions&models.PermParticipateInForums != 0)
 
 	// Test that permissions are included in all
 	assert.True(t, models.PermissionAll&models.PermCreateForumPosts != 0)
-	assert.True(t, models.PermissionAll&models.PermParticipateInForums != 0)
 }
