@@ -193,7 +193,8 @@ describe('Slash Commands Store Functions', () => {
 				{ id: '3', name: 'party', description: 'Party mode', type: 1, application_id: 'app', version: 'v1', default_permission: true, created_at: '', updated_at: '' }
 			];
 
-			const results = getAutocompleteSuggestions('/p', commands as any);
+			// Use '/pin' to uniquely match 'ping' (not 'party' which starts with 'p' but doesn't match 'pin')
+			const results = getAutocompleteSuggestions('/pin', commands as any);
 			expect(results.length).toBe(1);
 			expect(results[0].command.name).toBe('ping');
 		});
