@@ -288,8 +288,8 @@ func TestInviteTrackingAnalytics_ResultsMapping(t *testing.T) {
 
 	analytics := []models.InviteAnalytics{
 		{
-			Code:       "testcode",
-			TotalUses:  3,
+			Code:      "testcode",
+			TotalUses: 3,
 			UseLogs: []models.InviteUseLog{
 				{UserID: uuid.New(), AccountAgeDays: 30, JoinedAt: oldTime},
 				{UserID: uuid.New(), AccountAgeDays: 60, JoinedAt: oldTime},

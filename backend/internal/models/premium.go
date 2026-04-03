@@ -47,21 +47,21 @@ type PaymentMethod struct {
 
 // Subscription represents a user's premium subscription
 type Subscription struct {
-	ID                  uuid.UUID      `json:"id" db:"id"`
-	UserID              uuid.UUID      `json:"user_id" db:"user_id"`
-	Tier                PremiumTier    `json:"tier" db:"tier"`
-	Status              SubStatus      `json:"status" db:"status"`
-	BoostsUsed          int            `json:"boosts_used" db:"boosts_used"`
-	BoostsTotal         int            `json:"boosts_total" db:"boosts_total"`
-	NextBilling         *time.Time     `json:"next_billing,omitempty" db:"next_billing"`
-	CurrentPeriodStart  *time.Time     `json:"current_period_start,omitempty" db:"current_period_start"`
-	CurrentPeriodEnd    *time.Time     `json:"current_period_end,omitempty" db:"current_period_end"`
-	CanceledAt          *time.Time     `json:"canceled_at,omitempty" db:"canceled_at"`
-	PaymentMethod       *PaymentMethod `json:"payment_method,omitempty"`
-	StripeSubscriptionID string        `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
-	ExternalID          string         `json:"external_id,omitempty" db:"external_id"` // Stripe customer ID
-	CreatedAt           time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt           time.Time      `json:"updated_at" db:"updated_at"`
+	ID                   uuid.UUID      `json:"id" db:"id"`
+	UserID               uuid.UUID      `json:"user_id" db:"user_id"`
+	Tier                 PremiumTier    `json:"tier" db:"tier"`
+	Status               SubStatus      `json:"status" db:"status"`
+	BoostsUsed           int            `json:"boosts_used" db:"boosts_used"`
+	BoostsTotal          int            `json:"boosts_total" db:"boosts_total"`
+	NextBilling          *time.Time     `json:"next_billing,omitempty" db:"next_billing"`
+	CurrentPeriodStart   *time.Time     `json:"current_period_start,omitempty" db:"current_period_start"`
+	CurrentPeriodEnd     *time.Time     `json:"current_period_end,omitempty" db:"current_period_end"`
+	CanceledAt           *time.Time     `json:"canceled_at,omitempty" db:"canceled_at"`
+	PaymentMethod        *PaymentMethod `json:"payment_method,omitempty"`
+	StripeSubscriptionID string         `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
+	ExternalID           string         `json:"external_id,omitempty" db:"external_id"` // Stripe customer ID
+	CreatedAt            time.Time      `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at" db:"updated_at"`
 }
 
 // ServerBoost represents a user's boost applied to a server
@@ -95,21 +95,21 @@ type PremiumFeatures struct {
 	MonthlyPrice float64     `json:"monthly_price"`
 
 	// Basic Tier ($2.99/month) and Premium ($9.99/month)
-	ServerBoosts   int   `json:"server_boosts"`     // 2 boosts
-	FileUploadSize int64 `json:"file_upload_size"`  // 50MB basic, 100MB premium vs 8MB free
-	CrossServerEmojis   bool `json:"cross_server_emojis"`   // Use emojis across servers
-	HighQualityVideo    bool `json:"high_quality_video"`   // 1080p60 vs 720p30
-	CustomDiscriminator bool `json:"custom_discriminator"` // Choose your #1234
-	EarlyAccess         bool `json:"early_access"`         // Beta features
-	PrioritySupport     bool `json:"priority_support"`
+	ServerBoosts        int   `json:"server_boosts"`        // 2 boosts
+	FileUploadSize      int64 `json:"file_upload_size"`     // 50MB basic, 100MB premium vs 8MB free
+	CrossServerEmojis   bool  `json:"cross_server_emojis"`  // Use emojis across servers
+	HighQualityVideo    bool  `json:"high_quality_video"`   // 1080p60 vs 720p30
+	CustomDiscriminator bool  `json:"custom_discriminator"` // Choose your #1234
+	EarlyAccess         bool  `json:"early_access"`         // Beta features
+	PrioritySupport     bool  `json:"priority_support"`
 
 	// Premium Tier ($9.99/month) only
-	PremiumBadge        bool `json:"premium_badge"`        // Profile badge
-	NoAds               bool `json:"no_ads"`
-	MessageEditHistory  bool `json:"message_edit_history"`  // Full edit history access
-	PremiumStickers     bool `json:"premium_stickers"`      // Premium sticker packs
-	CustomStatusEmoji   bool `json:"custom_status_emoji"`   // Emoji in custom status
-	HDScreenShare       bool `json:"hd_screen_share"`       // HD screen sharing
+	PremiumBadge       bool `json:"premium_badge"` // Profile badge
+	NoAds              bool `json:"no_ads"`
+	MessageEditHistory bool `json:"message_edit_history"` // Full edit history access
+	PremiumStickers    bool `json:"premium_stickers"`     // Premium sticker packs
+	CustomStatusEmoji  bool `json:"custom_status_emoji"`  // Emoji in custom status
+	HDScreenShare      bool `json:"hd_screen_share"`      // HD screen sharing
 }
 
 // PremiumStatus represents a user's overall premium status
@@ -281,31 +281,31 @@ func SubscriptionTierFromString(s string) PremiumTier {
 
 // SubscriptionPlan represents a purchasable subscription plan
 type SubscriptionPlan struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Description  string            `json:"description"`
-	Price        float64           `json:"price"` // dollars per month
-	PriceCents   int               `json:"price_cents"` // cents per month
-	Currency     string            `json:"currency"`
-	Tier         PremiumTier       `json:"tier"`
-	Features     []string          `json:"features"`
-	IsBestValue  bool              `json:"is_best_value"`
-	StripePriceID string           `json:"stripe_price_id,omitempty"`
-	Active       bool              `json:"active"`
-	SortOrder    int               `json:"sort_order"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Description   string      `json:"description"`
+	Price         float64     `json:"price"`       // dollars per month
+	PriceCents    int         `json:"price_cents"` // cents per month
+	Currency      string      `json:"currency"`
+	Tier          PremiumTier `json:"tier"`
+	Features      []string    `json:"features"`
+	IsBestValue   bool        `json:"is_best_value"`
+	StripePriceID string      `json:"stripe_price_id,omitempty"`
+	Active        bool        `json:"active"`
+	SortOrder     int         `json:"sort_order"`
 }
 
 // GetSubscriptionPlans returns all available subscription plans
 func GetSubscriptionPlans() []*SubscriptionPlan {
 	return []*SubscriptionPlan{
 		{
-			ID:            "plan_basic",
-			Name:          "Hearth+ Basic",
-			Description:   "Essential premium features for an enhanced experience",
-			Price:         2.99,
-			PriceCents:    299,
-			Currency:      "USD",
-			Tier:          TierBasic,
+			ID:          "plan_basic",
+			Name:        "Hearth+ Basic",
+			Description: "Essential premium features for an enhanced experience",
+			Price:       2.99,
+			PriceCents:  299,
+			Currency:    "USD",
+			Tier:        TierBasic,
 			Features: []string{
 				"Custom emoji across servers",
 				"50MB file uploads",
@@ -320,13 +320,13 @@ func GetSubscriptionPlans() []*SubscriptionPlan {
 			SortOrder:     1,
 		},
 		{
-			ID:            "plan_premium",
-			Name:          "Hearth+ Premium",
-			Description:   "The complete premium experience with server boosts",
-			Price:         9.99,
-			PriceCents:    999,
-			Currency:      "USD",
-			Tier:          TierPremium,
+			ID:          "plan_premium",
+			Name:        "Hearth+ Premium",
+			Description: "The complete premium experience with server boosts",
+			Price:       9.99,
+			PriceCents:  999,
+			Currency:    "USD",
+			Tier:        TierPremium,
 			Features: []string{
 				"Everything in Basic",
 				"100MB file uploads",

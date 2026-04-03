@@ -13,9 +13,9 @@ import (
 
 // mockStickerRepo is a mock implementation of StickerRepository for testing
 type mockStickerRepo struct {
-	stickers       map[uuid.UUID]*models.Sticker
-	packs          map[uuid.UUID]*models.StickerPack
-	packStickers   map[uuid.UUID]map[uuid.UUID]*models.PackSticker
+	stickers     map[uuid.UUID]*models.Sticker
+	packs        map[uuid.UUID]*models.StickerPack
+	packStickers map[uuid.UUID]map[uuid.UUID]*models.PackSticker
 }
 
 func newMockStickerRepo() *mockStickerRepo {

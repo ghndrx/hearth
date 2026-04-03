@@ -63,10 +63,10 @@ func TestDirectoryEndpointModels(t *testing.T) {
 // TestDirectoryPaginationCalculation tests pagination math
 func TestDirectoryPaginationCalculation(t *testing.T) {
 	tests := []struct {
-		name       string
-		total      int
-		limit      int
-		expected   int
+		name     string
+		total    int
+		limit    int
+		expected int
 	}{
 		{"exact division", 100, 25, 4},
 		{"with remainder", 101, 25, 5},

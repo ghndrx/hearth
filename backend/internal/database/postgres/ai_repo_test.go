@@ -41,11 +41,11 @@ func TestAIRepository_CreateProviderConfig(t *testing.T) {
 		DisplayName:  "OpenAI Main",
 		BaseURL:      stringPtr("https://api.openai.com"),
 		IsEnabled:    true,
-		IsDefault:   true,
-		Priority:    1,
-		Config:      stringPtr(`{"api_key":"secret"}`),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		IsDefault:    true,
+		Priority:     1,
+		Config:       stringPtr(`{"api_key":"secret"}`),
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
 	mock.ExpectExec("INSERT INTO ai_providers").
@@ -71,10 +71,10 @@ func TestAIRepository_CreateProviderConfig_Error(t *testing.T) {
 		Name:         "openai-main",
 		DisplayName:  "OpenAI Main",
 		IsEnabled:    true,
-		IsDefault:   true,
-		Priority:    1,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		IsDefault:    true,
+		Priority:     1,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
 	mock.ExpectExec("INSERT INTO ai_providers").
@@ -283,10 +283,10 @@ func TestAIRepository_UpdateProviderConfig(t *testing.T) {
 		DisplayName:  "OpenAI Updated",
 		BaseURL:      stringPtr("https://api.openai.com/v1"),
 		IsEnabled:    true,
-		IsDefault:   false,
-		Priority:    2,
-		Config:      stringPtr(`{"api_key":"newkey"}`),
-		UpdatedAt:   time.Now(),
+		IsDefault:    false,
+		Priority:     2,
+		Config:       stringPtr(`{"api_key":"newkey"}`),
+		UpdatedAt:    time.Now(),
 	}
 
 	mock.ExpectExec("UPDATE ai_providers SET").

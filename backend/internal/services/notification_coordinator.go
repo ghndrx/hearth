@@ -70,19 +70,19 @@ func NewNotificationCoordinator(
 
 // NotificationInput contains all inputs needed to process a notification
 type NotificationInput struct {
-	Type           models.NotificationType
-	Title          string
-	Body           string
-	Data           string
-	ActorID        *uuid.UUID
-	SenderID       *uuid.UUID
-	RecipientID    uuid.UUID
-	ServerID       *uuid.UUID
-	ChannelID      *uuid.UUID
-	MessageID      *uuid.UUID
-	HasMention     bool
-	IsDM           bool
-	IsReply        bool
+	Type        models.NotificationType
+	Title       string
+	Body        string
+	Data        string
+	ActorID     *uuid.UUID
+	SenderID    *uuid.UUID
+	RecipientID uuid.UUID
+	ServerID    *uuid.UUID
+	ChannelID   *uuid.UUID
+	MessageID   *uuid.UUID
+	HasMention  bool
+	IsDM        bool
+	IsReply     bool
 }
 
 // ProcessNotification processes a notification through the entire pipeline:
@@ -150,8 +150,8 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 	}
 
 	decision := &models.NotificationRoutingDecision{
-		Priority: routed.Priority,
-		Channel:  c.deliveryModeToChannel(routed.DeliveryMode),
+		Priority:   routed.Priority,
+		Channel:    c.deliveryModeToChannel(routed.DeliveryMode),
 		ShouldSend: true,
 		DelaySecs:  c.computeDelay(routed.DeliveryMode, routed.Priority),
 		Reason:     fmt.Sprintf("priority=%s, delivery=%s", routed.Priority, routed.DeliveryMode),
@@ -446,9 +446,9 @@ func (c *NotificationCoordinator) deliverEmail(ctx context.Context, userID uuid.
 	data, _ := json.Marshal(map[string]interface{}{
 		"user_id":         userID,
 		"notification_id": smartNotif.ID,
-		"title":          smartNotif.Title,
-		"body":           smartNotif.Body,
-		"timestamp":      time.Now(),
+		"title":           smartNotif.Title,
+		"body":            smartNotif.Body,
+		"timestamp":       time.Now(),
 	})
 	_ = c.cache.Set(ctx, key, data, 7*24*time.Hour) // retain for 7 days
 

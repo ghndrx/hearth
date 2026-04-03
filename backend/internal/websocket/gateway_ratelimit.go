@@ -33,9 +33,9 @@ type ConnectionLimitConfig struct {
 // DefaultConnectionLimitConfig returns sensible defaults
 func DefaultConnectionLimitConfig() *ConnectionLimitConfig {
 	return &ConnectionLimitConfig{
-		MaxConnectionsPerIP:   20,  // 20 connections per IP
-		MaxConnectionsPerUser: 5,   // 5 connections per user (web + mobile + desktop etc.)
-		ConnectionTTL:          10 * time.Minute,
+		MaxConnectionsPerIP:   20, // 20 connections per IP
+		MaxConnectionsPerUser: 5,  // 5 connections per user (web + mobile + desktop etc.)
+		ConnectionTTL:         10 * time.Minute,
 		Enabled:               true,
 	}
 }
@@ -43,8 +43,8 @@ func DefaultConnectionLimitConfig() *ConnectionLimitConfig {
 // ConnectionLimiter enforces per-IP and per-user WebSocket connection limits
 // using Redis for distributed coordination across multiple gateway instances.
 type ConnectionLimiter struct {
-	redis    *redis.Client
-	config   *ConnectionLimitConfig
+	redis     *redis.Client
+	config    *ConnectionLimitConfig
 	keyPrefix string
 }
 
@@ -73,10 +73,10 @@ func (l *ConnectionLimiter) UserKey(userID uuid.UUID) string {
 
 // CheckResult describes the result of a connection limit check
 type CheckResult struct {
-	Allowed         bool
-	Reason          string
-	Code            int    // WebSocket close code to send
-	CurrentIPCount  int64  // Current connection count for this IP
+	Allowed          bool
+	Reason           string
+	Code             int   // WebSocket close code to send
+	CurrentIPCount   int64 // Current connection count for this IP
 	CurrentUserCount int64 // Current connection count for this user
 }
 

@@ -484,10 +484,10 @@ func TestCancelSubscription(t *testing.T) {
 	userID := uuid.New()
 
 	sub := &models.Subscription{
-		ID:        uuid.New(),
-		UserID:    userID,
-		Tier:      models.TierBasic,
-		Status:    models.SubStatusActive,
+		ID:     uuid.New(),
+		UserID: userID,
+		Tier:   models.TierBasic,
+		Status: models.SubStatusActive,
 	}
 
 	repo.On("GetSubscription", ctx, userID).Return(sub, nil)

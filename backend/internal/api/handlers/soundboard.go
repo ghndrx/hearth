@@ -172,5 +172,3 @@ func (h *SoundboardHandler) DeleteSound(c *fiber.Ctx) error {
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
-
-

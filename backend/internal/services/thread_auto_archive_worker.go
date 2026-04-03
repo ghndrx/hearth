@@ -17,13 +17,13 @@ type ThreadAutoArchiveWorker struct {
 	threadRepo      ThreadRepository
 	channelRepo     ChannelRepository
 	eventBus        EventBus
-	
-	stopCh          chan struct{}
-	wg              sync.WaitGroup
-	batchSize       int
-	checkInterval   time.Duration
-	isRunning       bool
-	mu              sync.Mutex
+
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
+	batchSize     int
+	checkInterval time.Duration
+	isRunning     bool
+	mu            sync.Mutex
 }
 
 // NewThreadAutoArchiveWorker creates a new auto-archive worker
@@ -35,9 +35,9 @@ func NewThreadAutoArchiveWorker(
 ) *ThreadAutoArchiveWorker {
 	return &ThreadAutoArchiveWorker{
 		autoArchiveRepo: autoArchiveRepo,
-		threadRepo:       threadRepo,
-		channelRepo:      channelRepo,
-		eventBus:         eventBus,
+		threadRepo:      threadRepo,
+		channelRepo:     channelRepo,
+		eventBus:        eventBus,
 		stopCh:          make(chan struct{}),
 		batchSize:       50,
 		checkInterval:   1 * time.Minute,
@@ -147,10 +147,10 @@ func (w *ThreadAutoArchiveWorker) archiveThread(ctx context.Context, meta *model
 		meta.BumpedByOwner = false
 		meta.ArchiveEligible = false
 		w.autoArchiveRepo.UpdateThreadMeta(ctx, meta)
-		
+
 		// Emit bump event
 		w.eventBus.Publish(EventThreadAutoArchiveBumped, map[string]interface{}{
-			"thread_id":    threadID,
+			"thread_id":       threadID,
 			"bumped_by_owner": true,
 		})
 		return

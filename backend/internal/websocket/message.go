@@ -88,12 +88,12 @@ const (
 
 	// Thread auto-archive events
 	EventThreadAutoArchiveUpdate = "THREAD_AUTO_ARCHIVE_UPDATE"
-	EventThreadAutoArchive      = "THREAD_AUTO_ARCHIVE"
+	EventThreadAutoArchive       = "THREAD_AUTO_ARCHIVE"
 
 	// Premium & Server Boost events
-	EventServerBoostUpdate   = "SERVER_BOOST_UPDATE"
-	EventServerBoostLevelUp  = "SERVER_BOOST_LEVEL_UP"
-	EventServerBoostLevelDown = "SERVER_BOOST_LEVEL_DOWN"
+	EventServerBoostUpdate         = "SERVER_BOOST_UPDATE"
+	EventServerBoostLevelUp        = "SERVER_BOOST_LEVEL_UP"
+	EventServerBoostLevelDown      = "SERVER_BOOST_LEVEL_DOWN"
 	EventPremiumSubscriptionUpdate = "PREMIUM_SUBSCRIPTION_UPDATE"
 )
 
@@ -228,11 +228,11 @@ type ServerBoostUpdateData struct {
 
 // ServerBoostLevelUpdateData represents a server's boost level change
 type ServerBoostLevelUpdateData struct {
-	ServerID     string `json:"server_id"`
-	Level        int    `json:"level"`
-	BoostCount   int    `json:"boost_count"`
-	BoostsRequired int  `json:"boosts_required,omitempty"` // for next level
-	Perks        interface{} `json:"perks,omitempty"`
+	ServerID       string      `json:"server_id"`
+	Level          int         `json:"level"`
+	BoostCount     int         `json:"boost_count"`
+	BoostsRequired int         `json:"boosts_required,omitempty"` // for next level
+	Perks          interface{} `json:"perks,omitempty"`
 }
 
 // PremiumSubscriptionUpdateData represents a user's subscription change
