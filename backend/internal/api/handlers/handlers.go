@@ -170,8 +170,9 @@ func (h *Handlers) SetForumTagsHandler(
 func (h *Handlers) SetForumTagsHandlerWithEventBus(
 	forumTagService *services.ForumTagService,
 	threadService *services.ThreadService,
+	gateway *websocket.Gateway,
 ) {
-	h.ForumTags = NewForumTagsHandler(forumTagService, threadService)
+	h.ForumTags = NewForumTagsHandler(forumTagService, threadService, gateway)
 }
 
 // SetServerAudioSettingsHandler sets the server audio settings handler
