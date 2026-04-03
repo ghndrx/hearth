@@ -156,6 +156,11 @@ func (m *MockChannelRepositoryForWebhook) BulkUpdatePositions(ctx context.Contex
 	return args.Error(0)
 }
 
+func (m *MockChannelRepositoryForWebhook) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	args := m.Called(ctx, channelID, configJSON)
+	return args.Error(0)
+}
+
 // MockServerRepoForWebhook is a mock implementation of ServerRepository for webhook tests
 type MockServerRepoForWebhook struct {
 	mock.Mock

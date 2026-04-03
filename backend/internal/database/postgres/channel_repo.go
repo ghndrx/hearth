@@ -162,6 +162,12 @@ func (r *ChannelRepository) UpdateLastMessage(ctx context.Context, channelID, me
 	return err
 }
 
+func (r *ChannelRepository) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	query := `UPDATE channels SET forum_config = $2 WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, channelID, configJSON)
+	return err
+}
+
 // CreateDMChannel creates a DM channel between two users
 func (r *ChannelRepository) CreateDMChannel(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error) {
 	// Check if already exists

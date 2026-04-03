@@ -296,7 +296,10 @@ func (h *ForumTagsHandler) GetThreadTags(c *fiber.Ctx) error {
 // @Produce json
 // @Param channelId path string true "Channel ID"
 // @Param tag_ids query string false "Comma-separated tag IDs to filter by"
-// @Param sort query int false "Sort order: 0=latest_activity, 1=creation_date, 2=pin_weight"
+// @Param sort query int false "Sort order: 0=latest_activity, 1=creation_date, 2=pin_weight, 3=most_reactions, 4=solved_first"
+// @Param author_id query string false "Filter by author ID"
+// @Param pinned_only query bool false "Show only pinned posts"
+// @Param search query string false "Search in post titles"
 // @Param limit query int false "Limit (default 25, max 50)"
 // @Param offset query int false "Offset for pagination"
 // @Success 200
@@ -322,6 +325,19 @@ func (h *ForumTagsHandler) ListPosts(c *fiber.Ctx) error {
 			}
 		}
 	}
+
+	// Parse author_id
+	if authorIDStr := c.Query("author_id"); authorIDStr != "" {
+		if authorID, err := uuid.Parse(authorIDStr); err == nil {
+			filter.AuthorID = &authorID
+		}
+	}
+
+	// Parse pinned_only
+	filter.PinnedOnly = c.QueryBool("pinned_only", false)
+
+	// Parse search query
+	filter.SearchQuery = c.Query("search", "")
 
 	limit := c.QueryInt("limit", 25)
 	if limit <= 0 || limit > 50 {
@@ -415,6 +431,122 @@ func (h *ForumTagsHandler) PinThread(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"success": true})
+}
+
+// MarkSolved marks or unmarks a forum post as solved
+// @Summary Mark/unmark forum post as solved
+// @Description Marks or unmarks a forum post as solved/answered
+// @Tags ForumTags
+// @Accept json
+// @Produce json
+// @Param threadId path string true "Thread ID"
+// @Param body body fiber.Map true "Solved state and optional message ID"
+// @Success 200
+// @Router /threads/{threadId}/solved [put]
+func (h *ForumTagsHandler) MarkSolved(c *fiber.Ctx) error {
+	threadID, err := uuid.Parse(c.Params("threadId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid thread id",
+		})
+	}
+
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	var body struct {
+		Solved         bool    `json:"solved"`
+		SolvedMessageID *string `json:"solved_message_id,omitempty"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	var solvedMsgID *uuid.UUID
+	if body.SolvedMessageID != nil && *body.SolvedMessageID != "" {
+		id, err := uuid.Parse(*body.SolvedMessageID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid solved_message_id",
+			})
+		}
+		solvedMsgID = &id
+	}
+
+	if err := h.forumTagService.MarkThreadSolved(c.Context(), threadID, userID, body.Solved, solvedMsgID); err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// GetForumConfig returns the forum configuration for a channel
+// @Summary Get forum channel config
+// @Description Returns the forum configuration for a channel
+// @Tags ForumTags
+// @Produce json
+// @Param channelId path string true "Channel ID"
+// @Success 200 {object} models.ForumConfig
+// @Router /channels/{channelId}/forum-config [get]
+func (h *ForumTagsHandler) GetForumConfig(c *fiber.Ctx) error {
+	channelID, err := uuid.Parse(c.Params("channelId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	config, err := h.forumTagService.GetForumChannelConfig(c.Context(), channelID)
+	if err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	return c.JSON(config)
+}
+
+// UpdateForumConfig updates the forum configuration for a channel
+// @Summary Update forum channel config
+// @Description Updates the forum configuration for a channel (requires MANAGE_CHANNELS permission)
+// @Tags ForumTags
+// @Accept json
+// @Produce json
+// @Param channelId path string true "Channel ID"
+// @Param body body models.ForumConfig true "Forum config"
+// @Success 200 {object} models.ForumConfig
+// @Router /channels/{channelId}/forum-config [patch]
+func (h *ForumTagsHandler) UpdateForumConfig(c *fiber.Ctx) error {
+	channelID, err := uuid.Parse(c.Params("channelId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	var config models.ForumConfig
+	if err := c.BodyParser(&config); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if err := h.forumTagService.UpdateForumChannelConfig(c.Context(), channelID, userID, &config); err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	return c.JSON(config)
 }
 
 // splitAndTrim is a helper to parse comma-separated UUIDs

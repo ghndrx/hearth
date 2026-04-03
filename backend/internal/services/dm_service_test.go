@@ -104,6 +104,10 @@ func (m *mockDMChannelRepo) BulkUpdatePositions(ctx context.Context, entries []m
 	return nil
 }
 
+func (m *mockDMChannelRepo) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	return nil
+}
+
 func (m *mockDMChannelRepo) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) {
 	return nil, nil
 }

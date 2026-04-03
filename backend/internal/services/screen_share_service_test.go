@@ -194,6 +194,11 @@ func (m *MockChannelRepositoryForScreenShare) BulkUpdatePositions(ctx context.Co
 	return args.Error(0)
 }
 
+func (m *MockChannelRepositoryForScreenShare) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	args := m.Called(ctx, channelID, configJSON)
+	return args.Error(0)
+}
+
 // MockServerRepositoryForScreenShare is a mock implementation of ServerRepository
 type MockServerRepositoryForScreenShare struct {
 	mock.Mock
