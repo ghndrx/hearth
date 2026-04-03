@@ -137,6 +137,10 @@ func (m *simpleMockThreadRepoForWorker) GetActiveByChannelID(ctx context.Context
 	return m.GetByChannelID(ctx, channelID)
 }
 
+func (m *simpleMockThreadRepoForWorker) GetThreadCount(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error) {
+	return 0, nil
+}
+
 func (m *simpleMockThreadRepoForWorker) Archive(ctx context.Context, id uuid.UUID) error {
 	if t, ok := m.threads[id]; ok {
 		t.Archived = true
