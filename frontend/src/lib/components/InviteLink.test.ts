@@ -29,9 +29,8 @@ describe('InviteLink', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		Object.assign(navigator, {
-			clipboard: mockClipboard
-		});
+		// Reset clipboard mocks - navigator.clipboard is polyfilled in test-setup.ts
+		navigator.clipboard.writeText = mockClipboard.writeText;
 		vi.mocked(api.post).mockResolvedValue(mockInviteResponse);
 	});
 
