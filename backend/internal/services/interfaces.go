@@ -82,6 +82,7 @@ type ChannelRepository interface {
 
 	// Updates
 	UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error
+	UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error
 
 	// DM recipient management
 	AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error

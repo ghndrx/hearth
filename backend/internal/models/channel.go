@@ -53,6 +53,7 @@ type Channel struct {
 	LastMessageID *uuid.UUID  `json:"last_message_id,omitempty" db:"last_message_id"`
 	Icon          *string     `json:"icon,omitempty" db:"icon"` // For group DMs
 	CreatedAt     time.Time   `json:"created_at" db:"created_at"`
+	ForumConfig   []byte      `json:"forum_config,omitempty" db:"forum_config"` // JSONB for forum-specific settings
 
 	// Populated from joins
 	PermissionOverrides []PermissionOverride `json:"permission_overrides,omitempty"`
@@ -140,6 +141,10 @@ type Thread struct {
 	AppliedTags     []uuid.UUID `json:"applied_tags,omitempty" db:"applied_tags"`
 	IsPinned        bool        `json:"is_pinned" db:"is_pinned"`
 	PinWeight       int         `json:"pin_weight" db:"pin_weight"`
+	IsSolved        bool        `json:"is_solved" db:"is_solved"`
+	SolvedBy        *uuid.UUID  `json:"solved_by,omitempty" db:"solved_by"`
+	SolvedAt        *time.Time  `json:"solved_at,omitempty" db:"solved_at"`
+	SolvedMessageID *uuid.UUID  `json:"solved_message_id,omitempty" db:"solved_message_id"` // The message that solved the post
 
 	// Populated from joins
 	ParentChannel *Channel   `json:"parent_channel,omitempty"`
@@ -174,10 +179,12 @@ type CreateThreadMessageRequest struct {
 
 // UpdateThreadRequest is the input for updating a thread
 type UpdateThreadRequest struct {
-	Name        *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Archived    *bool   `json:"archived,omitempty"`
-	Locked      *bool   `json:"locked,omitempty"`
-	AutoArchive *int    `json:"auto_archive,omitempty"`
+	Name            *string    `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Archived        *bool      `json:"archived,omitempty"`
+	Locked          *bool      `json:"locked,omitempty"`
+	AutoArchive     *int       `json:"auto_archive,omitempty"`
+	IsSolved        *bool      `json:"is_solved,omitempty"`
+	SolvedMessageID *uuid.UUID `json:"solved_message_id,omitempty"`
 }
 
 // DMChannelRecipient links users to DM channels

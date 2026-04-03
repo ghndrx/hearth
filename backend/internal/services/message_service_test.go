@@ -288,6 +288,11 @@ func (m *MockChannelRepositoryForMessages) BulkUpdatePositions(ctx context.Conte
 	return args.Error(0)
 }
 
+func (m *MockChannelRepositoryForMessages) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	args := m.Called(ctx, channelID, configJSON)
+	return args.Error(0)
+}
+
 // MockRoleRepositoryForMessages implements RoleRepository for message tests
 type MockRoleRepositoryForMessages struct {
 	mock.Mock

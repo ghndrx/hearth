@@ -398,11 +398,14 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	threads.Put("/:id/tags", h.ForumTags.ApplyTags)
 	threads.Get("/:id/tags", h.ForumTags.GetThreadTags)
 	threads.Put("/:id/pin", h.ForumTags.PinThread)
+	threads.Put("/:id/solved", h.ForumTags.MarkSolved)
 
 	// Forum channel tags
 	channels.Get("/:id/tags", h.ForumTags.ListTags)
 	channels.Post("/:id/tags", h.ForumTags.CreateTag)
 	channels.Get("/:id/posts", h.ForumTags.ListPosts)
+	channels.Get("/:id/forum-config", h.ForumTags.GetForumConfig)
+	channels.Patch("/:id/forum-config", h.ForumTags.UpdateForumConfig)
 
 	// Global tag management
 	api.Patch("/forum-tags/:tagId", h.ForumTags.UpdateTag)
