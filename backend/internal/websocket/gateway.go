@@ -94,6 +94,11 @@ func NewGateway(hub HubInterface, jwtService *auth.JWTService, config *GatewayCo
 	}
 }
 
+// Hub returns the underlying HubInterface for broadcasting events
+func (g *Gateway) Hub() HubInterface {
+	return g.hub
+}
+
 // HandleConnection handles a new WebSocket connection
 func (g *Gateway) HandleConnection(conn *websocket.Conn) {
 	defer conn.Close()

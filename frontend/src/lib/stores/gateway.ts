@@ -326,6 +326,58 @@ function createGatewayStore() {
         console.log('[Gateway] Guild/Channel event:', type, data);
         break;
 
+      // Forum Channel Events
+      case 'FORUM_POST_CREATE':
+        console.log('[Gateway] Forum post created:', data);
+        // Emit to forum store to refresh post list
+        emit('forum:post:created', data);
+        break;
+
+      case 'FORUM_POST_UPDATE':
+        console.log('[Gateway] Forum post updated:', data);
+        emit('forum:post:updated', data);
+        break;
+
+      case 'FORUM_POST_DELETE':
+        console.log('[Gateway] Forum post deleted:', data);
+        emit('forum:post:deleted', data);
+        break;
+
+      case 'FORUM_TAG_CREATE':
+        console.log('[Gateway] Forum tag created:', data);
+        emit('forum:tag:created', data);
+        break;
+
+      case 'FORUM_TAG_UPDATE':
+        console.log('[Gateway] Forum tag updated:', data);
+        emit('forum:tag:updated', data);
+        break;
+
+      case 'FORUM_TAG_DELETE':
+        console.log('[Gateway] Forum tag deleted:', data);
+        emit('forum:tag:deleted', data);
+        break;
+
+      case 'FORUM_POST_PIN':
+        console.log('[Gateway] Forum post pinned:', data);
+        emit('forum:post:pin', data);
+        break;
+
+      case 'FORUM_POST_UNPIN':
+        console.log('[Gateway] Forum post unpinned:', data);
+        emit('forum:post:unpin', data);
+        break;
+
+      case 'FORUM_POST_ARCHIVE':
+        console.log('[Gateway] Forum post archived:', data);
+        emit('forum:post:archive', data);
+        break;
+
+      case 'FORUM_POST_UNARCHIVE':
+        console.log('[Gateway] Forum post unarchived:', data);
+        emit('forum:post:unarchive', data);
+        break;
+
       default:
         console.log('[Gateway] Unknown event:', type, data);
     }

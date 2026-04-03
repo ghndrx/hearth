@@ -503,7 +503,7 @@ func TestThreadService_CreateThread(t *testing.T) {
 
 			svc := NewThreadService(threadRepo, channelRepo, serverRepo, nil, eventBus)
 
-			thread, err := svc.CreateThread(ctx, tt.channelID, tt.creatorID, tt.threadName, tt.autoArchive, nil)
+			thread, err := svc.CreateThread(ctx, tt.channelID, tt.creatorID, tt.threadName, tt.autoArchive, nil, nil)
 
 			if tt.wantErr != nil {
 				if err != tt.wantErr {
