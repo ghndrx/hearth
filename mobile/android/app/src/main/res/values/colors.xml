@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Hearth brand notification accent color (burning orange) -->
+    <color name="notification_accent">#FF6B35</color>
+    <color name="primary">#FF6B35</color>
+    <color name="primary_dark">#E55A25</color>
+    <color name="accent">#FF6B35</color>
+</resources>
