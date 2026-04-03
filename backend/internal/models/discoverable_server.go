@@ -106,18 +106,18 @@ type UpdateDiscoverableServerRequest struct {
 
 // RegisterServerRequest is the request to register a server for discovery
 type RegisterServerRequest struct {
-	Name        string                 `json:"name" validate:"required,min=2,max=100"`
-	Description string                 `json:"description" validate:"max=1000"`
+	Name        string                  `json:"name" validate:"required,min=2,max=100"`
+	Description string                  `json:"description" validate:"max=1000"`
 	Category    ServerDiscoveryCategory `json:"category" validate:"required"`
-	Tags        []string               `json:"tags,omitempty" validate:"max=10"`
+	Tags        []string                `json:"tags,omitempty" validate:"max=10"`
 }
 
 // UpdateDiscoverableServerRequest is the request to update a discoverable server listing
 type UpdateDiscoverableServerRequest struct {
-	Name        *string                 `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	Description *string                 `json:"description,omitempty" validate:"omitempty,max=1000"`
+	Name        *string                  `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+	Description *string                  `json:"description,omitempty" validate:"omitempty,max=1000"`
 	Category    *ServerDiscoveryCategory `json:"category,omitempty"`
-	Tags        []string                `json:"tags,omitempty" validate:"omitempty,max=10"`
+	Tags        []string                 `json:"tags,omitempty" validate:"omitempty,max=10"`
 }
 
 // PaginatedDiscoverableServers is the response for paginated server listings
