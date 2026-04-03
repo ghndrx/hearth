@@ -5,6 +5,8 @@ All notable changes to Hearth will be documented in this file.
 ## [2026-04-03](https://github.com/ghndrx/hearth/compare/2026-04-02...HEAD)
 
 ### Features
+* feat: comprehensive audit logs and moderation analytics
+* feat(handlers): add HTTP handler tests for LiveKitVoiceHandler (#93)
 * feat: implement AI-powered smart notifications system
 * feat: AI-Powered Smart Notifications system
 * feat: add critical competitive advantage PRDs and update task priorities
@@ -26,19 +28,18 @@ All notable changes to Hearth will be documented in this file.
 * fix(frontend): remove stale TODO in MessageArea - file preview already implemented (#79)
 * fix(frontend): correct TextInput required attribute test (#77)
 * fix(frontend): implement call initiation from user popout (#75)
+* fix(frontend): add error logging to 13 empty catch blocks (#20)
+* fix(ci): run svelte-kit sync before ESLint to generate .svelte-kit/tsconfig.json
+* fix: resolve 4 CI failures in devsecops workflow
+* fix: resolve 3 CI failures in devsecops workflow
+* fix(ci): correct devsecops workflow syntax
+* Fix critical service initialization tech debt (#110)
 
 ### Other Changes
 * refactor(handlers): add interfaces for LiveKitVoiceHandler dependency injection (#91)
-* fix(config_test): add TestMain to set SECRET_KEY before tests run (#92)
-* fix(tests): use regular function constructor for WebSocket mock (#89)
-* fix(tests): add missing jumpToMessage mock to MessageList.test.ts (#87)
-* fix(tests): replace deprecated vi.resetModules and vi.stubGlobal in integration tests (#86)
-* fix(frontend): update MessageComponents and Button tests for Svelte 5 compatibility (#84)
 * chore: address tech debt in backend error handling and configuration (#85)
 * test(handler): add mock-based tests for AI chat template listing (#83)
-* fix(SelectMenu): initialize selectedValues from default option and fix tests (#80)
 * test: improve coverage for ai/providers, cache, ai packages (#78)
-* fix(frontend): correct TextInput required attribute test (#77)
 * chore: address tech debt in config/auth - CRITICAL SECURITY FIX (#76)
 * docs: auto-generate changelog for 2026-04-02
 
@@ -141,10 +142,10 @@ All notable changes to Hearth will be documented in this file.
 * fix(frontend): resolve TypeScript type errors in role-service-permission-checks
 * fix(frontend): replace jsdom with happy-dom for vitest compatibility (#35)
 * fix(a11y): add tabindex to soundboard picker dialog (#34)
+* fix(frontend): resolve TypeScript null type errors in discovery components (#30)
 * fix(frontend): resolve TypeScript error in EventDetail.svelte (#32)
 * fix: add MANAGE_EVENTS permission check for event management (#31)
 * fix(discovery): link server verification from discoverable_servers table (#29)
-* fix(frontend): resolve TypeScript null type errors in discovery components (#30)
 
 ### Other Changes
 * chore: update TASK_QUEUE.md with 2026-03-31 GitHub issues analysis
@@ -184,14 +185,14 @@ All notable changes to Hearth will be documented in this file.
 * chore: address critical event management permission bypass (#12)
 * test(coverage): add webhook repository test coverage (#9)
 * test(coverage): improve cache test coverage with miniredis (#8)
-* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
+* Add comprehensive tests for forum_tags helper functions and ListPosts endpoint (#6)
 
 ### Miscellaneous
 * Add comprehensive tests for template handler endpoints (#21)
 * ci: fix CodeQL SARIF upload permissions in DevSecOps workflow (#16)
 * security: bump Go version to 1.25.8 in Dockerfiles (GO-2026-4601/4602/4603) (#10)
 * security: upgrade Go to 1.25.8 (fixes GO-2026-4601, GO-2026-4602, GO-2026-4603) (#7)
-* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
+* Add comprehensive tests for forum_tags helper functions and ListPosts endpoint (#6)
 
 ## [2026-03-29](https://github.com/ghndrx/hearth/compare/2026-03-28...HEAD)
 
@@ -222,7 +223,7 @@ All notable changes to Hearth will be documented in this file.
 * chore: address critical event management permission bypass (#12)
 * test(coverage): add webhook repository test coverage (#9)
 * test(coverage): improve cache test coverage with miniredis (#8)
-* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
+* Add comprehensive tests for forum_tags helper functions and ListPosts endpoint (#6)
 * style: apply gofmt to threads_coverage_test.go
 * test(handlers): add httptest coverage for VoiceHandler and GatewayHandler (#97)
 * fix: correct test handler to avoid double-response in TestHandleServiceError (#65)
@@ -235,7 +236,7 @@ All notable changes to Hearth will be documented in this file.
 * ci: fix CodeQL SARIF upload permissions in DevSecOps workflow (#16)
 * security: bump Go version to 1.25.8 in Dockerfiles (GO-2026-4601/4602/4603) (#10)
 * security: upgrade Go to 1.25.8 (fixes GO-2026-4601, GO-2026-4602, GO-2026-4603) (#7)
-* Add tests for forum_tags helper functions and ListPosts endpoint (#6)
+* Add comprehensive tests for forum_tags helper functions and ListPosts endpoint (#6)
 * style: apply gofmt to threads_coverage_test.go
 
 ## [2026-03-28](https://github.com/ghndrx/hearth/compare/2026-03-27...HEAD)
@@ -358,6 +359,7 @@ All notable changes to Hearth will be documented in this file.
 * chore: address tech debt in component handler
 * docs: add multi-agent workflow with worktree pool management
 * docs: update CLAUDE.md to exclude audit reports
+* docs: add strategic PRDs for platform viability gaps
 * chore: remove audit reports from repo, add to .gitignore
 * chore: remove 'AI' references from workflows
 * docs: add PR template without AI attribution
@@ -448,6 +450,7 @@ All notable changes to Hearth will be documented in this file.
 * fix(frontend): resolve SubtleCrypto argument type errors in encryption tests
 * fix(frontend): resolve SubtleCrypto argument type errors in encryption tests
 * fix(frontend): resolve SubtleCrypto SharedArrayBuffer error in encryption tests
+* fix(frontend): resolve SubtleCrypto ArrayBuffer issue in encryption tests
 * fix: resolve TypeScript errors in safety-number.ts (BufferSource type, byteLength)
 * fix: upgrade grpc to v1.79.3 to resolve CVE-2026-33186
 * fix: resolve CI failures from mock type mismatch and missing exports

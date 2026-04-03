@@ -19,18 +19,54 @@ import (
 
 // MockAuditLogService implements AuditLogServiceInterface for testing
 type MockAuditLogService struct {
-	logs        []models.AuditLogEntry
-	actionTypes []string
-	err         error
+	logs           []models.AuditLogEntry
+	actionTypes    []string
+	categories     []models.AuditLogCategoryInfo
+	dashboard      *models.ModerationDashboardSummary
+	trendData      []models.DailyModerationTrend
+	moderators     []models.ModeratorStats
+	offenders      []models.RepeatOffenderStats
+	autoModStats   *models.AutoModStats
+	err            error
+	exportData     []byte
+	exportFormat   string
 }
 
 func NewMockAuditLogService() *MockAuditLogService {
 	return &MockAuditLogService{
 		logs: make([]models.AuditLogEntry, 0),
 		actionTypes: []string{
-			models.AuditLogServerUpdate,
-			models.AuditLogChannelCreate,
 			models.AuditLogMemberBan,
+			models.AuditLogMemberKick,
+			models.AuditLogChannelCreate,
+		},
+		categories: []models.AuditLogCategoryInfo{
+			{Category: 10, Name: "Member", Description: "Member events"},
+			{Category: 20, Name: "Channel", Description: "Channel events"},
+		},
+		dashboard: &models.ModerationDashboardSummary{
+			ServerID:         uuid.Nil,
+			TotalActions:    100,
+			TopAction:       "MEMBER_BAN",
+			TopActionCount:  25,
+			UniqueModerators: 5,
+			UniqueTargets:   30,
+			ActionBreakdown: map[string]int{"MEMBER_BAN": 25, "MEMBER_KICK": 15},
+			TrendDirection:  "up",
+			TrendPercent:    10.5,
+		},
+		trendData: []models.DailyModerationTrend{
+			{Date: time.Now().AddDate(0, 0, -1), TotalActions: 10, Bans: 2, Kicks: 1},
+			{Date: time.Now(), TotalActions: 15, Bans: 3, Kicks: 2},
+		},
+		moderators: []models.ModeratorStats{
+			{ModeratorID: uuid.New(), TotalActions: 50, Bans: 20, Kicks: 10},
+		},
+		offenders: []models.RepeatOffenderStats{
+			{UserID: uuid.New(), ModerationCount: 5, DifferentModerators: 3, Bans: 2, Warns: 2, Mutes: 1},
+		},
+		autoModStats: &models.AutoModStats{
+			TotalTriggers: 100, Blocks: 30, Warns: 40, Timeouts: 15, Kicks: 5, Bans: 2,
 		},
 	}
 }
@@ -56,6 +92,54 @@ func (m *MockAuditLogService) GetLogByID(ctx context.Context, serverID, entryID 
 
 func (m *MockAuditLogService) GetActionTypes() []string {
 	return m.actionTypes
+}
+
+func (m *MockAuditLogService) GetCategories() []models.AuditLogCategoryInfo {
+	return m.categories
+}
+
+func (m *MockAuditLogService) GetDashboardSummary(ctx context.Context, serverID uuid.UUID, days int) (*models.ModerationDashboardSummary, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	dash := *m.dashboard
+	dash.ServerID = serverID
+	return &dash, nil
+}
+
+func (m *MockAuditLogService) GetTrendData(ctx context.Context, serverID uuid.UUID, days int) ([]models.DailyModerationTrend, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.trendData, nil
+}
+
+func (m *MockAuditLogService) GetModeratorActivity(ctx context.Context, serverID uuid.UUID, days int) ([]models.ModeratorStats, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.moderators, nil
+}
+
+func (m *MockAuditLogService) GetRepeatOffenders(ctx context.Context, serverID uuid.UUID, days, minCount int) ([]models.RepeatOffenderStats, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.offenders, nil
+}
+
+func (m *MockAuditLogService) GetAutoModStats(ctx context.Context, serverID uuid.UUID, days int) (*models.AutoModStats, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.autoModStats, nil
+}
+
+func (m *MockAuditLogService) ExportLogs(ctx context.Context, serverID uuid.UUID, format string, filter services.AuditLogFilter) ([]byte, string, error) {
+	if m.err != nil {
+		return nil, "", m.err
+	}
+	return m.exportData, m.exportFormat, nil
 }
 
 func (m *MockAuditLogService) AddLog(entry models.AuditLogEntry) {
@@ -126,10 +210,7 @@ func setupAuditLogTest(t *testing.T) (*fiber.App, *MockAuditLogService, *MockSer
 		return c.Next()
 	})
 
-	servers := api.Group("/servers")
-	servers.Get("/:id/audit-logs", handler.GetAuditLogs)
-	servers.Get("/:id/audit-logs/action-types", handler.GetActionTypes)
-	servers.Get("/:id/audit-logs/:entryId", handler.GetAuditLogEntry)
+	handler.RegisterAuditLogRoutes(api.Group("/servers"))
 
 	return app, auditLogSvc, serverSvc, serverID, userID
 }
@@ -140,13 +221,14 @@ func TestAuditLogHandler_GetAuditLogs_Success(t *testing.T) {
 	// Add some logs
 	targetID := uuid.New()
 	auditLogSvc.AddLog(models.AuditLogEntry{
-		ID:         uuid.New(),
-		ServerID:   serverID,
-		UserID:     userID,
-		ActionType: models.AuditLogMemberBan,
-		TargetID:   &targetID,
-		Reason:     "spam",
-		CreatedAt:  time.Now(),
+		ID:             uuid.New(),
+		ServerID:       serverID,
+		ActorID:        userID,
+		ActionType:     models.AuditLogMemberBan,
+		ActionCategory: 10,
+		TargetID:       &targetID,
+		Reason:         "spam",
+		CreatedAt:      time.Now(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs", nil)
@@ -168,14 +250,14 @@ func TestAuditLogHandler_GetAuditLogs_WithFilters(t *testing.T) {
 
 	// Add logs
 	auditLogSvc.AddLog(models.AuditLogEntry{
-		ID:         uuid.New(),
-		ServerID:   serverID,
-		UserID:     userID,
-		ActionType: models.AuditLogMemberBan,
-		CreatedAt:  time.Now(),
+		ID:             uuid.New(),
+		ServerID:       serverID,
+		ActorID:        userID,
+		ActionType:     models.AuditLogMemberBan,
+		ActionCategory: 10,
+		CreatedAt:      time.Now(),
 	})
 
-	filterUserID := uuid.New()
 	tests := []struct {
 		name        string
 		queryParams string
@@ -187,8 +269,8 @@ func TestAuditLogHandler_GetAuditLogs_WithFilters(t *testing.T) {
 			statusCode:  http.StatusOK,
 		},
 		{
-			name:        "filter by user_id",
-			queryParams: "?user_id=" + filterUserID.String(),
+			name:        "filter by action_category",
+			queryParams: "?action_category=10",
 			statusCode:  http.StatusOK,
 		},
 		{
@@ -238,16 +320,16 @@ func TestAuditLogHandler_GetAuditLogs_InvalidFilters(t *testing.T) {
 		errorMsg    string
 	}{
 		{
-			name:        "invalid user_id",
-			queryParams: "?user_id=invalid",
+			name:        "invalid action_category",
+			queryParams: "?action_category=invalid",
 			statusCode:  http.StatusBadRequest,
-			errorMsg:    "invalid user_id",
+			errorMsg:    "invalid action_category",
 		},
 		{
-			name:        "invalid target_id",
-			queryParams: "?target_id=invalid",
+			name:        "invalid action_category range",
+			queryParams: "?action_category=100",
 			statusCode:  http.StatusBadRequest,
-			errorMsg:    "invalid target_id",
+			errorMsg:    "invalid action_category",
 		},
 		{
 			name:        "invalid before timestamp",
@@ -336,8 +418,7 @@ func TestAuditLogHandler_GetAuditLogs_NoPermission(t *testing.T) {
 		return c.Next()
 	})
 
-	servers := api.Group("/servers")
-	servers.Get("/:id/audit-logs", handler.GetAuditLogs)
+	handler.RegisterAuditLogRoutes(api.Group("/servers"))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs", nil)
 	resp, err := app.Test(req)
@@ -364,8 +445,7 @@ func TestAuditLogHandler_GetAuditLogs_AdminHasPermission(t *testing.T) {
 		return c.Next()
 	})
 
-	servers := api.Group("/servers")
-	servers.Get("/:id/audit-logs", handler.GetAuditLogs)
+	handler.RegisterAuditLogRoutes(api.Group("/servers"))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs", nil)
 	resp, err := app.Test(req)
@@ -378,12 +458,13 @@ func TestAuditLogHandler_GetAuditLogEntry_Success(t *testing.T) {
 
 	entryID := uuid.New()
 	auditLogSvc.AddLog(models.AuditLogEntry{
-		ID:         entryID,
-		ServerID:   serverID,
-		UserID:     userID,
-		ActionType: models.AuditLogMemberBan,
-		Reason:     "spam",
-		CreatedAt:  time.Now(),
+		ID:             entryID,
+		ServerID:       serverID,
+		ActorID:        userID,
+		ActionType:     models.AuditLogMemberBan,
+		ActionCategory: 10,
+		Reason:         "spam",
+		CreatedAt:      time.Now(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs/"+entryID.String(), nil)
@@ -439,7 +520,142 @@ func TestAuditLogHandler_GetActionTypes_Success(t *testing.T) {
 	assert.Len(t, actionTypes, 3)
 }
 
-func TestAuditLogHandler_GetActionTypes_NoPermission(t *testing.T) {
+func TestAuditLogHandler_GetCategories_Success(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs/categories", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	categories := result["categories"].([]interface{})
+	assert.Len(t, categories, 2)
+}
+
+func TestAuditLogHandler_GetModerationDashboard_Success(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/dashboard", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result models.ModerationDashboardSummary
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+	assert.Equal(t, 100, result.TotalActions)
+	assert.Equal(t, "MEMBER_BAN", result.TopAction)
+	assert.Equal(t, 5, result.UniqueModerators)
+}
+
+func TestAuditLogHandler_GetModerationDashboard_WithDays(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/dashboard?days=30", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestAuditLogHandler_GetModerationDashboard_InvalidDays(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/dashboard?days=invalid", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestAuditLogHandler_GetModerationTrend_Success(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/trends", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+	assert.Equal(t, "7d", result["period"])
+	assert.NotNil(t, result["trend_data"])
+}
+
+func TestAuditLogHandler_GetModeratorActivity_Success(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/moderators", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+	assert.Equal(t, "7d", result["period"])
+	assert.NotNil(t, result["moderators"])
+}
+
+func TestAuditLogHandler_GetRepeatOffenders_Success(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/offenders", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+	assert.Equal(t, "30d", result["period"])
+	assert.Equal(t, float64(2), result["min_count"])
+	assert.NotNil(t, result["offenders"])
+}
+
+func TestAuditLogHandler_GetAutoModStats_Success(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/moderation/automod", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+	assert.Equal(t, "7d", result["period"])
+	assert.NotNil(t, result["stats"])
+}
+
+func TestAuditLogHandler_LimitCapping(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	// Request with limit > 100 should cap at 100
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs?limit=200", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+	assert.Equal(t, float64(100), result["limit"])
+}
+
+func TestAuditLogHandler_ExportAuditLogs_InvalidFormat(t *testing.T) {
+	app, _, _, serverID, _ := setupAuditLogTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs/export?format=xml", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestAuditLogHandler_NoPermission_AllEndpoints(t *testing.T) {
 	app := fiber.New()
 	t.Cleanup(func() { app.Shutdown() })
 
@@ -458,71 +674,24 @@ func TestAuditLogHandler_GetActionTypes_NoPermission(t *testing.T) {
 		return c.Next()
 	})
 
-	servers := api.Group("/servers")
-	servers.Get("/:id/audit-logs/action-types", handler.GetActionTypes)
+	handler.RegisterAuditLogRoutes(api.Group("/servers"))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs/action-types", nil)
-	resp, err := app.Test(req)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-}
+	endpoints := []string{
+		"/api/v1/servers/" + serverID.String() + "/audit-logs",
+		"/api/v1/servers/" + serverID.String() + "/audit-logs/action-types",
+		"/api/v1/servers/" + serverID.String() + "/audit-logs/categories",
+		"/api/v1/servers/" + serverID.String() + "/audit-logs/export",
+		"/api/v1/servers/" + serverID.String() + "/moderation/dashboard",
+		"/api/v1/servers/" + serverID.String() + "/moderation/trends",
+		"/api/v1/servers/" + serverID.String() + "/moderation/moderators",
+		"/api/v1/servers/" + serverID.String() + "/moderation/offenders",
+		"/api/v1/servers/" + serverID.String() + "/moderation/automod",
+	}
 
-func TestAuditLogHandler_LimitCapping(t *testing.T) {
-	app, _, _, serverID, _ := setupAuditLogTest(t)
-
-	// Request with limit > 100 should cap at 100
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs?limit=200", nil)
-	resp, err := app.Test(req)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var result map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-	assert.Equal(t, float64(100), result["limit"])
-}
-
-func TestAuditLogHandler_ResponseFormat(t *testing.T) {
-	app, auditLogSvc, _, serverID, userID := setupAuditLogTest(t)
-
-	targetID := uuid.New()
-	now := time.Now()
-	auditLogSvc.AddLog(models.AuditLogEntry{
-		ID:         uuid.New(),
-		ServerID:   serverID,
-		UserID:     userID,
-		ActionType: models.AuditLogMemberBan,
-		TargetID:   &targetID,
-		Changes: []models.Change{
-			{Key: "nickname", OldValue: "old", NewValue: "new"},
-		},
-		Reason:    "spam",
-		CreatedAt: now,
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/servers/"+serverID.String()+"/audit-logs", nil)
-	resp, err := app.Test(req)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var result map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	// Verify response structure
-	assert.Contains(t, result, "audit_logs")
-	assert.Contains(t, result, "total")
-	assert.Contains(t, result, "limit")
-	assert.Contains(t, result, "offset")
-
-	logs := result["audit_logs"].([]interface{})
-	assert.Len(t, logs, 1)
-
-	log := logs[0].(map[string]interface{})
-	assert.Contains(t, log, "id")
-	assert.Contains(t, log, "server_id")
-	assert.Contains(t, log, "user_id")
-	assert.Contains(t, log, "action_type")
-	assert.Contains(t, log, "created_at")
-	assert.Equal(t, models.AuditLogMemberBan, log["action_type"])
+	for _, endpoint := range endpoints {
+		req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+		resp, err := app.Test(req)
+		require.NoError(t, err, "endpoint: %s", endpoint)
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode, "endpoint: %s", endpoint)
+	}
 }
