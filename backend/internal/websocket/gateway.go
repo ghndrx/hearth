@@ -529,7 +529,7 @@ func (g *Gateway) handleIdentify(conn *websocket.Conn, client *Client, session *
 
 	readyData, err := json.Marshal(ready)
 	if err != nil {
-		g.logger.Error("Failed to marshal ready data: %v", err)
+	log.Printf("[Gateway] Failed to marshal ready data: %v", err)
 		g.sendError(conn, "Internal server error")
 		return
 	}
@@ -571,7 +571,7 @@ func (g *Gateway) handlePresenceUpdate(conn *websocket.Conn, client *Client, ses
 
 	presenceData, err := json.Marshal(presence)
 	if err != nil {
-		g.logger.Error("Failed to marshal presence data: %v", err)
+	log.Printf("[Gateway] Failed to marshal presence data: %v", err)
 		return
 	}
 
@@ -655,7 +655,7 @@ func (g *Gateway) handleRequestMembers(conn *websocket.Conn, client *Client, ses
 
 	chunkData, err := json.Marshal(chunk)
 	if err != nil {
-		g.logger.Error("Failed to marshal guild members chunk data: %v", err)
+	log.Printf("[Gateway] Failed to marshal guild members chunk data: %v", err)
 		g.sendError(conn, "Failed to retrieve guild members")
 		return
 	}
@@ -715,7 +715,7 @@ func (g *Gateway) sendHello(conn *websocket.Conn) {
 
 	helloData, err := json.Marshal(hello)
 	if err != nil {
-		g.logger.Error("Failed to marshal hello data: %v", err)
+	log.Printf("[Gateway] Failed to marshal hello data: %v", err)
 		conn.Close()
 		return
 	}
@@ -744,7 +744,7 @@ func (g *Gateway) sendError(conn *websocket.Conn, message string) {
 	}
 	errorData, err := json.Marshal(map[string]string{"message": message})
 	if err != nil {
-		g.logger.Error("Failed to marshal error data: %v", err)
+	log.Printf("[Gateway] Failed to marshal error data: %v", err)
 		conn.Close()
 		return
 	}
