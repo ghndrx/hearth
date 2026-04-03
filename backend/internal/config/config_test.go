@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+// TestMain sets up the test environment before running tests.
+// This ensures SECRET_KEY is set before any test that calls Load().
+func TestMain(m *testing.M) {
+	// Ensure SECRET_KEY is set for tests that call Load()
+	// This prevents panics from getRequiredEnv("SECRET_KEY") during test setup
+	os.Setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
+	code := m.Run()
+	os.Exit(code)
+}
+
 func TestLoad(t *testing.T) {
 	// Clear any existing env vars that might affect the test
 	oldVars := map[string]string{}
