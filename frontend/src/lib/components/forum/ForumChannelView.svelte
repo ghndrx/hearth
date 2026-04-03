@@ -3,6 +3,7 @@
 	import { api } from '$lib/api';
 	import ForumTagBadge from './ForumTagBadge.svelte';
 	import ForumTagPicker from './ForumTagPicker.svelte';
+	import { type ForumTag } from '$lib/stores/forumTags';
 
 	export let channelId: string;
 
@@ -27,14 +28,6 @@
 		created_at: string;
 		is_pinned: boolean;
 		archived: boolean;
-	}
-
-	interface ForumTag {
-		id: string;
-		name: string;
-		color?: string;
-		emoji_name?: string;
-		moderated: boolean;
 	}
 
 	interface ForumPostsResponse {
