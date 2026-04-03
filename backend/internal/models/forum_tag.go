@@ -15,6 +15,7 @@ type ForumTag struct {
 	Color     *string   `json:"color,omitempty" db:"color"`
 	EmojiName *string   `json:"emoji_name,omitempty" db:"emoji_name"`
 	Moderated bool      `json:"moderated" db:"moderated"`
+	Position  int       `json:"position" db:"position"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
@@ -35,6 +36,7 @@ type CreateForumTagRequest struct {
 	Color     *string `json:"color,omitempty" validate:"omitempty,max=7"`
 	EmojiName *string `json:"emoji_name,omitempty" validate:"omitempty,max=128"`
 	Moderated bool    `json:"moderated"`
+	Position  *int    `json:"position,omitempty"`
 }
 
 // UpdateForumTagRequest is the input for updating a tag
@@ -43,6 +45,7 @@ type UpdateForumTagRequest struct {
 	Color     *string `json:"color,omitempty" validate:"omitempty,max=7"`
 	EmojiName *string `json:"emoji_name,omitempty" validate:"omitempty,max=128"`
 	Moderated *bool   `json:"moderated,omitempty"`
+	Position  *int    `json:"position,omitempty"`
 }
 
 // ForumPostFilter contains filtering options for forum posts
