@@ -13,8 +13,6 @@ All notable changes to Hearth will be documented in this file.
 * feat(stickers): Advanced Sticker System - premium packs and subscription tiers (#82)
 * feat(premium): Premium Subscription System - Tiered subscriptions (Basic $2.99, Premium $9.99) with server boosts
 * feat: add critical competitive feature gap PRDs and task queue updates
-* feat: premium subscription system with server boosts
-* feat: add critical business-focused competitive PRDs and update priorities
 
 ### Bug Fixes
 * fix(config_test): add TestMain to set SECRET_KEY before tests run (#92)
@@ -42,6 +40,19 @@ All notable changes to Hearth will be documented in this file.
 * test: improve coverage for ai/providers, cache, ai packages (#78)
 * chore: address tech debt in config/auth - CRITICAL SECURITY FIX (#76)
 * docs: auto-generate changelog for 2026-04-02
+
+### Other Changes
+* feat(handlers): add HTTP handler tests for LiveKitVoiceHandler (#93)
+* refactor(handlers): add interfaces for LiveKitVoiceHandler dependency injection (#91)
+* fix(config_test): add TestMain to set SECRET_KEY before tests run (#92)
+* fix(tests): use regular function constructor for WebSocket mock (#89)
+* fix(tests): add missing jumpToMessage mock to MessageList.test.ts (#87)
+* fix(tests): replace deprecated vi.resetModules and vi.stubGlobal in integration tests (#86)
+* fix(frontend): update MessageComponents and Button tests for Svelte 5 compatibility (#84)
+* chore: address tech debt in backend error handling and configuration (#85)
+* test(handler): add mock-based tests for AI chat template listing (#83)
+* fix(SelectMenu): initialize selectedValues from default option and fix tests (#80)
+>>>>>>> 4d1ccba (docs: auto-generate changelog for 2026-04-03)
 
 ### Miscellaneous
   (none)
