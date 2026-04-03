@@ -245,4 +245,8 @@ const (
 	DMRecipientRemoved = "dm.recipient_remove"
 	GroupDMCreated     = "group_dm.created"
 	GroupDMUpdated     = "group_dm.updated"
+
+	// Audit log events
+	AuditLogCreated    = "audit_log.created"
+	ModerationEventAny = "moderation.*"
 )
