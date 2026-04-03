@@ -351,6 +351,18 @@ export function parseCommandInput(input: string, command: SlashCommand): {
 				errors.push(`Unexpected value: ${part}`);
 				continue;
 			}
+
+			// For String type, collect all remaining args as the value
+			if (positionalOpt.type === 3) {
+				const remaining = parts.slice(i).join(' ');
+				const parsed = parseOptionValue(3, remaining);
+				options[positionalOpt.name] = parsed.value;
+				if (!parsed.valid) {
+					errors.push(`Invalid value for ${positionalOpt.name}: ${remaining}`);
+				}
+				break; // All remaining args consumed for string option
+			}
+
 			const parsed = parseOptionValue(positionalOpt.type, part);
 			options[positionalOpt.name] = parsed.value;
 			if (!parsed.valid) {
