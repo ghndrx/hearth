@@ -13,18 +13,18 @@ import (
 
 // Discovery cache TTLs
 const (
-	DiscoveryCacheTTL         = 2 * time.Minute
-	DiscoveryFeaturedTTL      = 5 * time.Minute
-	DiscoveryTrendingTTL      = 3 * time.Minute
-	DiscoveryCategoriesTTL    = 10 * time.Minute
-	DiscoveryStatsTTL         = 5 * time.Minute
-	DiscoveryTagsTTL          = 5 * time.Minute
-	DiscoverySuggestionsTTL   = 1 * time.Minute
-	DiscoveryHomePageTTL      = 2 * time.Minute
-	DiscoverySearchTTL        = 1 * time.Minute
-	DiscoveryRecommendedTTL   = 3 * time.Minute
-	DiscoveryServerDetailTTL  = 5 * time.Minute
-	DiscoveryDirectoryTTL     = 2 * time.Minute
+	DiscoveryCacheTTL        = 2 * time.Minute
+	DiscoveryFeaturedTTL     = 5 * time.Minute
+	DiscoveryTrendingTTL     = 3 * time.Minute
+	DiscoveryCategoriesTTL   = 10 * time.Minute
+	DiscoveryStatsTTL        = 5 * time.Minute
+	DiscoveryTagsTTL         = 5 * time.Minute
+	DiscoverySuggestionsTTL  = 1 * time.Minute
+	DiscoveryHomePageTTL     = 2 * time.Minute
+	DiscoverySearchTTL       = 1 * time.Minute
+	DiscoveryRecommendedTTL  = 3 * time.Minute
+	DiscoveryServerDetailTTL = 5 * time.Minute
+	DiscoveryDirectoryTTL    = 2 * time.Minute
 )
 
 // Discovery cache key helpers

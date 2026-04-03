@@ -25,12 +25,12 @@ type ComponentRepository interface {
 
 // ComponentService handles component-related business logic
 type ComponentService struct {
-	repo          ComponentRepository
-	messageRepo   MessageRepository
-	channelRepo   ChannelRepository
-	serverRepo    ServerRepository
-	eventBus      EventBus
-	rateLimiter   ComponentRateLimiter
+	repo        ComponentRepository
+	messageRepo MessageRepository
+	channelRepo ChannelRepository
+	serverRepo  ServerRepository
+	eventBus    EventBus
+	rateLimiter ComponentRateLimiter
 }
 
 // NewComponentService creates a new component service

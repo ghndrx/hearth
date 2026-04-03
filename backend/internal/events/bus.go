@@ -238,7 +238,7 @@ const (
 
 	// Component events
 	ComponentInteraction = "component.interaction"
-	ComponentUpdated    = "component.updated"
+	ComponentUpdated     = "component.updated"
 
 	// DM events
 	DMRecipientAdded   = "dm.recipient_add"

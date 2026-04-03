@@ -12,9 +12,9 @@ import (
 
 var (
 	ErrAutoArchiveSettingsNotFound = errors.New("auto-archive settings not found")
-	ErrAutoArchiveOverrideExists    = errors.New("auto-archive override already exists for this channel")
-	ErrAutoArchiveNotAllowed        = errors.New("auto-archive override not allowed for this server")
-	ErrInvalidAutoArchiveDuration   = errors.New("invalid auto-archive duration")
+	ErrAutoArchiveOverrideExists   = errors.New("auto-archive override already exists for this channel")
+	ErrAutoArchiveNotAllowed       = errors.New("auto-archive override not allowed for this server")
+	ErrInvalidAutoArchiveDuration  = errors.New("invalid auto-archive duration")
 )
 
 // ThreadAutoArchiveRepositoryInterface defines thread auto-archive data access
@@ -59,11 +59,11 @@ func NewThreadAutoArchiveService(
 ) *ThreadAutoArchiveService {
 	return &ThreadAutoArchiveService{
 		autoArchiveRepo: autoArchiveRepo,
-		threadRepo:       threadRepo,
-		channelRepo:      channelRepo,
-		serverRepo:       serverRepo,
-		permService:      permService,
-		eventBus:         eventBus,
+		threadRepo:      threadRepo,
+		channelRepo:     channelRepo,
+		serverRepo:      serverRepo,
+		permService:     permService,
+		eventBus:        eventBus,
 	}
 }
 
@@ -80,14 +80,14 @@ func (s *ThreadAutoArchiveService) GetOrCreateServerSettings(ctx context.Context
 	// Create default settings
 	now := time.Now()
 	settings = &models.ThreadAutoArchiveSettings{
-		ID:                    uuid.New(),
-		ServerID:              serverID,
-		DefaultDuration:       1440, // 24 hours
-		AllowOverride:         true,
+		ID:                     uuid.New(),
+		ServerID:               serverID,
+		DefaultDuration:        1440, // 24 hours
+		AllowOverride:          true,
 		ArchiveDurationOptions: []int{60, 1440, 4320, 10080},
-		RequirePostAuthor:     false,
-		CreatedAt:             now,
-		UpdatedAt:             now,
+		RequirePostAuthor:      false,
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 
 	if err := s.autoArchiveRepo.CreateServerSettings(ctx, settings); err != nil {
@@ -107,7 +107,7 @@ func (s *ThreadAutoArchiveService) UpdateServerSettings(ctx context.Context, ser
 
 	// Check if user is owner
 	isOwner := server.OwnerID == requesterID
-	
+
 	// Check if user has admin permission
 	hasAdmin, err := s.permService.HasPermission(ctx, serverID, requesterID, models.PermAdministrator)
 	if err != nil {
@@ -348,7 +348,7 @@ func (s *ThreadAutoArchiveService) UpdateThreadAutoArchive(ctx context.Context, 
 
 	// Emit event
 	s.eventBus.Publish(EventThreadAutoArchiveBumped, map[string]interface{}{
-		"thread_id": threadID,
+		"thread_id":       threadID,
 		"next_archive_at": nextArchive,
 	})
 
@@ -385,8 +385,8 @@ func (s *ThreadAutoArchiveService) ArchiveThread(ctx context.Context, threadID u
 
 	// Emit event
 	s.eventBus.Publish(EventThreadAutoArchived, map[string]interface{}{
-		"thread_id":   threadID,
-		"channel_id":  thread.ParentChannelID,
+		"thread_id":    threadID,
+		"channel_id":   thread.ParentChannelID,
 		"auto_archive": true,
 	})
 
@@ -408,6 +408,6 @@ func isValidDuration(d int) bool {
 // Event types for thread auto-archive
 const (
 	EventThreadAutoArchiveSettingsUpdated = "thread_auto_archive.settings_updated"
-	EventThreadAutoArchiveBumped         = "thread_auto_archive.bumped"
-	EventThreadAutoArchived              = "thread_auto_archived"
+	EventThreadAutoArchiveBumped          = "thread_auto_archive.bumped"
+	EventThreadAutoArchived               = "thread_auto_archived"
 )

@@ -26,15 +26,15 @@ const (
 
 // Sticker represents a sticker in the system
 type Sticker struct {
-	ID          uuid.UUID       `json:"id" db:"id"`
-	ServerID    *uuid.UUID      `json:"server_id,omitempty" db:"server_id"` // nil for global stickers
-	Name        string          `json:"name" db:"name"`
-	Tags        []string        `json:"tags" db:"tags"`
-	URL         string          `json:"url" db:"url"`
-	Format      StickerFormat   `json:"format" db:"format"`
+	ID           uuid.UUID       `json:"id" db:"id"`
+	ServerID     *uuid.UUID      `json:"server_id,omitempty" db:"server_id"` // nil for global stickers
+	Name         string          `json:"name" db:"name"`
+	Tags         []string        `json:"tags" db:"tags"`
+	URL          string          `json:"url" db:"url"`
+	Format       StickerFormat   `json:"format" db:"format"`
 	RequiredTier StickerPackTier `json:"required_tier" db:"required_tier"` // Minimum tier to use this sticker
-	CreatedBy   uuid.UUID       `json:"created_by" db:"created_by"`
-	CreatedAt   time.Time       `json:"created_at" db:"created_at"`
+	CreatedBy    uuid.UUID       `json:"created_by" db:"created_by"`
+	CreatedAt    time.Time       `json:"created_at" db:"created_at"`
 }
 
 // StickerPack represents a collection of stickers
@@ -79,18 +79,18 @@ type StickerResponse struct {
 
 // StickerPackResponse is the API response for a sticker pack
 type StickerPackResponse struct {
-	ID           string               `json:"id"`
-	Name         string               `json:"name"`
-	Description  *string              `json:"description,omitempty"`
-	IconURL      *string              `json:"icon_url,omitempty"`
-	Tier         string               `json:"tier"`
-	StickerCount int                  `json:"sticker_count"`
-	IsActive     bool                 `json:"is_active"`
-	IsGlobal     bool                 `json:"is_global"`
-	ServerID     *string              `json:"guild_id,omitempty"`
-	CreatedBy    *string              `json:"creator_id,omitempty"`
-	CreatedAt    string               `json:"created_at"`
-	Stickers     []StickerResponse    `json:"stickers,omitempty"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Description  *string           `json:"description,omitempty"`
+	IconURL      *string           `json:"icon_url,omitempty"`
+	Tier         string            `json:"tier"`
+	StickerCount int               `json:"sticker_count"`
+	IsActive     bool              `json:"is_active"`
+	IsGlobal     bool              `json:"is_global"`
+	ServerID     *string           `json:"guild_id,omitempty"`
+	CreatedBy    *string           `json:"creator_id,omitempty"`
+	CreatedAt    string            `json:"created_at"`
+	Stickers     []StickerResponse `json:"stickers,omitempty"`
 }
 
 // ToResponse converts a Sticker to StickerResponse
@@ -154,10 +154,10 @@ type UpdateStickerRequest struct {
 
 // CreateStickerPackRequest is the request to create a sticker pack
 type CreateStickerPackRequest struct {
-	Name        string   `json:"name" validate:"required,min=2,max=100"`
-	Description *string  `json:"description,omitempty" validate:"max=500"`
-	IconURL     *string  `json:"icon_url,omitempty"`
-	Tier        string   `json:"tier" validate:"required,oneof=free basic premium"`
+	Name        string  `json:"name" validate:"required,min=2,max=100"`
+	Description *string `json:"description,omitempty" validate:"max=500"`
+	IconURL     *string `json:"icon_url,omitempty"`
+	Tier        string  `json:"tier" validate:"required,oneof=free basic premium"`
 	IsGlobal    *bool   `json:"is_global,omitempty"`
 }
 

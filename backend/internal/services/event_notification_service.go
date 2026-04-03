@@ -161,9 +161,9 @@ func (s *EventNotificationService) handleEventStarted(data interface{}) {
 
 	// Create notification for each user
 	notifData, _ := json.Marshal(map[string]interface{}{
-		"event_id":    event.ID.String(),
-		"channel_id":  channelIDToString(event.ChannelID),
-		"server_id":   event.ServerID.String(),
+		"event_id":   event.ID.String(),
+		"channel_id": channelIDToString(event.ChannelID),
+		"server_id":  event.ServerID.String(),
 	})
 
 	title := "Event Starting Now!"
@@ -171,12 +171,12 @@ func (s *EventNotificationService) handleEventStarted(data interface{}) {
 
 	for _, rsvp := range rsvps {
 		createReq := &models.CreateNotificationRequest{
-			UserID:   rsvp.UserID,
-			Type:     models.NotificationTypeEventStart,
-			Title:    title,
-			Body:     body,
-			Data:     stringPtr(string(notifData)),
-			ServerID: &event.ServerID,
+			UserID:    rsvp.UserID,
+			Type:      models.NotificationTypeEventStart,
+			Title:     title,
+			Body:      body,
+			Data:      stringPtr(string(notifData)),
+			ServerID:  &event.ServerID,
 			ChannelID: event.ChannelID,
 		}
 

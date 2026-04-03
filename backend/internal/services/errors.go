@@ -86,12 +86,12 @@ var (
 	ErrTooManyWebhooks     = errors.New("maximum number of webhooks reached for this channel")
 
 	// DM errors
-	ErrNotDMChannel       = errors.New("channel is not a DM or group DM")
-	ErrNotGroupDM         = errors.New("channel is not a group DM")
-	ErrNotGroupDMOwner    = errors.New("only the group DM owner can perform this action")
-	ErrAlreadyDMRecipient = errors.New("user is already a recipient of this DM")
-	ErrNotDMRecipient     = errors.New("user is not a recipient of this DM")
-	ErrGroupDMFull              = errors.New("group DM can have at most 50 members")
+	ErrNotDMChannel              = errors.New("channel is not a DM or group DM")
+	ErrNotGroupDM                = errors.New("channel is not a group DM")
+	ErrNotGroupDMOwner           = errors.New("only the group DM owner can perform this action")
+	ErrAlreadyDMRecipient        = errors.New("user is already a recipient of this DM")
+	ErrNotDMRecipient            = errors.New("user is not a recipient of this DM")
+	ErrGroupDMFull               = errors.New("group DM can have at most 50 members")
 	ErrCannotTransferToNonMember = errors.New("cannot transfer ownership to a non-member")
 
 	// Cache errors

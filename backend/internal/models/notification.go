@@ -20,7 +20,7 @@ const (
 	NotificationTypeReaction      NotificationType = "reaction"
 	NotificationTypeSystem        NotificationType = "system"
 	NotificationTypeEventInvite   NotificationType = "event_invite"
-	NotificationTypeEventRSVP    NotificationType = "event_rsvp"
+	NotificationTypeEventRSVP     NotificationType = "event_rsvp"
 	NotificationTypeEventReminder NotificationType = "event_reminder"
 	NotificationTypeEventStart    NotificationType = "event_start"
 )

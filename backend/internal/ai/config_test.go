@@ -87,7 +87,6 @@ func TestProviderType_Valid(t *testing.T) {
 	}
 }
 
-
 func TestFeatureType_Valid(t *testing.T) {
 	tests := []struct {
 		feature  FeatureType
@@ -110,7 +109,6 @@ func TestFeatureType_Valid(t *testing.T) {
 		})
 	}
 }
-
 
 func TestAIProviderConfig_ToResponse(t *testing.T) {
 	id := uuid.New()
@@ -226,7 +224,6 @@ func TestUserAICredential_ToResponseWithoutCredentials(t *testing.T) {
 	assert.Equal(t, false, response.HasCredentials)
 	assert.Nil(t, response.LastUsedAt)
 }
-
 
 func TestProviderTypeConstants(t *testing.T) {
 	// Verify that all provider type constants are strings

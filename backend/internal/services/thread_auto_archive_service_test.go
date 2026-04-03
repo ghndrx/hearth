@@ -13,7 +13,7 @@ import (
 
 // simpleMockThreadAutoArchiveRepo is a simple mock for ThreadAutoArchiveRepositoryInterface
 type simpleMockThreadAutoArchiveRepo struct {
-	serverSettings   *models.ThreadAutoArchiveSettings
+	serverSettings  *models.ThreadAutoArchiveSettings
 	channelOverride *models.ChannelAutoArchiveOverride
 	threadMeta      *models.ThreadAutoArchiveMeta
 	serverStats     *models.ThreadAutoArchiveStats
@@ -338,8 +338,8 @@ func (m *simpleMockServerRepo) GetServerInviteUseLogs(ctx context.Context, serve
 // simpleMockEventBus is a simple mock for EventBus
 type simpleMockEventBus struct{}
 
-func (m *simpleMockEventBus) Publish(event string, data interface{}) {}
-func (m *simpleMockEventBus) Subscribe(event string, handler func(data interface{})) {}
+func (m *simpleMockEventBus) Publish(event string, data interface{})                   {}
+func (m *simpleMockEventBus) Subscribe(event string, handler func(data interface{}))   {}
 func (m *simpleMockEventBus) Unsubscribe(event string, handler func(data interface{})) {}
 
 // simpleMockPermService is a simple mock for PermissionService
