@@ -912,6 +912,9 @@ const (
 	EventForumThreadUpdate     = "FORUM_THREAD_UPDATE"
 	EventForumThreadDelete     = "FORUM_THREAD_DELETE"
 	EventForumThreadPinned     = "FORUM_THREAD_PINNED"
+	EventForumTagCreate        = "FORUM_TAG_CREATE"
+	EventForumTagUpdate        = "FORUM_TAG_UPDATE"
+	EventForumTagDelete        = "FORUM_TAG_DELETE"
 )
 
 // Forum event handlers
