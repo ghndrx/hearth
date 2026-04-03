@@ -28,6 +28,9 @@ type ThreadRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByChannelID(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error)
 	GetActiveByChannelID(ctx context.Context, channelID uuid.UUID) ([]*models.Thread, error)
+	GetThreadsPaginated(ctx context.Context, channelID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error)
+	GetThreadCount(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error)
+	GetTotalMessageCount(ctx context.Context, channelID uuid.UUID) (int, error)
 	Archive(ctx context.Context, id uuid.UUID) error
 	Unarchive(ctx context.Context, id uuid.UUID) error
 	AddMember(ctx context.Context, threadID, userID uuid.UUID) error
@@ -149,6 +152,12 @@ func (s *ThreadService) CreateThread(
 		ChannelID: channelID,
 	})
 
+	// Also publish forum.thread_created for WebSocket bridge
+	s.eventBus.Publish("forum.thread_created", &ThreadCreatedEvent{
+		Thread:    thread,
+		ChannelID: channelID,
+	})
+
 	return thread, nil
 }
 
@@ -212,6 +221,12 @@ func (s *ThreadService) UpdateThread(ctx context.Context, threadID uuid.UUID, re
 	}
 
 	s.eventBus.Publish("thread.updated", &ThreadUpdatedEvent{
+		Thread:    thread,
+		ChannelID: thread.ParentChannelID,
+	})
+
+	// Also publish forum.thread_updated for WebSocket bridge
+	s.eventBus.Publish("forum.thread_updated", &ThreadUpdatedEvent{
 		Thread:    thread,
 		ChannelID: thread.ParentChannelID,
 	})
@@ -442,6 +457,35 @@ func (s *ThreadService) GetChannelThreads(
 	return s.threadRepo.GetActiveByChannelID(ctx, channelID)
 }
 
+// GetChannelThreadsPaginated retrieves threads for a channel with pagination
+func (s *ThreadService) GetChannelThreadsPaginated(
+	ctx context.Context,
+	channelID uuid.UUID,
+	requesterID uuid.UUID,
+	sortOrder int,
+	limit, offset int,
+	includeArchived bool,
+) ([]models.Thread, int, error) {
+	// Verify channel exists
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if channel == nil {
+		return nil, 0, ErrChannelNotFound
+	}
+
+	// For server channels, verify membership
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, 0, ErrNotServerMember
+		}
+	}
+
+	return s.threadRepo.GetThreadsPaginated(ctx, channelID, sortOrder, limit, offset, includeArchived)
+}
+
 // JoinThread adds a user to a thread
 func (s *ThreadService) JoinThread(ctx context.Context, threadID, userID uuid.UUID) error {
 	thread, err := s.threadRepo.GetByID(ctx, threadID)
@@ -504,6 +548,12 @@ func (s *ThreadService) DeleteThread(ctx context.Context, threadID, requesterID 
 	}
 
 	s.eventBus.Publish("thread.deleted", &ThreadDeletedEvent{
+		ThreadID:  threadID,
+		ChannelID: thread.ParentChannelID,
+	})
+
+	// Also publish forum.thread_deleted for WebSocket bridge
+	s.eventBus.Publish("forum.thread_deleted", &ThreadDeletedEvent{
 		ThreadID:  threadID,
 		ChannelID: thread.ParentChannelID,
 	})
@@ -678,6 +728,12 @@ type ThreadUnarchivedEvent struct {
 type ThreadDeletedEvent struct {
 	ThreadID  uuid.UUID
 	ChannelID uuid.UUID
+}
+
+type ThreadPinnedEvent struct {
+	ThreadID  uuid.UUID
+	ChannelID uuid.UUID
+	Pinned   bool
 }
 
 type ThreadMessageCreatedEvent struct {
