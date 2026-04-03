@@ -184,23 +184,23 @@ type DiscoveryStats struct {
 // TrendingServer represents a trending server in discovery
 type TrendingServer struct {
 	ServerListingResult
-	BannerURL        *string    `json:"banner_url,omitempty"`
-	TrendScore       float64    `json:"trend_score"`
-	GrowthPercentage float64    `json:"growth_percentage"`
-	LastTrendAt      time.Time  `json:"last_trend_at"`
+	BannerURL        *string   `json:"banner_url,omitempty"`
+	TrendScore       float64   `json:"trend_score"`
+	GrowthPercentage float64   `json:"growth_percentage"`
+	LastTrendAt      time.Time `json:"last_trend_at"`
 }
 
 // TrendingCategory represents trending data for a category
 type TrendingCategory struct {
-	Category      *DiscoveryCategory `json:"category"`
-	ServerCount   int                `json:"server_count"`
-	GrowthRate    float64            `json:"growth_rate"`
+	Category    *DiscoveryCategory `json:"category"`
+	ServerCount int                `json:"server_count"`
+	GrowthRate  float64            `json:"growth_rate"`
 }
 
 // DiscoveryPage represents the main discovery page data
 type DiscoveryPage struct {
-	Featured    []*FeaturedServer   `json:"featured"`
-	Trending    []*TrendingServer   `json:"trending"`
-	Categories  []*DiscoveryCategory `json:"categories"`
-	Stats       *DiscoveryStats     `json:"stats"`
+	Featured   []*FeaturedServer    `json:"featured"`
+	Trending   []*TrendingServer    `json:"trending"`
+	Categories []*DiscoveryCategory `json:"categories"`
+	Stats      *DiscoveryStats      `json:"stats"`
 }

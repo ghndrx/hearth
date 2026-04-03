@@ -236,17 +236,17 @@ func (h *DiscoverableServerHandler) GetDiscovery(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"featured":      homePage.Featured,
-		"trending":      homePage.Trending,
-		"recommended":   homePage.Recommended,
-		"categories":    homePage.Categories,
-		"popular_tags":  homePage.PopularTags,
-		"stats":         homePage.Stats,
-		"servers":       serversResult.Servers,
-		"total":         serversResult.Total,
-		"page":          serversResult.Page,
-		"limit":         serversResult.Limit,
-		"total_pages":   serversResult.TotalPages,
+		"featured":     homePage.Featured,
+		"trending":     homePage.Trending,
+		"recommended":  homePage.Recommended,
+		"categories":   homePage.Categories,
+		"popular_tags": homePage.PopularTags,
+		"stats":        homePage.Stats,
+		"servers":      serversResult.Servers,
+		"total":        serversResult.Total,
+		"page":         serversResult.Page,
+		"limit":        serversResult.Limit,
+		"total_pages":  serversResult.TotalPages,
 	})
 }
 
@@ -383,7 +383,7 @@ func (h *DiscoverableServerHandler) GetServerDetail(c *fiber.Ctx) error {
 		"id":           server.ID,
 		"server_id":    server.ServerID,
 		"name":         server.Name,
-		"description": server.Description,
+		"description":  server.Description,
 		"category":     server.Category,
 		"icon_url":     server.IconURL,
 		"banner_url":   server.BannerURL,
@@ -436,7 +436,7 @@ func (h *DiscoverableServerHandler) JoinServer(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":  "Successfully joined server",
+		"message":   "Successfully joined server",
 		"server_id": id,
 	})
 }

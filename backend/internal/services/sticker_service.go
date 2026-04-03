@@ -23,14 +23,14 @@ var (
 	ErrStickerDimensions   = errors.New("sticker dimensions too large (max 100x100px)")
 
 	// Sticker Pack errors
-	ErrPackNotFound       = errors.New("sticker pack not found")
-	ErrPackNameRequired   = errors.New("pack name is required")
-	ErrPackNameTooLong    = errors.New("pack name too long (max 100 chars)")
-	ErrPackTierInvalid    = errors.New("invalid pack tier")
-	ErrPackTierRequired   = errors.New("pack tier required")
-	ErrPackNotOwned       = errors.New("user does not own this pack")
-	ErrPackNotGlobal      = errors.New("can only create global packs")
-	ErrPackTierAccess     = errors.New("user tier does not have access to this pack")
+	ErrPackNotFound         = errors.New("sticker pack not found")
+	ErrPackNameRequired     = errors.New("pack name is required")
+	ErrPackNameTooLong      = errors.New("pack name too long (max 100 chars)")
+	ErrPackTierInvalid      = errors.New("invalid pack tier")
+	ErrPackTierRequired     = errors.New("pack tier required")
+	ErrPackNotOwned         = errors.New("user does not own this pack")
+	ErrPackNotGlobal        = errors.New("can only create global packs")
+	ErrPackTierAccess       = errors.New("user tier does not have access to this pack")
 	ErrStickerAlreadyInPack = errors.New("sticker already in pack")
 )
 

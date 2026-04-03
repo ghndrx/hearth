@@ -18,14 +18,14 @@ import (
 
 // mockTemplateService is a mock implementation of TemplateService for testing
 type mockTemplateService struct {
-	createTemplateFunc       func(ctx context.Context, serverID, userID uuid.UUID, name, description string, isPublic bool) (*models.ServerTemplate, error)
-	getTemplateFunc          func(ctx context.Context, code string) (*models.ServerTemplate, error)
+	createTemplateFunc      func(ctx context.Context, serverID, userID uuid.UUID, name, description string, isPublic bool) (*models.ServerTemplate, error)
+	getTemplateFunc         func(ctx context.Context, code string) (*models.ServerTemplate, error)
 	getTemplateByIDFunc     func(ctx context.Context, templateID uuid.UUID) (*models.ServerTemplate, error)
 	listMyTemplatesFunc     func(ctx context.Context, userID uuid.UUID) ([]*models.ServerTemplate, error)
 	listPublicTemplatesFunc func(ctx context.Context, cursor *uuid.UUID, limit int) ([]*models.ServerTemplate, *uuid.UUID, error)
 	updateTemplateFunc      func(ctx context.Context, templateID uuid.UUID, name, description *string, isPublic *bool) (*models.ServerTemplate, error)
 	deleteTemplateFunc      func(ctx context.Context, templateID uuid.UUID) error
-	useTemplateFunc          func(ctx context.Context, code string, userID uuid.UUID, name string) (*models.Server, error)
+	useTemplateFunc         func(ctx context.Context, code string, userID uuid.UUID, name string) (*models.Server, error)
 }
 
 // setupTemplateTestApp creates a Fiber app with user ID middleware for testing

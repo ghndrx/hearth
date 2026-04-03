@@ -19,7 +19,7 @@ type ForwardedMessage struct {
 // ForwardMessageRequest represents a request to forward a message
 type ForwardMessageRequest struct {
 	DestinationChannelID uuid.UUID `json:"destination_channel_id" validate:"required"`
-	Comment               string    `json:"comment,omitempty"`
+	Comment              string    `json:"comment,omitempty"`
 }
 
 // ForwardedMessageWithContext includes the original message context

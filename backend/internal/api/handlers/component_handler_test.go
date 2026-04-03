@@ -122,8 +122,6 @@ func setupComponentHandlerTestApp(t *testing.T, h *ComponentHandler) *fiber.App 
 	return app
 }
 
-
-
 // =============================================================================
 // Tests for HandleComponentInteractionV2
 // =============================================================================

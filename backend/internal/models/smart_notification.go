@@ -42,10 +42,10 @@ type SmartNotification struct {
 	Notification
 
 	// Priority scoring
-	PriorityScore    int                      `json:"priority_score" db:"priority_score"`       // 0-100
-	Priority         NotificationPriority     `json:"priority" db:"priority"`
-	DeliveryMode     NotificationDeliveryMode `json:"delivery_mode" db:"delivery_mode"`
-	Category         NotificationCategory     `json:"category" db:"category"`
+	PriorityScore int                      `json:"priority_score" db:"priority_score"` // 0-100
+	Priority      NotificationPriority     `json:"priority" db:"priority"`
+	DeliveryMode  NotificationDeliveryMode `json:"delivery_mode" db:"delivery_mode"`
+	Category      NotificationCategory     `json:"category" db:"category"`
 
 	// Delivery tracking
 	DeliveredAt      *time.Time `json:"delivered_at,omitempty" db:"delivered_at"`
@@ -56,28 +56,28 @@ type SmartNotification struct {
 
 // NotificationDigest represents a batched notification digest
 type NotificationDigest struct {
-	ID              uuid.UUID  `json:"id" db:"id"`
-	UserID          uuid.UUID  `json:"user_id" db:"user_id"`
-	Title           string     `json:"title" db:"title"`
-	Summary         string     `json:"summary" db:"summary"`
+	ID              uuid.UUID   `json:"id" db:"id"`
+	UserID          uuid.UUID   `json:"user_id" db:"user_id"`
+	Title           string      `json:"title" db:"title"`
+	Summary         string      `json:"summary" db:"summary"`
 	NotificationIDs []uuid.UUID `json:"notification_ids"`
-	Count           int        `json:"count" db:"count"`
-	DeliveredAt     *time.Time `json:"delivered_at,omitempty" db:"delivered_at"`
-	ReadAt          *time.Time `json:"read_at,omitempty" db:"read_at"`
-	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
+	Count           int         `json:"count" db:"count"`
+	DeliveredAt     *time.Time  `json:"delivered_at,omitempty" db:"delivered_at"`
+	ReadAt          *time.Time  `json:"read_at,omitempty" db:"read_at"`
+	CreatedAt       time.Time   `json:"created_at" db:"created_at"`
 }
 
 // UserEngagement tracks user engagement with notifications
 type UserEngagement struct {
-	UserID              uuid.UUID         `json:"user_id" db:"user_id"`
-	TotalReceived       int               `json:"total_received" db:"total_received"`
-	TotalClicked        int               `json:"total_clicked" db:"total_clicked"`
-	TotalDismissed      int               `json:"total_dismissed" db:"total_dismissed"`
-	ClickRate           float64           `json:"click_rate"`
-	TopChannels         []uuid.UUID       `json:"top_channels,omitempty"`
-	LastActiveAt        *time.Time        `json:"last_active_at,omitempty" db:"last_active_at"`
-	PreferredDelivery   NotificationDeliveryMode `json:"preferred_delivery"`
-	UpdatedAt           time.Time         `json:"updated_at" db:"updated_at"`
+	UserID            uuid.UUID                `json:"user_id" db:"user_id"`
+	TotalReceived     int                      `json:"total_received" db:"total_received"`
+	TotalClicked      int                      `json:"total_clicked" db:"total_clicked"`
+	TotalDismissed    int                      `json:"total_dismissed" db:"total_dismissed"`
+	ClickRate         float64                  `json:"click_rate"`
+	TopChannels       []uuid.UUID              `json:"top_channels,omitempty"`
+	LastActiveAt      *time.Time               `json:"last_active_at,omitempty" db:"last_active_at"`
+	PreferredDelivery NotificationDeliveryMode `json:"preferred_delivery"`
+	UpdatedAt         time.Time                `json:"updated_at" db:"updated_at"`
 }
 
 // SnoozeConfig represents a notification snooze configuration
@@ -101,12 +101,12 @@ type MuteConfig struct {
 
 // SmartNotificationPreferences holds user preferences for smart notifications
 type SmartNotificationPreferences struct {
-	UserID              uuid.UUID `json:"user_id" db:"user_id"`
-	Enabled             bool      `json:"enabled" db:"enabled"`
-	DigestEnabled       bool      `json:"digest_enabled" db:"digest_enabled"`
-	DigestIntervalMins  int       `json:"digest_interval_mins" db:"digest_interval_mins"` // default 30
-	UrgentAlwaysDeliver bool      `json:"urgent_always_deliver" db:"urgent_always_deliver"`
-	ClickTrackingEnabled bool     `json:"click_tracking_enabled" db:"click_tracking_enabled"`
+	UserID               uuid.UUID `json:"user_id" db:"user_id"`
+	Enabled              bool      `json:"enabled" db:"enabled"`
+	DigestEnabled        bool      `json:"digest_enabled" db:"digest_enabled"`
+	DigestIntervalMins   int       `json:"digest_interval_mins" db:"digest_interval_mins"` // default 30
+	UrgentAlwaysDeliver  bool      `json:"urgent_always_deliver" db:"urgent_always_deliver"`
+	ClickTrackingEnabled bool      `json:"click_tracking_enabled" db:"click_tracking_enabled"`
 }
 
 // PriorityScoringInput holds the inputs needed to compute a priority score
@@ -144,7 +144,7 @@ type NotificationClickEvent struct {
 
 // DigestListOptions represents options for listing digests
 type DigestListOptions struct {
-	Limit  int  `json:"limit"`
-	Offset int  `json:"offset"`
+	Limit  int   `json:"limit"`
+	Offset int   `json:"offset"`
 	Unread *bool `json:"unread,omitempty"`
 }

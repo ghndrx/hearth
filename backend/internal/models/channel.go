@@ -51,8 +51,8 @@ type Channel struct {
 	UserLimit     *int        `json:"user_limit,omitempty" db:"user_limit"`
 	RTCRegion     *string     `json:"rtc_region,omitempty" db:"rtc_region"`
 	LastMessageID *uuid.UUID  `json:"last_message_id,omitempty" db:"last_message_id"`
-	Icon           *string     `json:"icon,omitempty" db:"icon"` // For group DMs
-	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
+	Icon          *string     `json:"icon,omitempty" db:"icon"` // For group DMs
+	CreatedAt     time.Time   `json:"created_at" db:"created_at"`
 
 	// Populated from joins
 	PermissionOverrides []PermissionOverride `json:"permission_overrides,omitempty"`

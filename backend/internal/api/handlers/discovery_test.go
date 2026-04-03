@@ -18,21 +18,21 @@ import (
 )
 
 type mockDiscoveryService struct {
-	getFeaturedServersFunc    func(ctx context.Context, limit int) ([]*models.DiscoveryListing, error)
-	getCategoriesFunc         func(ctx context.Context) ([]*models.DiscoveryCategory, error)
-	searchServersFunc         func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.DiscoveryListing, int, error)
-	getRecommendationsFunc    func(ctx context.Context, userID uuid.UUID, limit int) ([]*models.DiscoveryListing, error)
-	getServersByCategoryFunc  func(ctx context.Context, category string, limit, offset int) ([]*models.DiscoveryListing, int, error)
-	getListingWithDetailsFunc func(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
-	submitForDiscoveryFunc    func(ctx context.Context, serverID, userID uuid.UUID, req *models.SubmitDiscoveryRequest) error
-	updateListingFunc         func(ctx context.Context, serverID, userID uuid.UUID, req *models.UpdateDiscoveryRequest) error
-	reportServerFunc          func(ctx context.Context, serverID, userID uuid.UUID, req *models.ReportServerRequest) error
-	approveListingFunc        func(ctx context.Context, listingID, adminID uuid.UUID) error
-	rejectListingFunc         func(ctx context.Context, listingID, adminID uuid.UUID, reason string) error
-	setFeaturedFunc                    func(ctx context.Context, listingID uuid.UUID, featured bool) error
-	searchServersPublicFunc            func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error)
-	getServerListingPublicFunc         func(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
-	getListingWithDetailsPublicFunc   func(ctx context.Context, serverID uuid.UUID) (*models.ServerListingResult, error)
+	getFeaturedServersFunc          func(ctx context.Context, limit int) ([]*models.DiscoveryListing, error)
+	getCategoriesFunc               func(ctx context.Context) ([]*models.DiscoveryCategory, error)
+	searchServersFunc               func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.DiscoveryListing, int, error)
+	getRecommendationsFunc          func(ctx context.Context, userID uuid.UUID, limit int) ([]*models.DiscoveryListing, error)
+	getServersByCategoryFunc        func(ctx context.Context, category string, limit, offset int) ([]*models.DiscoveryListing, int, error)
+	getListingWithDetailsFunc       func(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
+	submitForDiscoveryFunc          func(ctx context.Context, serverID, userID uuid.UUID, req *models.SubmitDiscoveryRequest) error
+	updateListingFunc               func(ctx context.Context, serverID, userID uuid.UUID, req *models.UpdateDiscoveryRequest) error
+	reportServerFunc                func(ctx context.Context, serverID, userID uuid.UUID, req *models.ReportServerRequest) error
+	approveListingFunc              func(ctx context.Context, listingID, adminID uuid.UUID) error
+	rejectListingFunc               func(ctx context.Context, listingID, adminID uuid.UUID, reason string) error
+	setFeaturedFunc                 func(ctx context.Context, listingID uuid.UUID, featured bool) error
+	searchServersPublicFunc         func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error)
+	getServerListingPublicFunc      func(ctx context.Context, serverID uuid.UUID) (*models.DiscoveryListing, error)
+	getListingWithDetailsPublicFunc func(ctx context.Context, serverID uuid.UUID) (*models.ServerListingResult, error)
 }
 
 func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
@@ -297,18 +297,18 @@ func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
 			validCategories := map[models.ServerCategory]bool{
 				models.CategoryGaming:        true,
 				models.CategoryMusic:         true,
-				models.CategoryTechnology:   true,
+				models.CategoryTechnology:    true,
 				models.CategoryArt:           true,
 				models.CategoryEducation:     true,
-				models.CategoryScience:        true,
+				models.CategoryScience:       true,
 				models.CategoryEntertainment: true,
-				models.CategorySocial:         true,
-				models.CategorySports:         true,
-				models.CategoryAnime:          true,
-				models.CategoryFashion:        true,
-				models.CategoryFood:           true,
-				models.CategoryBusiness:       true,
-				models.CategoryLanguage:       true,
+				models.CategorySocial:        true,
+				models.CategorySports:        true,
+				models.CategoryAnime:         true,
+				models.CategoryFashion:       true,
+				models.CategoryFood:          true,
+				models.CategoryBusiness:      true,
+				models.CategoryLanguage:      true,
 			}
 			if !validCategories[category] {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid category"})
@@ -836,7 +836,6 @@ var _ = services.ErrDiscoveryListingNotFound
 
 // Tests for enhanced discovery features
 
-
 // Note: Enhanced discovery features (trending, stats, tags, page, enhanced search)
 // are tested via integration tests as they require proper mock implementations
 // of the DiscoveryService methods. The mock in this file does not implement
@@ -874,8 +873,8 @@ func TestGetPublicServers_Success(t *testing.T) {
 func TestGetPublicServers_DefaultPagination(t *testing.T) {
 	mock := &mockDiscoveryService{
 		searchServersPublicFunc: func(ctx context.Context, filters *models.DiscoveryFilters) ([]*models.ServerListingResult, int, error) {
-			assert.Equal(t, 25, filters.Limit)  // default limit
-			assert.Equal(t, 0, filters.Offset)   // default offset
+			assert.Equal(t, 25, filters.Limit) // default limit
+			assert.Equal(t, 0, filters.Offset) // default offset
 			// Default sort is "popular" (test app doesn't do mapping like real handler)
 			assert.Equal(t, "popular", filters.SortBy)
 			return []*models.ServerListingResult{}, 100, nil
@@ -1988,5 +1987,3 @@ func TestDiscoveryHandler_ReportServer_InvalidServerID(t *testing.T) {
 // =============================================================================
 // Handler tests for ApproveListing
 // =============================================================================
-
-

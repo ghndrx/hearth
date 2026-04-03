@@ -35,8 +35,8 @@ type PermissionServiceGetChannelPermissionsInterface interface {
 // ComponentHandler handles component-related HTTP requests
 type ComponentHandler struct {
 	componentService  ComponentServiceInterface
-	messageService   MessageServiceGetMessageInterface
-	channelService   ChannelServiceGetChannelInterface
+	messageService    MessageServiceGetMessageInterface
+	channelService    ChannelServiceGetChannelInterface
 	permissionService PermissionServiceGetChannelPermissionsInterface
 }
 
@@ -48,8 +48,8 @@ func NewComponentHandler(
 	permissionService PermissionServiceGetChannelPermissionsInterface,
 ) *ComponentHandler {
 	return &ComponentHandler{
-		componentService:   componentService,
-		messageService:     messageService,
+		componentService:  componentService,
+		messageService:    messageService,
 		channelService:    channelService,
 		permissionService: permissionService,
 	}

@@ -369,10 +369,10 @@ func (r *DiscoverableServerRepository) GetTrendingServers(ctx context.Context, l
 		// Generate mock trend data based on position
 		trendScore := float64(len(servers) - i)
 		result[i] = &models.TrendingServerInfo{
-			Server:         s,
-			TrendScore:     trendScore,
-			GrowthRate:     trendScore * 2.5,
-			RankChange:     0,
+			Server:     s,
+			TrendScore: trendScore,
+			GrowthRate: trendScore * 2.5,
+			RankChange: 0,
 		}
 	}
 
@@ -393,7 +393,7 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 	// 2. Mutual members with servers the user has joined
 	// 3. Featured and trending servers not yet joined
 	// 4. Similar servers based on user's existing server categories
-	
+
 	// First, get the user's joined server categories to understand their interests
 	categoryQuery := `
 		SELECT DISTINCT ds.category
@@ -419,7 +419,7 @@ func (r *DiscoverableServerRepository) GetRecommendedServers(ctx context.Context
 	for i := range userCategories {
 		categoryPlaceholders[i] = fmt.Sprintf("$%d", i+2)
 	}
-	
+
 	query := fmt.Sprintf(`
 		SELECT ds.id, ds.server_id, ds.name, ds.description, ds.category, ds.icon_url, ds.banner_url,
 		       ds.tags, ds.member_count, ds.is_verified, ds.is_featured, ds.created_at,
@@ -504,7 +504,7 @@ func (r *DiscoverableServerRepository) getBasicRecommendations(ctx context.Conte
 	for i, s := range servers {
 		result[i] = &models.ServerRecommendation{
 			DiscoverableServerSearchResult: *s,
-			Reason:              reasons[i%len(reasons)],
+			Reason:                         reasons[i%len(reasons)],
 		}
 	}
 
@@ -595,10 +595,10 @@ func (r *DiscoverableServerRepository) GetPopularTags(ctx context.Context, limit
 // GetDiscoveryStats returns overall discovery statistics
 func (r *DiscoverableServerRepository) GetDiscoveryStats(ctx context.Context) (*models.DiscoveryPageStats, error) {
 	var stats struct {
-		TotalServers      int64 `db:"total_servers"`
-		TotalMembers     int64 `db:"total_members"`
-		TotalCategories  int   `db:"total_categories"`
-		NewServersThisWeek int  `db:"new_servers_this_week"`
+		TotalServers       int64 `db:"total_servers"`
+		TotalMembers       int64 `db:"total_members"`
+		TotalCategories    int   `db:"total_categories"`
+		NewServersThisWeek int   `db:"new_servers_this_week"`
 	}
 
 	statsQuery := `
@@ -624,9 +624,9 @@ func (r *DiscoverableServerRepository) GetDiscoveryStats(ctx context.Context) (*
 	r.db.GetContext(ctx, &stats.NewServersThisWeek, weekQuery)
 
 	return &models.DiscoveryPageStats{
-		TotalServers:      stats.TotalServers,
-		TotalMembers:      stats.TotalMembers,
-		TotalCategories:   stats.TotalCategories,
+		TotalServers:       stats.TotalServers,
+		TotalMembers:       stats.TotalMembers,
+		TotalCategories:    stats.TotalCategories,
 		NewServersThisWeek: stats.NewServersThisWeek,
 	}, nil
 }

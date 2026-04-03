@@ -64,7 +64,7 @@ func TestIsValidCategory(t *testing.T) {
 func TestAllDiscoveryCategories(t *testing.T) {
 	categories := models.AllDiscoveryCategories()
 	assert.Len(t, categories, 9)
-	
+
 	expected := []models.ServerDiscoveryCategory{
 		models.DiscoveryCategoryGaming,
 		models.DiscoveryCategoryTechnology,
@@ -76,7 +76,7 @@ func TestAllDiscoveryCategories(t *testing.T) {
 		models.DiscoveryCategoryCommunity,
 		models.DiscoveryCategoryOther,
 	}
-	
+
 	for _, exp := range expected {
 		found := false
 		for _, cat := range categories {
@@ -111,7 +111,7 @@ func TestPaginatedDiscoverableServersResponse(t *testing.T) {
 func TestDiscoverySearchRequest(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
 		req := &models.DiscoverySearchRequest{}
-		
+
 		assert.Equal(t, "", req.Query)
 		assert.Equal(t, models.ServerDiscoveryCategory(""), req.Category)
 		assert.Nil(t, req.Categories)
@@ -131,7 +131,7 @@ func TestDiscoverySearchRequest(t *testing.T) {
 			Page:      1,
 			Limit:     25,
 		}
-		
+
 		assert.Equal(t, "gaming", req.Query)
 		assert.Equal(t, models.DiscoveryCategoryGaming, req.Category)
 		assert.Equal(t, "popular", req.SortBy)
@@ -164,11 +164,11 @@ func TestDiscoverySearchResponse(t *testing.T) {
 func TestDiscoveryHomePage(t *testing.T) {
 	t.Run("home page structure", func(t *testing.T) {
 		page := &models.DiscoveryHomePage{
-			Featured:      []*models.DiscoverableFeaturedServer{},
-			Trending:      []*models.TrendingServerInfo{},
-			Recommended:   []*models.ServerRecommendation{},
-			Categories:    []*models.CategoryWithStats{},
-			PopularTags:   []*models.DiscoveryTag{},
+			Featured:    []*models.DiscoverableFeaturedServer{},
+			Trending:    []*models.TrendingServerInfo{},
+			Recommended: []*models.ServerRecommendation{},
+			Categories:  []*models.CategoryWithStats{},
+			PopularTags: []*models.DiscoveryTag{},
 			Stats: &models.DiscoveryPageStats{
 				TotalServers:       1000,
 				TotalMembers:       50000,
@@ -197,10 +197,10 @@ func TestTrendingServerInfo(t *testing.T) {
 			Server: &models.DiscoverableServerSearchResult{
 				Name: "Test Server",
 			},
-			TrendScore:          85.5,
-			GrowthRate:          12.3,
-			ActiveMembersRatio:  0.45,
-			RankChange:          3,
+			TrendScore:         85.5,
+			GrowthRate:         12.3,
+			ActiveMembersRatio: 0.45,
+			RankChange:         3,
 		}
 
 		assert.Equal(t, 85.5, trending.TrendScore)
@@ -219,9 +219,9 @@ func TestServerRecommendation(t *testing.T) {
 				Name:        "Recommended Server",
 				MemberCount: 5000,
 			},
-			Reason:           "Popular in your interests",
+			Reason:            "Popular in your interests",
 			MutualMemberCount: 42,
-			MutualServers:    []string{"server-1", "server-2"},
+			MutualServers:     []string{"server-1", "server-2"},
 		}
 
 		assert.Equal(t, "Popular in your interests", rec.Reason)
@@ -329,39 +329,39 @@ func TestDiscoveryResponse(t *testing.T) {
 	t.Run("discovery response structure includes all fields", func(t *testing.T) {
 		// This tests the expected structure of the GET /discovery response
 		// which combines home page data with paginated server listings
-		
+
 		servers := []*models.DiscoverableServerSearchResult{
 			{Name: "Server 1", MemberCount: 1000},
 			{Name: "Server 2", MemberCount: 2000},
 		}
-		
+
 		featured := []*models.DiscoverableFeaturedServer{
 			{Name: "Featured 1", MemberCount: 5000},
 		}
-		
+
 		trending := []*models.TrendingServerInfo{
 			{Server: &models.DiscoverableServerSearchResult{Name: "Trending 1"}, TrendScore: 90.0},
 		}
-		
+
 		recommended := []*models.ServerRecommendation{
 			{DiscoverableServerSearchResult: models.DiscoverableServerSearchResult{Name: "Rec 1"}, Reason: "Popular in your interests"},
 		}
-		
+
 		categories := []*models.CategoryWithStats{
 			{CategoryInfo: models.CategoryInfo{Name: "Gaming", Slug: "gaming", ServerCount: 100}},
 		}
-		
+
 		tags := []*models.DiscoveryTag{
 			{Name: "Gaming", Slug: "gaming", UsageCount: 500},
 		}
-		
+
 		stats := &models.DiscoveryPageStats{
 			TotalServers:       1000,
-			TotalMembers:      50000,
-			TotalCategories:   9,
+			TotalMembers:       50000,
+			TotalCategories:    9,
 			NewServersThisWeek: 25,
 		}
-		
+
 		// Verify the expected structure is valid
 		assert.NotNil(t, servers)
 		assert.NotNil(t, featured)
@@ -370,23 +370,23 @@ func TestDiscoveryResponse(t *testing.T) {
 		assert.NotNil(t, categories)
 		assert.NotNil(t, tags)
 		assert.NotNil(t, stats)
-		
+
 		assert.Len(t, servers, 2)
 		assert.Len(t, featured, 1)
 		assert.Len(t, trending, 1)
 		assert.Len(t, recommended, 1)
 		assert.Len(t, categories, 1)
 		assert.Len(t, tags, 1)
-		
+
 		// Verify pagination info is in stats
 		assert.Equal(t, int64(1000), stats.TotalServers)
 		assert.Equal(t, int64(50000), stats.TotalMembers)
 		assert.Equal(t, 9, stats.TotalCategories)
 		assert.Equal(t, 25, stats.NewServersThisWeek)
-		
+
 		// Verify trending info
 		assert.Equal(t, 90.0, trending[0].TrendScore)
-		
+
 		// Verify recommendation
 		assert.Equal(t, "Popular in your interests", recommended[0].Reason)
 	})

@@ -19,9 +19,9 @@ import (
 
 // GatewayConfig holds gateway configuration
 type GatewayConfig struct {
-	HeartbeatInterval  time.Duration
-	SessionTimeout     time.Duration
-	ConnectionLimiter  *ConnectionLimiter
+	HeartbeatInterval time.Duration
+	SessionTimeout    time.Duration
+	ConnectionLimiter *ConnectionLimiter
 }
 
 // DefaultGatewayConfig returns default configuration

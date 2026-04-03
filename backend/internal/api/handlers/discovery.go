@@ -547,18 +547,18 @@ func (h *DiscoveryHandler) GetPublicServers(c *fiber.Ctx) error {
 		validCategories := map[models.ServerCategory]bool{
 			models.CategoryGaming:        true,
 			models.CategoryMusic:         true,
-			models.CategoryTechnology:   true,
+			models.CategoryTechnology:    true,
 			models.CategoryArt:           true,
 			models.CategoryEducation:     true,
-			models.CategoryScience:        true,
+			models.CategoryScience:       true,
 			models.CategoryEntertainment: true,
-			models.CategorySocial:         true,
-			models.CategorySports:         true,
-			models.CategoryAnime:          true,
-			models.CategoryFashion:        true,
-			models.CategoryFood:           true,
-			models.CategoryBusiness:       true,
-			models.CategoryLanguage:       true,
+			models.CategorySocial:        true,
+			models.CategorySports:        true,
+			models.CategoryAnime:         true,
+			models.CategoryFashion:       true,
+			models.CategoryFood:          true,
+			models.CategoryBusiness:      true,
+			models.CategoryLanguage:      true,
 		}
 		if !validCategories[filters.Category] {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -659,6 +659,7 @@ func (h *DiscoveryHandler) SearchServersEnhanced(c *fiber.Ctx) error {
 		"offset":  filters.Offset,
 	})
 }
+
 // GET /api/v1/servers/:id (public - no auth required)
 func (h *DiscoveryHandler) GetPublicServer(c *fiber.Ctx) error {
 	serverID, err := uuid.Parse(c.Params("id"))

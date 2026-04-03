@@ -466,11 +466,11 @@ func (s *DiscoverableServerService) GetDiscoveryHomePage(ctx context.Context, us
 	}
 
 	return &models.DiscoveryHomePage{
-		Featured:      featured,
-		Trending:      trending,
-		Recommended:   recommended,
-		Categories:    categories,
-		PopularTags:   tags,
-		Stats:         stats,
+		Featured:    featured,
+		Trending:    trending,
+		Recommended: recommended,
+		Categories:  categories,
+		PopularTags: tags,
+		Stats:       stats,
 	}, nil
 }

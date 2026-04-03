@@ -795,11 +795,11 @@ func TestSmartNotificationService_GetDigest(t *testing.T) {
 
 	now := time.Now()
 	digest := &models.NotificationDigest{
-		ID:      digestID,
-		UserID:  userID,
-		Title:   "Test digest",
-		Summary: "1 mention",
-		Count:   1,
+		ID:        digestID,
+		UserID:    userID,
+		Title:     "Test digest",
+		Summary:   "1 mention",
+		Count:     1,
 		CreatedAt: now,
 	}
 

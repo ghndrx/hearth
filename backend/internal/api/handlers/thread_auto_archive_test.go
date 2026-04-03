@@ -189,7 +189,7 @@ func TestThreadAutoArchiveHandler_GetChannelAutoArchiveOverride(t *testing.T) {
 
 	channelID := uuid.New()
 	override := &models.ChannelAutoArchiveOverride{
-		ID:                   uuid.New(),
+		ID:                  uuid.New(),
 		ChannelID:           channelID,
 		AutoArchiveDuration: 4320,
 	}
@@ -226,7 +226,7 @@ func TestThreadAutoArchiveHandler_SetChannelAutoArchiveOverride(t *testing.T) {
 	duration := 4320
 
 	override := &models.ChannelAutoArchiveOverride{
-		ID:                   uuid.New(),
+		ID:                  uuid.New(),
 		ChannelID:           channelID,
 		AutoArchiveDuration: duration,
 	}

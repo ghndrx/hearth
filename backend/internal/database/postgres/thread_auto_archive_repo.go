@@ -112,7 +112,7 @@ func (r *ThreadAutoArchiveRepository) DeleteChannelOverride(ctx context.Context,
 // GetOrCreateThreadMeta retrieves or creates auto-archive metadata for a thread
 func (r *ThreadAutoArchiveRepository) GetOrCreateThreadMeta(ctx context.Context, threadID uuid.UUID) (*models.ThreadAutoArchiveMeta, error) {
 	var meta models.ThreadAutoArchiveMeta
-	
+
 	// First try to get existing
 	query := `
 		SELECT thread_id, last_activity_at, last_activity_message_id, last_activity_user_id, 
@@ -136,7 +136,7 @@ func (r *ThreadAutoArchiveRepository) GetOrCreateThreadMeta(ctx context.Context,
 	} else if err != nil {
 		return nil, err
 	}
-	
+
 	return &meta, nil
 }
 
@@ -223,7 +223,7 @@ func (r *ThreadAutoArchiveRepository) DeleteThreadMeta(ctx context.Context, thre
 func (r *ThreadAutoArchiveRepository) GetServerStats(ctx context.Context, serverID uuid.UUID) (*models.ThreadAutoArchiveStats, error) {
 	var stats models.ThreadAutoArchiveStats
 	stats.ServerID = serverID
-	
+
 	// Get total threads in server channels
 	query := `
 		SELECT COUNT(*) FROM threads t
@@ -234,7 +234,7 @@ func (r *ThreadAutoArchiveRepository) GetServerStats(ctx context.Context, server
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get archived threads
 	query = `
 		SELECT COUNT(*) FROM threads t
@@ -245,7 +245,7 @@ func (r *ThreadAutoArchiveRepository) GetServerStats(ctx context.Context, server
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get scheduled threads (have next_archive_at set and not archived)
 	query = `
 		SELECT COUNT(*) FROM thread_auto_archive_meta tam
@@ -257,7 +257,7 @@ func (r *ThreadAutoArchiveRepository) GetServerStats(ctx context.Context, server
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get threads ready to archive
 	query = `
 		SELECT COUNT(*) FROM thread_auto_archive_meta tam
@@ -270,7 +270,7 @@ func (r *ThreadAutoArchiveRepository) GetServerStats(ctx context.Context, server
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &stats, nil
 }
 
@@ -286,7 +286,7 @@ func (r *ThreadAutoArchiveRepository) GetChannelDuration(ctx context.Context, ch
 	if err != sql.ErrNoRows {
 		return 0, err
 	}
-	
+
 	// Fall back to server default
 	var settings models.ThreadAutoArchiveSettings
 	query = `SELECT default_duration FROM thread_auto_archive_settings WHERE server_id = $1`
@@ -297,6 +297,6 @@ func (r *ThreadAutoArchiveRepository) GetChannelDuration(ctx context.Context, ch
 	if err != nil {
 		return 0, err
 	}
-	
+
 	return settings.DefaultDuration, nil
 }

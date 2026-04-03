@@ -17,12 +17,12 @@ var (
 
 // ForwardService handles message forwarding business logic
 type ForwardService struct {
-	messageRepo        MessageRepository
-	forwardedMsgRepo   ForwardedMessageRepository
-	channelRepo        ChannelRepository
-	serverRepo         ServerRepository
-	permService        *PermissionService
-	eventBus           EventBus
+	messageRepo      MessageRepository
+	forwardedMsgRepo ForwardedMessageRepository
+	channelRepo      ChannelRepository
+	serverRepo       ServerRepository
+	permService      *PermissionService
+	eventBus         EventBus
 }
 
 // NewForwardService creates a new forward service
@@ -97,7 +97,7 @@ func (s *ForwardService) ForwardMessage(
 	// Create the forwarded message record
 	forwardedMsg := &models.ForwardedMessage{
 		ID:                   uuid.New(),
-		OriginalMessageID:     originalMessageID,
+		OriginalMessageID:    originalMessageID,
 		ForwardedByID:        forwarderID,
 		DestinationChannelID: destinationChannelID,
 		Comment:              comment,
@@ -110,7 +110,7 @@ func (s *ForwardService) ForwardMessage(
 
 	// Publish event for the forward
 	s.eventBus.Publish("message.forwarded", &MessageForwardedEvent{
-		OriginalMessageID:     originalMessageID,
+		OriginalMessageID:    originalMessageID,
 		ForwardedByID:        forwarderID,
 		DestinationChannelID: destinationChannelID,
 	})
@@ -188,7 +188,7 @@ func (s *ForwardService) checkSendPermission(ctx context.Context, channel *model
 
 // MessageForwardedEvent is published when a message is forwarded
 type MessageForwardedEvent struct {
-	OriginalMessageID     uuid.UUID `json:"original_message_id"`
+	OriginalMessageID    uuid.UUID `json:"original_message_id"`
 	ForwardedByID        uuid.UUID `json:"forwarded_by_id"`
 	DestinationChannelID uuid.UUID `json:"destination_channel_id"`
 }
