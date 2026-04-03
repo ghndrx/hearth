@@ -258,6 +258,9 @@ func (m *simpleMockChannelRepoForWorker) GetUserDMs(ctx context.Context, userID 
 func (m *simpleMockChannelRepoForWorker) UpdateLastMessage(ctx context.Context, channelID, messageID uuid.UUID, at time.Time) error {
 	return nil
 }
+func (m *simpleMockChannelRepoForWorker) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	return nil
+}
 func (m *simpleMockChannelRepoForWorker) AddRecipient(ctx context.Context, channelID, userID uuid.UUID) error {
 	return nil
 }

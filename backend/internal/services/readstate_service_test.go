@@ -168,6 +168,11 @@ func (m *MockChannelRepositoryForReadState) BulkUpdatePositions(ctx context.Cont
 	return args.Error(0)
 }
 
+func (m *MockChannelRepositoryForReadState) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	args := m.Called(ctx, channelID, configJSON)
+	return args.Error(0)
+}
+
 func TestReadStateService_MarkChannelAsRead(t *testing.T) {
 	ctx := context.Background()
 	userID := uuid.New()

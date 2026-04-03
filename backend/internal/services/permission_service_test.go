@@ -696,6 +696,11 @@ func (m *MockChannelRepoForPermissions) UpdateLastMessage(ctx context.Context, c
 	return args.Error(0)
 }
 
+func (m *MockChannelRepoForPermissions) UpdateForumConfig(ctx context.Context, channelID uuid.UUID, configJSON []byte) error {
+	args := m.Called(ctx, channelID, configJSON)
+	return args.Error(0)
+}
+
 func (m *MockChannelRepoForPermissions) GetPermissionOverrides(ctx context.Context, channelID uuid.UUID) ([]models.PermissionOverride, error) {
 	args := m.Called(ctx, channelID)
 	if args.Get(0) == nil {
