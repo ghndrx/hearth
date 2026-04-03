@@ -139,7 +139,10 @@ func (r *SavedMessagesRepository) GetByUserWithMessages(ctx context.Context, use
 
 	// Fetch messages
 	var messages []models.Message
-	query, args, _ := sqlx.In(`SELECT * FROM messages WHERE id IN (?)`, messageIDs)
+	query, args, err := sqlx.In(`SELECT * FROM messages WHERE id IN (?)`, messageIDs)
+	if err != nil {
+		return nil, err
+	}
 	query = r.db.Rebind(query)
 	err = r.db.SelectContext(ctx, &messages, query, args...)
 	if err != nil {
