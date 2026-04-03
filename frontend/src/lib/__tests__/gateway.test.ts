@@ -38,12 +38,19 @@ describe('Gateway', () => {
 		};
 
 		originalWebSocket = global.WebSocket;
-		const MockWebSocket = vi.fn(() => mockWs) as any;
+
+		// Use a regular function constructor instead of vi.fn(() => mockWs)
+		// vi.fn(() => mockWs) creates an arrow function which cannot be used
+		// as a constructor with 'new' (arrow functions don't have [[Construct]]).
+		// A regular function can be called with 'new' and return 'mockWs'.
+		function MockWebSocket(this: any, _url: string) {
+			return mockWs;
+		}
 		MockWebSocket.CONNECTING = 0;
 		MockWebSocket.OPEN = 1;
 		MockWebSocket.CLOSING = 2;
 		MockWebSocket.CLOSED = 3;
-		global.WebSocket = MockWebSocket;
+		global.WebSocket = vi.fn(MockWebSocket) as any;
 	});
 
 	afterEach(() => {
