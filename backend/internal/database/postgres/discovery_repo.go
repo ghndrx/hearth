@@ -931,7 +931,9 @@ func (r *DiscoveryRepository) SearchServersEnhanced(ctx context.Context, filters
 		tagConditions := make([]string, len(filters.Tags))
 		for i, tag := range filters.Tags {
 			slug := strings.ToLower(strings.ReplaceAll(tag, " ", "-"))
-			tagConditions[i] = fmt.Sprintf("EXISTS (SELECT 1 FROM server_discovery_listing_tags lt2 JOIN server_discovery_tags t2 ON t2.id = lt2.tag_id WHERE lt2.listing_id = l.id AND t2.slug = '%s')", slug)
+			tagConditions[i] = fmt.Sprintf("EXISTS (SELECT 1 FROM server_discovery_listing_tags lt2 JOIN server_discovery_tags t2 ON t2.id = lt2.tag_id WHERE lt2.listing_id = l.id AND t2.slug = $%d)", argNum)
+			args = append(args, slug)
+			argNum++
 		}
 		conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
 	}
