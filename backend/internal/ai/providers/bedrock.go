@@ -407,7 +407,25 @@ func (p *BedrockProvider) parseError(statusCode int, body []byte) error {
 		Type    string `json:"__type"`
 	}
 
-	_ = json.Unmarshal(body, &errResp)
+	if err := json.Unmarshal(body, &errResp); err != nil {
+		// If we can't parse the JSON, use the raw body as the error message
+		errMsg := string(body)
+		if errMsg == "" {
+			errMsg = "unknown error"
+		}
+
+		switch statusCode {
+		case 401, 403:
+			return ErrInvalidCredentials
+		case 429:
+			return ErrRateLimitExceeded
+		case 500, 502, 503:
+			return ErrProviderUnavailable
+		default:
+			return fmt.Errorf("bedrock error (%d): %s", statusCode, errMsg)
+		}
+	}
+
 	errMsg := errResp.Message
 	if errMsg == "" {
 		errMsg = string(body)

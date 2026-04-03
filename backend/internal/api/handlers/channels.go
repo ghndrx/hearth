@@ -86,6 +86,9 @@ func (h *ChannelHandler) Get(c *fiber.Ctx) error {
 		})
 	}
 
+	// Set channel_type field for Discord API compatibility
+	channel.ChannelType = channel.Type
+
 	return c.JSON(channel)
 }
 
@@ -158,6 +161,9 @@ func (h *ChannelHandler) Update(c *fiber.Ctx) error {
 			})
 		}
 	}
+
+	// Set channel_type field for Discord API compatibility
+	channel.ChannelType = channel.Type
 
 	return c.JSON(channel)
 }

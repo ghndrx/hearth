@@ -178,6 +178,18 @@ func (m *mockThreadRepository) UpdatePresenceHeartbeat(ctx context.Context, thre
 	return nil
 }
 
+func (m *mockThreadRepository) GetThreadsPaginated(ctx context.Context, channelID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error) {
+	return nil, 0, nil
+}
+
+func (m *mockThreadRepository) GetThreadCount(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error) {
+	return 0, nil
+}
+
+func (m *mockThreadRepository) GetTotalMessageCount(ctx context.Context, channelID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
 // mockChannelRepoForThread mocks ChannelRepository for thread service tests
 type mockChannelRepoForThread struct {
 	getByIDFunc func(ctx context.Context, id uuid.UUID) (*models.Channel, error)
