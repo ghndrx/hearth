@@ -3,6 +3,7 @@ package services
 import (
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // CheckKeywordMatch checks if content matches any of the keywords.
@@ -159,7 +160,7 @@ func CheckMentionAbuse(content string, mentionLimit int) bool {
 		if r == '@' && !inWord {
 			mentionCount++
 			inWord = true
-		} else if r > 255 || !isAlphanumeric(byte(r)) {
+		} else if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
 			inWord = false
 		}
 	}
