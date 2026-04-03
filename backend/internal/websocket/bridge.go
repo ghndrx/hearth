@@ -130,6 +130,15 @@ func (b *EventBridge) registerHandlers() {
 	// Server boost events
 	b.bus.Subscribe("server.boost_added", b.onServerBoostAdded)
 	b.bus.Subscribe("server.boost_removed", b.onServerBoostRemoved)
+
+	// Forum events
+	b.bus.Subscribe("forum.thread_created", b.onForumThreadCreated)
+	b.bus.Subscribe("forum.thread_updated", b.onForumThreadUpdated)
+	b.bus.Subscribe("forum.thread_deleted", b.onForumThreadDeleted)
+	b.bus.Subscribe("forum.thread_pinned", b.onForumThreadPinned)
+	b.bus.Subscribe("forum.tag_created", b.onForumTagCreated)
+	b.bus.Subscribe("forum.tag_updated", b.onForumTagUpdated)
+	b.bus.Subscribe("forum.tag_deleted", b.onForumTagDeleted)
 }
 
 // Message event handlers
@@ -899,4 +908,83 @@ const (
 	EventTypeChannelPinsUpdate = "CHANNEL_PINS_UPDATE"
 	EventTypeBanAdd            = "GUILD_BAN_ADD"
 	EventTypeUserUpdate        = "USER_UPDATE"
+	EventForumThreadCreate     = "FORUM_THREAD_CREATE"
+	EventForumThreadUpdate     = "FORUM_THREAD_UPDATE"
+	EventForumThreadDelete     = "FORUM_THREAD_DELETE"
+	EventForumThreadPinned     = "FORUM_THREAD_PINNED"
+	EventForumTagCreate        = "FORUM_TAG_CREATE"
+	EventForumTagUpdate        = "FORUM_TAG_UPDATE"
+	EventForumTagDelete        = "FORUM_TAG_DELETE"
 )
+
+// Forum event handlers
+
+func (b *EventBridge) onForumThreadCreated(event events.Event) {
+	data, ok := event.Data.(*services.ThreadCreatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumThreadCreated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_THREAD_CREATE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumThreadCreate, data)
+}
+
+func (b *EventBridge) onForumThreadUpdated(event events.Event) {
+	data, ok := event.Data.(*services.ThreadUpdatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumThreadUpdated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_THREAD_UPDATE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumThreadUpdate, data)
+}
+
+func (b *EventBridge) onForumThreadDeleted(event events.Event) {
+	data, ok := event.Data.(*services.ThreadDeletedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumThreadDeleted: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_THREAD_DELETE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumThreadDelete, data)
+}
+
+func (b *EventBridge) onForumThreadPinned(event events.Event) {
+	data, ok := event.Data.(*services.ThreadPinnedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumThreadPinned: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_THREAD_PINNED to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumThreadPinned, data)
+}
+
+func (b *EventBridge) onForumTagCreated(event events.Event) {
+	data, ok := event.Data.(*services.ForumTagCreatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumTagCreated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_TAG_CREATE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumTagCreate, data)
+}
+
+func (b *EventBridge) onForumTagUpdated(event events.Event) {
+	data, ok := event.Data.(*services.ForumTagUpdatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumTagUpdated: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_TAG_UPDATE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumTagUpdate, data)
+}
+
+func (b *EventBridge) onForumTagDeleted(event events.Event) {
+	data, ok := event.Data.(*services.ForumTagDeletedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onForumTagDeleted: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting FORUM_TAG_DELETE to channel %s", data.ChannelID)
+	b.sendToChannel(data.ChannelID, EventForumTagDelete, data)
+}

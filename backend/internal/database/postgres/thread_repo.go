@@ -112,6 +112,91 @@ func (r *ThreadRepository) GetActiveByChannelID(ctx context.Context, channelID u
 	return threads, err
 }
 
+// GetThreadsPaginated retrieves threads for a forum channel with pagination, sorted by last_message_at
+func (r *ThreadRepository) GetThreadsPaginated(ctx context.Context, channelID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 25
+	}
+
+	var threads []models.Thread
+	var total int
+
+	// Get total count
+	countQuery := `SELECT COUNT(*) FROM threads WHERE parent_channel_id = $1`
+	if !includeArchived {
+		countQuery += ` AND archived = false`
+	}
+	err := r.db.GetContext(ctx, &total, countQuery, channelID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Build thread query with sorting
+	threadQuery := `
+		SELECT t.id, t.parent_channel_id, t.parent_message_id, t.owner_id, t.name, t.message_count, t.member_count,
+		       t.archived, t.auto_archive, t.locked, t.created_at, t.archive_timestamp,
+		       t.applied_tags, t.is_pinned, t.pin_weight,
+		       COALESCE(tm.last_message_at, t.created_at) as last_message_at
+		FROM threads t
+		LEFT JOIN (
+			SELECT thread_id, MAX(created_at) as last_message_at
+			FROM thread_messages
+			GROUP BY thread_id
+		) tm ON tm.thread_id = t.id
+		WHERE t.parent_channel_id = $1
+	`
+
+	args := []interface{}{channelID}
+
+	if !includeArchived {
+		threadQuery += ` AND t.archived = false`
+	}
+
+	// Determine sort order
+	var orderClause string
+	switch sortOrder {
+	case 1: // creation_date
+		orderClause = ` ORDER BY t.is_pinned DESC, t.pin_weight DESC, t.created_at DESC`
+	case 2: // pin_weight
+		orderClause = ` ORDER BY t.is_pinned DESC, t.pin_weight DESC, last_message_at DESC NULLS LAST`
+	default: // latest_activity (0)
+		orderClause = ` ORDER BY t.is_pinned DESC, t.pin_weight DESC, last_message_at DESC NULLS LAST`
+	}
+
+	threadQuery += orderClause + ` LIMIT $2 OFFSET $3`
+	args = append(args, limit, offset)
+
+	err = r.db.SelectContext(ctx, &threads, threadQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return threads, total, nil
+}
+
+// GetThreadCount returns the number of threads in a channel
+func (r *ThreadRepository) GetThreadCount(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM threads WHERE parent_channel_id = $1`
+	if !includeArchived {
+		query += ` AND archived = false`
+	}
+	err := r.db.GetContext(ctx, &count, query, channelID)
+	return count, err
+}
+
+// GetTotalMessageCount returns the total message count across all threads in a channel
+func (r *ThreadRepository) GetTotalMessageCount(ctx context.Context, channelID uuid.UUID) (int, error) {
+	var count int
+	query := `
+		SELECT COALESCE(SUM(message_count), 0)
+		FROM threads
+		WHERE parent_channel_id = $1
+	`
+	err := r.db.GetContext(ctx, &count, query, channelID)
+	return count, err
+}
+
 // Archive archives a thread
 func (r *ThreadRepository) Archive(ctx context.Context, id uuid.UUID) error {
 	now := time.Now()
