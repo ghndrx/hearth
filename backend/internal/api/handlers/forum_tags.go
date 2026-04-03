@@ -94,10 +94,12 @@ func (h *ForumTagsHandler) CreateTag(c *fiber.Ctx) error {
 // @Tags ForumTags
 // @Accept json
 // @Produce json
+// @Param channelId path string false "Channel ID (alternative to tagId)"
 // @Param tagId path string true "Tag ID"
 // @Param tag body models.UpdateForumTagRequest true "Tag data"
 // @Success 200 {object} models.ForumTag
 // @Router /forum-tags/{tagId} [patch]
+// @Router /channels/{channelId}/tags/{tagId} [patch]
 func (h *ForumTagsHandler) UpdateTag(c *fiber.Ctx) error {
 	tagID, err := uuid.Parse(c.Params("tagId"))
 	if err != nil {
@@ -132,9 +134,11 @@ func (h *ForumTagsHandler) UpdateTag(c *fiber.Ctx) error {
 // @Summary Delete forum tag
 // @Description Deletes a forum tag (requires MANAGE_CHANNELS permission)
 // @Tags ForumTags
+// @Param channelId path string false "Channel ID (alternative to tagId)"
 // @Param tagId path string true "Tag ID"
 // @Success 204
 // @Router /forum-tags/{tagId} [delete]
+// @Router /channels/{channelId}/tags/{tagId} [delete]
 func (h *ForumTagsHandler) DeleteTag(c *fiber.Ctx) error {
 	tagID, err := uuid.Parse(c.Params("tagId"))
 	if err != nil {

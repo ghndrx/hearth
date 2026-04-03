@@ -31,6 +31,7 @@ type mockThreadServiceForCoverage struct {
 	archiveThreadFunc             func(ctx context.Context, threadID, requesterID uuid.UUID) error
 	unarchiveThreadFunc           func(ctx context.Context, threadID, requesterID uuid.UUID) error
 	getChannelThreadsFunc         func(ctx context.Context, channelID, requesterID uuid.UUID, includeArchived bool) ([]*models.Thread, error)
+	getChannelThreadsPaginatedFunc func(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error)
 	joinThreadFunc                func(ctx context.Context, threadID, userID uuid.UUID) error
 	leaveThreadFunc               func(ctx context.Context, threadID, userID uuid.UUID) error
 	deleteThreadFunc              func(ctx context.Context, threadID, requesterID uuid.UUID) error
@@ -100,6 +101,26 @@ func (m *mockThreadServiceForCoverage) GetChannelThreads(ctx context.Context, ch
 		return m.getChannelThreadsFunc(ctx, channelID, requesterID, includeArchived)
 	}
 	return []*models.Thread{}, nil
+}
+
+func (m *mockThreadServiceForCoverage) GetChannelThreadsPaginated(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error) {
+	if m.getChannelThreadsPaginatedFunc != nil {
+		return m.getChannelThreadsPaginatedFunc(ctx, channelID, requesterID, sortOrder, limit, offset, includeArchived)
+	}
+	// Fallback: try to delegate to getChannelThreadsFunc if set
+	if m.getChannelThreadsFunc != nil {
+		threads, err := m.getChannelThreadsFunc(ctx, channelID, requesterID, includeArchived)
+		if err != nil {
+			return nil, 0, err
+		}
+		// Convert []*models.Thread to []models.Thread
+		result := make([]models.Thread, len(threads))
+		for i, t := range threads {
+			result[i] = *t
+		}
+		return result, len(result), nil
+	}
+	return []models.Thread{}, 0, nil
 }
 
 func (m *mockThreadServiceForCoverage) JoinThread(ctx context.Context, threadID, userID uuid.UUID) error {

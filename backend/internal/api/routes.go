@@ -403,6 +403,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	channels.Get("/:id/tags", h.ForumTags.ListTags)
 	channels.Post("/:id/tags", h.ForumTags.CreateTag)
 	channels.Get("/:id/posts", h.ForumTags.ListPosts)
+	channels.Patch("/:id/tags/:tagId", h.ForumTags.UpdateTag)
+	channels.Delete("/:id/tags/:tagId", h.ForumTags.DeleteTag)
 
 	// Global tag management
 	api.Patch("/forum-tags/:tagId", h.ForumTags.UpdateTag)

@@ -50,6 +50,9 @@ const (
 	PermSendTTS               int64 = 1 << 24
 	PermManageMessages        int64 = 1 << 25
 	PermManageThreads         int64 = 1 << 26
+	// Forum-specific permissions
+	PermCreateForumPosts      int64 = 1 << 36
+	PermParticipateInForums   int64 = 1 << 37
 	PermEmbedLinks            int64 = 1 << 27
 	PermAttachFiles           int64 = 1 << 28
 	PermReadMessageHistory    int64 = 1 << 29
@@ -88,7 +91,8 @@ const PermissionAll int64 = PermViewChannels | PermManageChannels | PermManageRo
 	PermUseExternalStickers | PermManageStickers | PermAddReactions | PermUseSlashCommands |
 	PermConnect | PermSpeak | PermVideo | PermUseVoiceActivity |
 	PermPrioritySpeaker | PermMuteMembers | PermDeafenMembers |
-	PermMoveMembers | PermUseSoundboard | PermManageEvents
+	PermMoveMembers | PermUseSoundboard | PermManageEvents |
+	PermCreateForumPosts | PermParticipateInForums
 
 // DefaultPermissions for @everyone role
 const DefaultPermissions int64 = PermViewChannels | PermCreateInvite |
@@ -96,7 +100,7 @@ const DefaultPermissions int64 = PermViewChannels | PermCreateInvite |
 	PermCreatePublicThreads | PermEmbedLinks | PermAttachFiles |
 	PermReadMessageHistory | PermAddReactions | PermUseExternalEmoji |
 	PermUseExternalStickers | PermUseSlashCommands | PermConnect | PermSpeak | PermVideo |
-	PermUseVoiceActivity
+	PermUseVoiceActivity | PermCreateForumPosts | PermParticipateInForums
 
 // HasPermission checks if a permission set includes a specific permission
 func HasPermission(perms, perm int64) bool {

@@ -165,6 +165,14 @@ func (h *Handlers) SetForumTagsHandler(
 	h.ForumTags = NewForumTagsHandler(forumTagService, threadService)
 }
 
+// SetForumTagsHandlerWithEventBus sets the forum tags handler with event bus support
+func (h *Handlers) SetForumTagsHandlerWithEventBus(
+	forumTagService *services.ForumTagService,
+	threadService *services.ThreadService,
+) {
+	h.ForumTags = NewForumTagsHandler(forumTagService, threadService)
+}
+
 // SetServerAudioSettingsHandler sets the server audio settings handler
 func (h *Handlers) SetServerAudioSettingsHandler(service ServerAudioSettingsServiceInterface) {
 	h.ServerAudioSettings = NewServerAudioSettingsHandler(service)

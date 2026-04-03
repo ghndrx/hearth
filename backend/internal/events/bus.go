@@ -249,4 +249,13 @@ const (
 	// Audit log events
 	AuditLogCreated    = "audit_log.created"
 	ModerationEventAny = "moderation.*"
+
+	// Forum events
+	ForumThreadCreated  = "forum.thread_created"
+	ForumThreadUpdated  = "forum.thread_updated"
+	ForumThreadDeleted  = "forum.thread_deleted"
+	ForumThreadPinned   = "forum.thread_pinned"
+	ForumTagCreated    = "forum.tag_created"
+	ForumTagUpdated    = "forum.tag_updated"
+	ForumTagDeleted    = "forum.tag_deleted"
 )

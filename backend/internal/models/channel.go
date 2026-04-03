@@ -51,13 +51,32 @@ type Channel struct {
 	UserLimit     *int        `json:"user_limit,omitempty" db:"user_limit"`
 	RTCRegion     *string     `json:"rtc_region,omitempty" db:"rtc_region"`
 	LastMessageID *uuid.UUID  `json:"last_message_id,omitempty" db:"last_message_id"`
+	LastMessageAt *time.Time  `json:"last_message_at,omitempty" db:"last_message_at"`
 	Icon           *string     `json:"icon,omitempty" db:"icon"` // For group DMs
 	CreatedAt      time.Time   `json:"created_at" db:"created_at"`
+
+	// Forum-specific fields (stored as JSONB in the database)
+	DefaultReactionEmoji *string    `json:"default_reaction_emoji,omitempty"`
+	DefaultSortOrder    int        `json:"default_sort_order"`    // 0=latest_activity, 1=creation_date, 2=pin_weight
+	DefaultAutoArchive  int        `json:"default_auto_archive"`  // minutes
+	RequireTag          bool       `json:"require_tag"`
+	DefaultLayout       int        `json:"default_layout"`       // 0=list, 1=gallery
+	PostGuidelines      *string    `json:"post_guidelines,omitempty"`
+	AvailableTags       []ForumTag `json:"available_tags,omitempty"`
+
+	// Thread counts (populated from joins)
+	ThreadCount    int `json:"thread_count,omitempty"`
+	MessageCount   int `json:"message_count,omitempty"`
 
 	// Populated from joins
 	PermissionOverrides []PermissionOverride `json:"permission_overrides,omitempty"`
 	Recipients          []uuid.UUID          `json:"recipients,omitempty"` // For DMs - user IDs
+
+	// ChannelType is a duplicate of Type for Discord API compatibility
+	ChannelType ChannelType `json:"channel_type,omitempty"`
 }
+
+// AutoArchiveDuration constants (in minutes)
 
 // AutoArchiveDuration constants (in minutes)
 const (
@@ -140,6 +159,7 @@ type Thread struct {
 	AppliedTags     []uuid.UUID `json:"applied_tags,omitempty" db:"applied_tags"`
 	IsPinned        bool        `json:"is_pinned" db:"is_pinned"`
 	PinWeight       int         `json:"pin_weight" db:"pin_weight"`
+	LastMessageAt   *time.Time  `json:"last_message_at,omitempty" db:"last_message_at"`
 
 	// Populated from joins
 	ParentChannel *Channel   `json:"parent_channel,omitempty"`

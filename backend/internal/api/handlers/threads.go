@@ -20,6 +20,7 @@ type ThreadServiceInterface interface {
 	ArchiveThread(ctx context.Context, threadID, requesterID uuid.UUID) error
 	UnarchiveThread(ctx context.Context, threadID, requesterID uuid.UUID) error
 	GetChannelThreads(ctx context.Context, channelID, requesterID uuid.UUID, includeArchived bool) ([]*models.Thread, error)
+	GetChannelThreadsPaginated(ctx context.Context, channelID uuid.UUID, requesterID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error)
 	JoinThread(ctx context.Context, threadID, userID uuid.UUID) error
 	LeaveThread(ctx context.Context, threadID, userID uuid.UUID) error
 	DeleteThread(ctx context.Context, threadID, requesterID uuid.UUID) error
@@ -351,13 +352,16 @@ func (h *ThreadHandler) UnarchiveThread(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// GetChannelThreads retrieves all threads in a channel
+// GetChannelThreads retrieves all threads in a channel with pagination
 // @Summary Get channel threads
-// @Description Retrieves all threads in the specified channel, optionally including archived threads
+// @Description Retrieves threads in the specified channel with pagination, sorted by last_message_at by default
 // @Tags Threads
 // @Produce json
 // @Param id path string true "Channel ID"
 // @Param include_archived query bool false "Include archived threads in results"
+// @Param sort query int false "Sort order: 0=latest_activity, 1=creation_date, 2=pin_weight (default 0)"
+// @Param limit query int false "Limit (default 25, max 50)"
+// @Param offset query int false "Offset for pagination"
 // @Success 200 {array} models.Thread "List of threads"
 // @Failure 400 {object} fiber.Map "Invalid channel ID"
 // @Failure 403 {object} fiber.Map "Not a server member"
@@ -374,8 +378,15 @@ func (h *ThreadHandler) GetChannelThreads(c *fiber.Ctx) error {
 	}
 
 	includeArchived := c.QueryBool("include_archived", false)
+	sortOrder := c.QueryInt("sort", 0)
+	limit := c.QueryInt("limit", 25)
+	offset := c.QueryInt("offset", 0)
 
-	threads, err := h.threadService.GetChannelThreads(c.Context(), channelID, userID, includeArchived)
+	if limit <= 0 || limit > 50 {
+		limit = 25
+	}
+
+	threads, total, err := h.threadService.GetChannelThreadsPaginated(c.Context(), channelID, userID, sortOrder, limit, offset, includeArchived)
 	if err != nil {
 		switch err {
 		case services.ErrChannelNotFound:
@@ -393,7 +404,11 @@ func (h *ThreadHandler) GetChannelThreads(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(threads)
+	return c.JSON(fiber.Map{
+		"threads":  threads,
+		"total":    total,
+		"has_more": offset+len(threads) < total,
+	})
 }
 
 // JoinThread adds the current user to a thread

@@ -542,7 +542,7 @@ func main() {
 	log.Printf("✅ App Directory service initialized")
 
 	// Initialize Forum Tags service and handler
-	forumTagService := services.NewForumTagService(repos.ForumTags, repos.Threads, repos.Channels, repos.Servers, permService)
+	forumTagService := services.NewForumTagService(repos.ForumTags, repos.Threads, repos.Channels, repos.Servers, permService, serviceBus)
 	h.SetForumTagsHandler(forumTagService, threadService)
 	log.Printf("✅ Forum tags service initialized")
 
