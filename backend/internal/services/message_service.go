@@ -1137,7 +1137,7 @@ func (s *MessageService) maybeAutoCreateThread(ctx context.Context, channelID, p
 		name = "Thread"
 	}
 
-	_, _ = s.threadService.CreateThread(ctx, channelID, parentMsg.AuthorID, name, nil, &parentMessageID)
+	_, _ = s.threadService.CreateThread(ctx, channelID, parentMsg.AuthorID, name, nil, &parentMessageID, nil)
 }
 
 // Helpers

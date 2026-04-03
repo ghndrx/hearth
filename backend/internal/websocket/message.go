@@ -95,6 +95,18 @@ const (
 	EventServerBoostLevelUp        = "SERVER_BOOST_LEVEL_UP"
 	EventServerBoostLevelDown      = "SERVER_BOOST_LEVEL_DOWN"
 	EventPremiumSubscriptionUpdate = "PREMIUM_SUBSCRIPTION_UPDATE"
+
+	// Forum Channel events
+	EventForumPostCreate    = "FORUM_POST_CREATE"
+	EventForumPostUpdate    = "FORUM_POST_UPDATE"
+	EventForumPostDelete    = "FORUM_POST_DELETE"
+	EventForumTagCreate     = "FORUM_TAG_CREATE"
+	EventForumTagUpdate     = "FORUM_TAG_UPDATE"
+	EventForumTagDelete     = "FORUM_TAG_DELETE"
+	EventForumPostPin       = "FORUM_POST_PIN"
+	EventForumPostUnpin     = "FORUM_POST_UNPIN"
+	EventForumPostArchive   = "FORUM_POST_ARCHIVE"
+	EventForumPostUnarchive = "FORUM_POST_UNARCHIVE"
 )
 
 // DispatchEvent creates a dispatch message
@@ -242,3 +254,48 @@ type PremiumSubscriptionUpdateData struct {
 	Status    string `json:"status"`
 	ExpiresAt string `json:"expires_at,omitempty"`
 }
+
+// ForumPostCreateData represents a new forum post (thread) event
+type ForumPostCreateData struct {
+	ChannelID     string   `json:"channel_id"`
+	GuildID       string   `json:"guild_id,omitempty"`
+	Post         interface{} `json:"post"`
+	AppliedTags   []string `json:"applied_tags,omitempty"`
+	Author        interface{} `json:"author"`
+}
+
+// ForumPostUpdateData represents a forum post update event
+type ForumPostUpdateData struct {
+	ChannelID    string   `json:"channel_id"`
+	GuildID      string   `json:"guild_id,omitempty"`
+	PostID       string   `json:"post_id"`
+	Name         *string  `json:"name,omitempty"`
+	AppliedTags  []string `json:"applied_tags,omitempty"`
+	Archived     *bool    `json:"archived,omitempty"`
+	Locked       *bool    `json:"locked,omitempty"`
+	AutoArchive  *int     `json:"auto_archive,omitempty"`
+	IsPinned     *bool    `json:"is_pinned,omitempty"`
+}
+
+// ForumPostDeleteData represents a forum post deletion event
+type ForumPostDeleteData struct {
+	ChannelID string `json:"channel_id"`
+	GuildID   string `json:"guild_id,omitempty"`
+	PostID    string `json:"post_id"`
+}
+
+// ForumTagEventData represents a forum tag event
+type ForumTagEventData struct {
+	ChannelID string `json:"channel_id"`
+	GuildID   string `json:"guild_id,omitempty"`
+	Tag       interface{} `json:"tag"`
+}
+
+// ForumPostPinData represents a forum post pin event
+type ForumPostPinData struct {
+	ChannelID string `json:"channel_id"`
+	GuildID   string `json:"guild_id,omitempty"`
+	PostID    string `json:"post_id"`
+	Pinned    bool   `json:"pinned"`
+}
+

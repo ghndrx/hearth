@@ -127,6 +127,14 @@ func (m *simpleMockThreadRepo) GetActiveByChannelID(ctx context.Context, channel
 	return nil, nil
 }
 
+func (m *simpleMockThreadRepo) GetThreadsPaginated(ctx context.Context, channelID uuid.UUID, sortOrder int, limit, offset int, includeArchived bool) ([]models.Thread, int, error) {
+	return nil, 0, nil
+}
+
+func (m *simpleMockThreadRepo) GetThreadCount(ctx context.Context, channelID uuid.UUID, includeArchived bool) (int, error) {
+	return 0, nil
+}
+
 func (m *simpleMockThreadRepo) Archive(ctx context.Context, id uuid.UUID) error {
 	if m.thread != nil {
 		m.thread.Archived = true

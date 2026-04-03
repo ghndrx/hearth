@@ -82,6 +82,7 @@ func (s *ThreadService) CreateThread(
 	name string,
 	autoArchive *int,
 	parentMessageID *uuid.UUID,
+	tagIDs []uuid.UUID,
 ) (*models.Thread, error) {
 	// Verify channel exists
 	channel, err := s.channelRepo.GetByID(ctx, channelID)
@@ -134,6 +135,9 @@ func (s *ThreadService) CreateThread(
 		AutoArchive:     archiveDuration,
 		Locked:          false,
 		CreatedAt:       time.Now(),
+		AppliedTags:     tagIDs,
+		IsPinned:        false,
+		PinWeight:       0,
 	}
 
 	if err := s.threadRepo.Create(ctx, thread); err != nil {
