@@ -161,8 +161,9 @@ func (h *Handlers) SetForwardHandler(
 func (h *Handlers) SetForumTagsHandler(
 	forumTagService *services.ForumTagService,
 	threadService *services.ThreadService,
+	gateway *websocket.Gateway,
 ) {
-	h.ForumTags = NewForumTagsHandler(forumTagService, threadService)
+	h.ForumTags = NewForumTagsHandler(forumTagService, threadService, gateway)
 }
 
 // SetServerAudioSettingsHandler sets the server audio settings handler
