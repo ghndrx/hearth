@@ -166,9 +166,15 @@ func (r *MessageRepository) GetChannelMessages(ctx context.Context, channelID uu
 		}
 
 		var attachments []models.Attachment
-		query, args, _ := sqlx.In(`SELECT * FROM attachments WHERE message_id IN (?)`, messageIDs)
+		query, args, err := sqlx.In(`SELECT * FROM attachments WHERE message_id IN (?)`, messageIDs)
+		if err != nil {
+			return messages, err
+		}
 		query = r.db.Rebind(query)
-		_ = r.db.SelectContext(ctx, &attachments, query, args...)
+		err = r.db.SelectContext(ctx, &attachments, query, args...)
+		if err != nil {
+			return messages, err
+		}
 
 		// Map attachments to messages
 		attMap := make(map[uuid.UUID][]models.Attachment)
@@ -191,9 +197,15 @@ func (r *MessageRepository) GetChannelMessages(ctx context.Context, channelID uu
 
 		if len(authorIDs) > 0 {
 			var authors []models.PublicUser
-			authQuery, authArgs, _ := sqlx.In(`SELECT id, username, discriminator, avatar_url, banner_url, bio, status, custom_status, flags FROM users WHERE id IN (?)`, authorIDs)
+			authQuery, authArgs, err := sqlx.In(`SELECT id, username, discriminator, avatar_url, banner_url, bio, status, custom_status, flags FROM users WHERE id IN (?)`, authorIDs)
+			if err != nil {
+				return messages, err
+			}
 			authQuery = r.db.Rebind(authQuery)
-			_ = r.db.SelectContext(ctx, &authors, authQuery, authArgs...)
+			err = r.db.SelectContext(ctx, &authors, authQuery, authArgs...)
+			if err != nil {
+				return messages, err
+			}
 
 			// Map authors to messages
 			authorMap := make(map[uuid.UUID]*models.PublicUser)
