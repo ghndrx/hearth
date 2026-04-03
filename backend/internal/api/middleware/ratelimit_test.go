@@ -346,11 +346,7 @@ func TestRateLimitWithConfig_CustomKeyGenerator(t *testing.T) {
 	m := NewMiddlewareWithRateLimiter("test-secret", limiter)
 
 	app := fiber.New()
-	defer func() {
-		if err := app.Shutdown(); err != nil {
-			t.Logf("app shutdown error: %v", err)
-		}
-	}()
+	t.Cleanup(func() { app.Shutdown() })
 
 	config := RateLimitConfig{
 		Limit:  2,
