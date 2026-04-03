@@ -48,8 +48,8 @@ func NewComponentHandler(
 	permissionService PermissionServiceGetChannelPermissionsInterface,
 ) *ComponentHandler {
 	return &ComponentHandler{
-		componentService:   componentService,
-		messageService:     messageService,
+		componentService:  componentService,
+		messageService:    messageService,
 		channelService:    channelService,
 		permissionService: permissionService,
 	}
