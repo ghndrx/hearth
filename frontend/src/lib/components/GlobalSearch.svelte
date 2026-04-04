@@ -7,7 +7,7 @@
 
 	// ==================== Types ====================
 
-	export interface GlobalSearchResult {
+	interface GlobalSearchResult {
 		id: string;
 		channel_id: string;
 		guild_id?: string;
@@ -480,9 +480,11 @@
 				<div class="result-content">
 					<div class="result-header">
 						<Avatar 
-							user={result.author} 
-							size={20} 
-							showStatus={false}
+							src={result.author?.avatar ?? null}
+							userId={result.author?.id ?? null}
+							username={result.author?.display_name ?? result.author?.username ?? null}
+							size="sm" 
+							showPresence={false}
 						/>
 						<span class="author-name">
 							{authorName(result)}
@@ -513,7 +515,7 @@
 		<!-- Load More Indicator -->
 		{#if loading && results.length > 0}
 			<div class="loading-more">
-				<LoadingSpinner size={20} />
+				<LoadingSpinner size="sm" />
 			</div>
 		{/if}
 
@@ -522,7 +524,7 @@
 			<div class="empty-state">
 				<EmptyState
 					title="No results found"
-					message="Try different keywords or remove some filters"
+					description="Try different keywords or remove some filters"
 					icon="🔍"
 				/>
 			</div>
