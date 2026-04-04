@@ -2,19 +2,19 @@ package postgres
 
 import (
 	"context"
-	"time"
+	"database/sql"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+
 	"hearth/internal/models"
 )
 
-// ServerFolderRepository handles database operations for server folders
 type ServerFolderRepository struct {
 	db *sqlx.DB
 }
 
-// NewServerFolderRepository creates a new server folder repository
 func NewServerFolderRepository(db *sqlx.DB) *ServerFolderRepository {
 	return &ServerFolderRepository{db: db}
 }
@@ -22,376 +22,148 @@ func NewServerFolderRepository(db *sqlx.DB) *ServerFolderRepository {
 // Create creates a new server folder
 func (r *ServerFolderRepository) Create(ctx context.Context, folder *models.ServerFolder) error {
 	query := `
-		INSERT INTO server_folders (id, user_id, parent_id, name, position, is_collapsed, depth, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO server_folders (id, user_id, parent_id, name, position, is_collapsed, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		folder.ID,
-		folder.UserID,
-		folder.ParentID,
-		folder.Name,
-		folder.Position,
-		folder.IsCollapsed,
-		folder.Depth,
-		folder.CreatedAt,
-		folder.UpdatedAt,
+		folder.ID, folder.UserID, folder.ParentID, folder.Name,
+		folder.Position, folder.IsCollapsed, folder.CreatedAt, folder.UpdatedAt,
 	)
 	return err
 }
 
-// GetByID gets a server folder by ID
-func (r *ServerFolderRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.ServerFolder, error) {
+// GetByID retrieves a folder by ID for a specific user
+func (r *ServerFolderRepository) GetByID(ctx context.Context, userID, folderID uuid.UUID) (*models.ServerFolder, error) {
+	var folder models.ServerFolder
 	query := `
-		SELECT id, user_id, parent_id, name, position, is_collapsed, depth, created_at, updated_at
+		SELECT id, user_id, parent_id, name, position, is_collapsed, created_at, updated_at
 		FROM server_folders
-		WHERE id = $1
+		WHERE id = $1 AND user_id = $2
 	`
-	folder := &models.ServerFolder{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&folder.ID,
-		&folder.UserID,
-		&folder.ParentID,
-		&folder.Name,
-		&folder.Position,
-		&folder.IsCollapsed,
-		&folder.Depth,
-		&folder.CreatedAt,
-		&folder.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
+	err := r.db.GetContext(ctx, &folder, query, folderID, userID)
+	if err == sql.ErrNoRows {
+		return nil, nil
 	}
-	return folder, nil
+	return &folder, err
 }
 
-// GetByUserID gets all server folders for a user
-func (r *ServerFolderRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.ServerFolder, error) {
+// GetAllForUser retrieves all folders for a user
+func (r *ServerFolderRepository) GetAllForUser(ctx context.Context, userID uuid.UUID) ([]*models.ServerFolder, error) {
+	var folders []*models.ServerFolder
 	query := `
-		SELECT id, user_id, parent_id, name, position, is_collapsed, depth, created_at, updated_at
+		SELECT id, user_id, parent_id, name, position, is_collapsed, created_at, updated_at
 		FROM server_folders
 		WHERE user_id = $1
 		ORDER BY position ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var folders []*models.ServerFolder
-	for rows.Next() {
-		folder := &models.ServerFolder{}
-		err := rows.Scan(
-			&folder.ID,
-			&folder.UserID,
-			&folder.ParentID,
-			&folder.Name,
-			&folder.Position,
-			&folder.IsCollapsed,
-			&folder.Depth,
-			&folder.CreatedAt,
-			&folder.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		folders = append(folders, folder)
-	}
-	return folders, rows.Err()
+	err := r.db.SelectContext(ctx, &folders, query, userID)
+	return folders, err
 }
 
-// Update updates a server folder
+// Update updates a folder
 func (r *ServerFolderRepository) Update(ctx context.Context, folder *models.ServerFolder) error {
 	query := `
-		UPDATE server_folders
-		SET name = $1, position = $2, is_collapsed = $3, parent_id = $4, depth = $5, updated_at = $6
-		WHERE id = $7
+		UPDATE server_folders SET
+			name = $3, parent_id = $4, position = $5, is_collapsed = $6, updated_at = $7
+		WHERE id = $1 AND user_id = $2
 	`
-	folder.UpdatedAt = time.Now()
 	_, err := r.db.ExecContext(ctx, query,
-		folder.Name,
-		folder.Position,
-		folder.IsCollapsed,
-		folder.ParentID,
-		folder.Depth,
-		folder.UpdatedAt,
-		folder.ID,
+		folder.ID, folder.UserID, folder.Name, folder.ParentID,
+		folder.Position, folder.IsCollapsed, folder.UpdatedAt,
 	)
 	return err
 }
 
-// Delete deletes a server folder
-func (r *ServerFolderRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM server_folders WHERE id = $1`
-	_, err := r.db.ExecContext(ctx, query, id)
+// Delete deletes a folder
+func (r *ServerFolderRepository) Delete(ctx context.Context, userID, folderID uuid.UUID) error {
+	query := `DELETE FROM server_folders WHERE id = $1 AND user_id = $2`
+	_, err := r.db.ExecContext(ctx, query, folderID, userID)
 	return err
 }
 
-// GetChildFolders gets all child folders of a folder
-func (r *ServerFolderRepository) GetChildFolders(ctx context.Context, parentID uuid.UUID) ([]*models.ServerFolder, error) {
-	query := `
-		SELECT id, user_id, parent_id, name, position, is_collapsed, depth, created_at, updated_at
-		FROM server_folders
-		WHERE parent_id = $1
-		ORDER BY position ASC
-	`
-	rows, err := r.db.QueryContext(ctx, query, parentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var folders []*models.ServerFolder
-	for rows.Next() {
-		folder := &models.ServerFolder{}
-		err := rows.Scan(
-			&folder.ID,
-			&folder.UserID,
-			&folder.ParentID,
-			&folder.Name,
-			&folder.Position,
-			&folder.IsCollapsed,
-			&folder.Depth,
-			&folder.CreatedAt,
-			&folder.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		folders = append(folders, folder)
-	}
-	return folders, rows.Err()
-}
-
-// GetMaxPositionAtLevel gets the maximum position at a given depth for a user
-func (r *ServerFolderRepository) GetMaxPositionAtLevel(ctx context.Context, userID uuid.UUID, depth int, parentID *uuid.UUID) (int, error) {
-	var query string
-	var args []interface{}
-
-	if parentID == nil {
-		query = `SELECT COALESCE(MAX(position), -1) FROM server_folders WHERE user_id = $1 AND parent_id IS NULL`
-		args = []interface{}{userID}
-	} else {
-		query = `SELECT COALESCE(MAX(position), -1) FROM server_folders WHERE user_id = $1 AND parent_id = $2`
-		args = []interface{}{userID, *parentID}
-	}
-
-	var maxPos int
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(&maxPos)
-	if err != nil {
-		return -1, err
-	}
-	return maxPos, nil
-}
-
-// AssignServerToFolder assigns a server to a folder for a user
-func (r *ServerFolderRepository) AssignServerToFolder(ctx context.Context, userID, serverID uuid.UUID, folderID *uuid.UUID, position int) error {
-	query := `
-		INSERT INTO user_server_folder (user_id, server_id, folder_id, position, assigned_at)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (user_id, server_id) DO UPDATE SET
-			folder_id = EXCLUDED.folder_id,
-			position = EXCLUDED.position,
-			assigned_at = EXCLUDED.assigned_at
-	`
-	_, err := r.db.ExecContext(ctx, query, userID, serverID, folderID, position, time.Now())
-	return err
-}
-
-// RemoveServerFromFolder removes a server from its folder
-func (r *ServerFolderRepository) RemoveServerFromFolder(ctx context.Context, userID, serverID uuid.UUID) error {
-	query := `DELETE FROM user_server_folder WHERE user_id = $1 AND server_id = $2`
-	_, err := r.db.ExecContext(ctx, query, userID, serverID)
-	return err
-}
-
-// GetServerFolder gets the folder assignment for a server
-func (r *ServerFolderRepository) GetServerFolder(ctx context.Context, userID, serverID uuid.UUID) (*models.ServerInFolder, error) {
-	query := `
-		SELECT usf.server_id, usf.folder_id, usf.position, usf.assigned_at,
-			   s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id,
-			   s.default_channel_id, s.afk_channel_id, s.afk_timeout, s.verification_level,
-			   s.explicit_content_filter, s.default_notifications, s.features, s.max_members,
-			   s.vanity_url_code, s.created_at, s.updated_at
-		FROM user_server_folder usf
-		JOIN servers s ON s.id = usf.server_id
-		WHERE usf.user_id = $1 AND usf.server_id = $2
-	`
-	sif := &models.ServerInFolder{Server: &models.Server{}}
-	err := r.db.QueryRowContext(ctx, query, userID, serverID).Scan(
-		&sif.ServerID,
-		&sif.FolderID,
-		&sif.Position,
-		&sif.AssignedAt,
-		&sif.Server.ID,
-		&sif.Server.Name,
-		&sif.Server.IconURL,
-		&sif.Server.BannerURL,
-		&sif.Server.Description,
-		&sif.Server.OwnerID,
-		&sif.Server.DefaultChannelID,
-		&sif.Server.AFKChannelID,
-		&sif.Server.AFKTimeout,
-		&sif.Server.VerificationLevel,
-		&sif.Server.ExplicitContentFilter,
-		&sif.Server.DefaultNotifications,
-		&sif.Server.Features,
-		&sif.Server.MaxMembers,
-		&sif.Server.VanityURLCode,
-		&sif.Server.CreatedAt,
-		&sif.Server.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return sif, nil
-}
-
-// GetServersInFolder gets all servers in a folder for a user
-func (r *ServerFolderRepository) GetServersInFolder(ctx context.Context, userID uuid.UUID, folderID *uuid.UUID) ([]*models.ServerInFolder, error) {
-	var query string
-	var args []interface{}
-
-	if folderID == nil {
-		query = `
-			SELECT usf.server_id, usf.folder_id, usf.position, usf.assigned_at,
-				   s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id,
-				   s.default_channel_id, s.afk_channel_id, s.afk_timeout, s.verification_level,
-				   s.explicit_content_filter, s.default_notifications, s.features, s.max_members,
-				   s.vanity_url_code, s.created_at, s.updated_at
-			FROM user_server_folder usf
-			JOIN servers s ON s.id = usf.server_id
-			WHERE usf.user_id = $1 AND usf.folder_id IS NULL
-			ORDER BY usf.position ASC
-		`
-		args = []interface{}{userID}
-	} else {
-		query = `
-			SELECT usf.server_id, usf.folder_id, usf.position, usf.assigned_at,
-				   s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id,
-				   s.default_channel_id, s.afk_channel_id, s.afk_timeout, s.verification_level,
-				   s.explicit_content_filter, s.default_notifications, s.features, s.max_members,
-				   s.vanity_url_code, s.created_at, s.updated_at
-			FROM user_server_folder usf
-			JOIN servers s ON s.id = usf.server_id
-			WHERE usf.user_id = $1 AND usf.folder_id = $2
-			ORDER BY usf.position ASC
-		`
-		args = []interface{}{userID, *folderID}
-	}
-
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+// GetServersInFolder retrieves all servers assigned to a folder
+func (r *ServerFolderRepository) GetServersInFolder(ctx context.Context, userID, folderID uuid.UUID) ([]*models.ServerInFolder, error) {
 	var servers []*models.ServerInFolder
-	for rows.Next() {
-		sif := &models.ServerInFolder{Server: &models.Server{}}
-		err := rows.Scan(
-			&sif.ServerID,
-			&sif.FolderID,
-			&sif.Position,
-			&sif.AssignedAt,
-			&sif.Server.ID,
-			&sif.Server.Name,
-			&sif.Server.IconURL,
-			&sif.Server.BannerURL,
-			&sif.Server.Description,
-			&sif.Server.OwnerID,
-			&sif.Server.DefaultChannelID,
-			&sif.Server.AFKChannelID,
-			&sif.Server.AFKTimeout,
-			&sif.Server.VerificationLevel,
-			&sif.Server.ExplicitContentFilter,
-			&sif.Server.DefaultNotifications,
-			&sif.Server.Features,
-			&sif.Server.MaxMembers,
-			&sif.Server.VanityURLCode,
-			&sif.Server.CreatedAt,
-			&sif.Server.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		servers = append(servers, sif)
-	}
-	return servers, rows.Err()
-}
-
-// GetAllUserServersWithFolders gets all servers for a user with their folder assignments
-func (r *ServerFolderRepository) GetAllUserServersWithFolders(ctx context.Context, userID uuid.UUID) ([]*models.ServerInFolder, error) {
 	query := `
-		SELECT usf.server_id, usf.folder_id, usf.position, usf.assigned_at,
-			   s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id,
-			   s.default_channel_id, s.afk_channel_id, s.afk_timeout, s.verification_level,
-			   s.explicit_content_filter, s.default_notifications, s.features, s.max_members,
-			   s.vanity_url_code, s.created_at, s.updated_at
-		FROM user_server_folder usf
-		JOIN servers s ON s.id = usf.server_id
-		JOIN members m ON m.server_id = s.id AND m.user_id = usf.user_id
-		WHERE usf.user_id = $1
-		ORDER BY usf.folder_id NULLS FIRST, usf.position ASC
+		SELECT sfs.server_id, sfs.folder_id, sfs.user_id, sfs.position, sfs.assigned_at
+		FROM server_folder_servers sfs
+		WHERE sfs.user_id = $1 AND sfs.folder_id = $2
+		ORDER BY sfs.position ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var servers []*models.ServerInFolder
-	for rows.Next() {
-		sif := &models.ServerInFolder{Server: &models.Server{}}
-		err := rows.Scan(
-			&sif.ServerID,
-			&sif.FolderID,
-			&sif.Position,
-			&sif.AssignedAt,
-			&sif.Server.ID,
-			&sif.Server.Name,
-			&sif.Server.IconURL,
-			&sif.Server.BannerURL,
-			&sif.Server.Description,
-			&sif.Server.OwnerID,
-			&sif.Server.DefaultChannelID,
-			&sif.Server.AFKChannelID,
-			&sif.Server.AFKTimeout,
-			&sif.Server.VerificationLevel,
-			&sif.Server.ExplicitContentFilter,
-			&sif.Server.DefaultNotifications,
-			&sif.Server.Features,
-			&sif.Server.MaxMembers,
-			&sif.Server.VanityURLCode,
-			&sif.Server.CreatedAt,
-			&sif.Server.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		servers = append(servers, sif)
-	}
-	return servers, rows.Err()
+	err := r.db.SelectContext(ctx, &servers, query, userID, folderID)
+	return servers, err
 }
 
-// UpdateServerPositions updates positions of multiple servers in a folder
-func (r *ServerFolderRepository) UpdateServerPositions(ctx context.Context, userID uuid.UUID, positions []models.ServerPosition) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+// GetUnassignedServers retrieves all servers not assigned to any folder for a user
+func (r *ServerFolderRepository) GetUnassignedServers(ctx context.Context, userID uuid.UUID) ([]*models.ServerInFolder, error) {
+	var servers []*models.ServerInFolder
+	query := `
+		SELECT sfs.server_id, sfs.folder_id, sfs.user_id, sfs.position, sfs.assigned_at
+		FROM server_folder_servers sfs
+		WHERE sfs.user_id = $1 AND sfs.folder_id IS NULL
+		ORDER BY sfs.position ASC
+	`
+	err := r.db.SelectContext(ctx, &servers, query, userID)
+	return servers, err
+}
+
+// GetAllServerAssignments retrieves all server assignments for a user
+func (r *ServerFolderRepository) GetAllServerAssignments(ctx context.Context, userID uuid.UUID) ([]*models.ServerInFolder, error) {
+	var servers []*models.ServerInFolder
+	query := `
+		SELECT sfs.server_id, sfs.folder_id, sfs.user_id, sfs.position, sfs.assigned_at
+		FROM server_folder_servers sfs
+		WHERE sfs.user_id = $1
+		ORDER BY sfs.position ASC
+	`
+	err := r.db.SelectContext(ctx, &servers, query, userID)
+	return servers, err
+}
+
+// AssignServerToFolder assigns a server to a folder (or removes from folder if folderID is nil)
+func (r *ServerFolderRepository) AssignServerToFolder(ctx context.Context, userID, serverID uuid.UUID, folderID *uuid.UUID) error {
+	query := `
+		INSERT INTO server_folder_servers (server_id, folder_id, user_id, position, assigned_at)
+		VALUES ($1, $2, $3, 
+			COALESCE((SELECT MAX(position) + 1 FROM server_folder_servers WHERE user_id = $3 AND folder_id IS NOT DISTINCT FROM $2), 0),
+			NOW())
+		ON CONFLICT (server_id, user_id) DO UPDATE SET folder_id = $2
+	`
+	_, err := r.db.ExecContext(ctx, query, serverID, folderID, userID)
+	return err
+}
+
+// AssignServersToFolder assigns multiple servers to a folder
+func (r *ServerFolderRepository) AssignServersToFolder(ctx context.Context, userID uuid.UUID, serverIDs []uuid.UUID, folderID *uuid.UUID) error {
+	if len(serverIDs) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareContext(ctx, `
-		UPDATE user_server_folder SET position = $1 WHERE user_id = $2 AND server_id = $3
-	`)
-	if err != nil {
+	// Get max position in the target folder
+	var maxPos sql.NullInt64
+	posQuery := `SELECT MAX(position) FROM server_folder_servers WHERE user_id = $1 AND folder_id IS NOT DISTINCT FROM $2`
+	err = tx.GetContext(ctx, &maxPos, posQuery, userID, folderID)
+	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
-	defer stmt.Close()
+	startPos := 0
+	if maxPos.Valid {
+		startPos = int(maxPos.Int64) + 1
+	}
 
-	for _, pos := range positions {
-		_, err := stmt.ExecContext(ctx, pos.Position, userID, pos.ServerID)
+	for i, serverID := range serverIDs {
+		query := `
+			INSERT INTO server_folder_servers (server_id, folder_id, user_id, position, assigned_at)
+			VALUES ($1, $2, $3, $4, NOW())
+			ON CONFLICT (server_id, user_id) DO UPDATE SET folder_id = $2, position = $4
+		`
+		_, err := tx.ExecContext(ctx, query, serverID, folderID, userID, startPos+i)
 		if err != nil {
 			return err
 		}
@@ -400,30 +172,55 @@ func (r *ServerFolderRepository) UpdateServerPositions(ctx context.Context, user
 	return tx.Commit()
 }
 
-// GetChildFolderIDs gets all descendant folder IDs (for cascade delete check)
-func (r *ServerFolderRepository) GetChildFolderIDs(ctx context.Context, parentID uuid.UUID) ([]uuid.UUID, error) {
-	query := `
-		WITH RECURSIVE descendants AS (
-			SELECT id FROM server_folders WHERE parent_id = $1
-			UNION ALL
-			SELECT sf.id FROM server_folders sf
-			INNER JOIN descendants d ON sf.parent_id = d.id
-		)
-		SELECT id FROM descendants
-	`
-	rows, err := r.db.QueryContext(ctx, query, parentID)
-	if err != nil {
-		return nil, err
+// UpdateServerPositions updates positions for servers in a folder
+func (r *ServerFolderRepository) UpdateServerPositions(ctx context.Context, userID uuid.UUID, positions []models.ServerPosition) error {
+	if len(positions) == 0 {
+		return nil
 	}
-	defer rows.Close()
 
-	var ids []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
 	}
-	return ids, rows.Err()
+	defer tx.Rollback()
+
+	for _, pos := range positions {
+		serverID, err := uuid.Parse(pos.ServerID)
+		if err != nil {
+			return fmt.Errorf("invalid server_id: %w", err)
+		}
+		query := `
+			UPDATE server_folder_servers SET position = $1
+			WHERE server_id = $2 AND user_id = $3
+		`
+		_, err = tx.ExecContext(ctx, query, pos.Position, serverID, userID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetServerAssignment gets a server's folder assignment
+func (r *ServerFolderRepository) GetServerAssignment(ctx context.Context, userID, serverID uuid.UUID) (*models.ServerInFolder, error) {
+	var assignment models.ServerInFolder
+	query := `
+		SELECT server_id, folder_id, user_id, position, assigned_at
+		FROM server_folder_servers
+		WHERE user_id = $1 AND server_id = $2
+	`
+	err := r.db.GetContext(ctx, &assignment, query, userID, serverID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &assignment, err
+}
+
+// UserIsMemberOfServer checks if user is a member of the server
+func (r *ServerFolderRepository) UserIsMemberOfServer(ctx context.Context, userID, serverID uuid.UUID) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM members WHERE user_id = $1 AND server_id = $2)`
+	err := r.db.GetContext(ctx, &exists, query, userID, serverID)
+	return exists, err
 }

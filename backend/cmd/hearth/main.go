@@ -582,8 +582,8 @@ func main() {
 	log.Printf("✅ Premium & Billing services initialized")
 
 	// Initialize Server Folder service and handler
-	serverFolderService := services.NewServerFolderService(repos.ServerFolders, repos.Servers, serviceBus)
-	h.SetServerFolderHandler(serverFolderService, serverService)
+	serverFolderService := services.NewServerFolderService(repos.ServerFolders)
+	h.SetServerFolderHandler(serverFolderService)
 	log.Printf("✅ Server Folder service initialized")
 
 	m := middleware.NewMiddleware(cfg.SecretKey)
