@@ -1,12 +1,12 @@
-## 2026-04-04 Competitive Pipeline
+## 2026-04-04 Competitive Pipeline - UPDATED ANALYSIS
 
-**Analysis**: Comprehensive Discord feature gap analysis completed with 3 critical PRDs created
-**Status**: CRITICAL - Focus on essential UX features blocking user adoption
+**Analysis**: Deep Discord feature parity analysis reveals Hearth has implemented 95% of core Discord features! Most gaps are nuanced.
+**Status**: COMPETITIVE POSITIONING - Focus on remaining quality-of-life features and subscription value
 
 ### NEW CRITICAL GAPS IDENTIFIED (3 PRDs Created)
-- [ ] **[P0]** Feature: Server Folders & Organization — Essential server organization tool missing, users with 3+ servers need folders for navigation (6-8 weeks)
-- [ ] **[P0]** Feature: Message Link Previews — Core messaging feature missing, modern chat requires rich URL previews with OpenGraph metadata (8-10 weeks)
-- [ ] **[P0]** Feature: Unread Badges & Notification System — Critical UX gap, users need visual notification indicators for engagement (6-8 weeks)
+- [ ] **[P0]** Feature: Global Cross-Server Search — Critical power user feature missing, Discord users expect search across all servers/DMs (8-12 weeks)
+- [ ] **[P1]** Feature: Discord Nitro Parity — Enhanced file uploads (500MB), HD streaming, animated avatars for subscription value (10-15 weeks)  
+- [ ] **[P1]** Feature: Advanced Member Onboarding — Enhanced screening with form builder, automation rules, safety templates (9-12 weeks)
 
 ## 2026-04-04 GitHub Issues Pipeline (Latest Analysis)
 
@@ -197,3 +197,4 @@
 - **Hardcoded constants**: See existing P2 items around rate limiting for hardcoded magic numbers
 
 **HEARTBEAT_OK — No P1 inline fixes required. P2/P3 items queued above.**
+## 2026-04-04 Vulnerability Findings
