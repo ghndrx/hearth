@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { gateway, Op, onGatewayEvent } from '$lib/stores/gateway';
 import { voiceState, voiceActions } from '$lib/stores/voice';
 import { user as authUser } from '$lib/stores/auth';
+import { Logger } from '$lib/utils/logger';
 
 // ICE servers for STUN/TURN
 const ICE_SERVERS: RTCIceServer[] = [
@@ -19,6 +20,7 @@ interface PeerConnection {
 }
 
 class VoiceConnectionManager {
+	private logger = Logger.create('Voice');
 	private localStream: MediaStream | null = null;
 	private peers: Map<string, PeerConnection> = new Map();
 	private audioContext: AudioContext | null = null;
@@ -120,9 +122,9 @@ class VoiceConnectionManager {
 			// Mark as connected
 			voiceActions.setConnected();
 
-			console.log('[Voice] Connected to voice channel');
+			this.logger.info('Connected to voice channel');
 		} catch (error) {
-			console.error('[Voice] Failed to connect:', error);
+			this.logger.error('Failed to connect:', error);
 			voiceActions.setError(
 				error instanceof Error ? error.message : 'Failed to access microphone'
 			);
@@ -188,7 +190,7 @@ class VoiceConnectionManager {
 	private createPeerConnection(userId: string, createOffer: boolean) {
 		if (this.peers.has(userId)) return;
 
-		console.log(`[Voice] Creating peer connection to ${userId}, offer: ${createOffer}`);
+		this.logger.info(` Creating peer connection to ${userId}, offer: ${createOffer}`);
 
 		const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 		const remoteStream = new MediaStream();
@@ -211,7 +213,7 @@ class VoiceConnectionManager {
 
 		// Handle incoming tracks
 		connection.ontrack = (event) => {
-			console.log(`[Voice] Received track from ${userId}`);
+			this.logger.info(` Received track from ${userId}`);
 			event.streams[0].getTracks().forEach(track => {
 				remoteStream.addTrack(track);
 			});
@@ -239,7 +241,7 @@ class VoiceConnectionManager {
 
 		// Handle connection state
 		connection.onconnectionstatechange = () => {
-			console.log(`[Voice] Connection state with ${userId}: ${connection.connectionState}`);
+			this.logger.info(` Connection state with ${userId}: ${connection.connectionState}`);
 			if (connection.connectionState === 'failed' || connection.connectionState === 'disconnected') {
 				this.closePeerConnection(userId);
 			}
@@ -267,12 +269,12 @@ class VoiceConnectionManager {
 				}
 			});
 		} catch (error) {
-			console.error(`[Voice] Failed to create offer for ${userId}:`, error);
+			this.logger.error(`Failed to create offer for ${userId}:`, error);
 		}
 	}
 
 	private async handleOffer(fromUserId: string, sdp: string) {
-		console.log(`[Voice] Received offer from ${fromUserId}`);
+		this.logger.info(` Received offer from ${fromUserId}`);
 
 		// Create peer connection if it doesn't exist
 		if (!this.peers.has(fromUserId)) {
@@ -298,12 +300,12 @@ class VoiceConnectionManager {
 				}
 			});
 		} catch (error) {
-			console.error(`[Voice] Failed to handle offer from ${fromUserId}:`, error);
+			this.logger.error(` Failed to handle offer from ${fromUserId}:`, error);
 		}
 	}
 
 	private async handleAnswer(fromUserId: string, sdp: string) {
-		console.log(`[Voice] Received answer from ${fromUserId}`);
+		this.logger.info(` Received answer from ${fromUserId}`);
 
 		const peer = this.peers.get(fromUserId);
 		if (!peer) return;
@@ -311,7 +313,7 @@ class VoiceConnectionManager {
 		try {
 			await peer.connection.setRemoteDescription({ type: 'answer', sdp });
 		} catch (error) {
-			console.error(`[Voice] Failed to handle answer from ${fromUserId}:`, error);
+			this.logger.error(` Failed to handle answer from ${fromUserId}:`, error);
 		}
 	}
 
@@ -325,7 +327,7 @@ class VoiceConnectionManager {
 		try {
 			await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
 		} catch (error) {
-			console.error(`[Voice] Failed to add ICE candidate from ${fromUserId}:`, error);
+			this.logger.error(` Failed to add ICE candidate from ${fromUserId}:`, error);
 		}
 	}
 
@@ -344,14 +346,14 @@ class VoiceConnectionManager {
 		audio.style.display = 'none';
 		document.body.appendChild(audio);
 
-		console.log(`[Voice] Playing audio from ${userId}`);
+		this.logger.info(` Playing audio from ${userId}`);
 	}
 
 	private closePeerConnection(userId: string) {
 		const peer = this.peers.get(userId);
 		if (!peer) return;
 
-		console.log(`[Voice] Closing peer connection to ${userId}`);
+		this.logger.info(` Closing peer connection to ${userId}`);
 
 		peer.connection.close();
 		this.peers.delete(userId);
@@ -364,7 +366,7 @@ class VoiceConnectionManager {
 	}
 
 	disconnect() {
-		console.log('[Voice] Disconnecting');
+		this.logger.info(' Disconnecting');
 
 		// Stop speaking detection
 		if (this.speakingCheckInterval) {
