@@ -1,0 +1,171 @@
+name: 🔬 Competitive Analysis Pipeline
+
+on:
+  schedule:
+    # Every 6 hours - refresh competitive intel
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: 'Force full refresh (yes/no)'
+        required: false
+        default: 'no'
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  discord-watch:
+    name: 📡 Discord Activity Watch
+    runs-on: ubuntu-latest
+    outputs:
+      gaps_found: ${{ steps.scan.outputs.gaps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan competitive landscape
+        id: scan
+        run: |
+          echo "=== Scanning competitive landscape ==="
+          
+          # Count PRDs by priority
+          p0_count=$(grep -l '\[P0\]' PRDs/*.md 2>/dev/null | wc -l)
+          p1_count=$(grep -l '\[P1\]' PRDs/*.md 2>/dev/null | wc -l)
+          p2_count=$(grep -l '\[P2\]' PRDs/*.md 2>/dev/null | wc -l)
+          
+          echo "p0_count=$p0_count" >> $GITHUB_OUTPUT
+          echo "p1_count=$p1_count" >> $GITHUB_OUTPUT
+          echo "p2_count=$p2_count" >> $GITHUB_OUTPUT
+          
+          echo "PRD inventory: P0=$p0_count, P1=$p1_count, P2=$p2_count"
+
+  github-issues-scan:
+    name: 🔍 GitHub Issues Scan
+    runs-on: ubuntu-latest
+    outputs:
+      open_issues: ${{ steps.scan.outputs.issue_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan GitHub issues
+        id: scan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          open=$(gh issue list --state open --limit 100 2>/dev/null | wc -l || echo "0")
+          echo "open_issues=$open" >> $GITHUB_OUTPUT
+          echo "Open issues: $open"
+
+  update-task-queue:
+    name: 📝 Update TASK_QUEUE
+    needs: [discord-watch, github-issues-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update TASK_QUEUE
+        run: |
+          TODAY=$(date '+%Y-%m-%d')
+          
+          echo "=== Updating TASK_QUEUE.md ==="
+          
+          # Build updated queue
+          {
+            cat << HEADER
+# TASK_QUEUE.md - Hearth Development Queue
+
+> Auto-updated by 🔬 Competitive Analysis Pipeline
+> Last update: $TODAY
+
+## 📊 Queue Statistics
+- **P0 Features**: ${{ needs.discord-watch.outputs.p0_count }}
+- **P1 Features**: ${{ needs.discord-watch.outputs.p1_count }}  
+- **P2 Features**: ${{ needs.discord-watch.outputs.p2_count }}
+- **Open GitHub Issues**: ${{ needs.github-issues-scan.outputs.open_issues }}
+
+## 🚢 Shipping Queue (Priority Order)
+
+### P0 - Critical (Must Ship)
+
+HEADER
+          } > TASK_QUEUE_UPDATE.md
+          
+          # Extract P0s from PRDs
+          for prd in $(grep -l '\[P0\]' PRDs/*.md 2>/dev/null); do
+            title=$(head -3 "$prd" | grep -oE '# [^ ]+' | head -1 | sed 's/# //')
+            basename=$(basename "$prd" .md)
+            echo "- [ ] **P0** Feature: $title — $basename" >> TASK_QUEUE_UPDATE.md
+          done 2>/dev/null || true
+          
+          {
+            cat << FOOTER
+
+### P1 - High Value (Next Sprint)
+
+FOOTER
+          } >> TASK_QUEUE_UPDATE.md
+          
+          for prd in $(grep -l '\[P1\]' PRDs/*.md 2>/dev/null); do
+            title=$(head -3 "$prd" | grep -oE '# [^ ]+' | head -1 | sed 's/# //')
+            basename=$(basename "$prd" .md)
+            echo "- [ ] **P1** Feature: $title — $basename" >> TASK_QUEUE_UPDATE.md
+          done 2>/dev/null || true
+          
+          {
+            cat << FOOTER
+
+### P2 - Medium (Backlog)
+
+FOOTER
+          } >> TASK_QUEUE_UPDATE.md
+          
+          for prd in $(grep -l '\[P2\]' PRDs/*.md 2>/dev/null); do
+            title=$(head -3 "$prd" | grep -oE '# [^ ]+' | head -1 | sed 's/# //')
+            basename=$(basename "$prd" .md)
+            echo "- [ ] **P2** Feature: $title — $basename" >> TASK_QUEUE_UPDATE.md
+          done 2>/dev/null || true
+          
+          # Check diff
+          if diff -q TASK_QUEUE.md TASK_QUEUE_UPDATE.md > /dev/null 2>&1; then
+            echo "✅ TASK_QUEUE unchanged"
+            rm TASK_QUEUE_UPDATE.md
+          else
+            mv TASK_QUEUE_UPDATE.md TASK_QUEUE.md
+            git add TASK_QUEUE.md
+            git config user.email "greg@gregh.dev"
+            git config user.name "Greg Hendrickson"
+            git commit -m "chore: refresh TASK_QUEUE from competitive analysis ($TODAY)"
+            git push origin develop
+            echo "✅ TASK_QUEUE updated"
+          fi
+
+  report:
+    name: 📊 Analysis Report
+    needs: [discord-watch, github-issues-scan, update-task-queue]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate report
+        run: |
+          echo "# 🔬 Competitive Analysis Report"
+          echo "**Run**: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo ""
+          echo "| Metric | Value |"
+          echo "|--------|-------|"
+          echo "| P0 Features | ${{ needs.discord-watch.outputs.p0_count }} |"
+          echo "| P1 Features | ${{ needs.discord-watch.outputs.p1_count }} |"
+          echo "| P2 Features | ${{ needs.discord-watch.outputs.p2_count }} |"
+          echo "| Open Issues | ${{ needs.github-issues-scan.outputs.open_issues }} |"
+          echo ""
+          echo "## Next: 🚀 Ship Pipeline"
+          echo "Runs every 4 hours - picks next P0 and scaffolds implementation"
