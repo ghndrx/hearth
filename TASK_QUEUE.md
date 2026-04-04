@@ -1,3 +1,13 @@
+## 2026-04-04 Competitive Pipeline
+
+**Analysis**: Comprehensive Discord feature gap analysis completed with 3 critical PRDs created
+**Status**: CRITICAL - Focus on essential UX features blocking user adoption
+
+### NEW CRITICAL GAPS IDENTIFIED (3 PRDs Created)
+- [ ] **[P0]** Feature: Server Folders & Organization — Essential server organization tool missing, users with 3+ servers need folders for navigation (6-8 weeks)
+- [ ] **[P0]** Feature: Message Link Previews — Core messaging feature missing, modern chat requires rich URL previews with OpenGraph metadata (8-10 weeks)
+- [ ] **[P0]** Feature: Unread Badges & Notification System — Critical UX gap, users need visual notification indicators for engagement (6-8 weeks)
+
 ## 2026-04-04 GitHub Issues Pipeline
 
 **Status**: No open issues found in repository
