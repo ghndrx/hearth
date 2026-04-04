@@ -375,7 +375,6 @@ func (h *Handlers) SetContentSafetyHandler(
 // SetServerFolderHandler sets the server folder handler
 func (h *Handlers) SetServerFolderHandler(
 	serverFolderService *services.ServerFolderService,
-	serverService *services.ServerService,
 ) {
-	h.ServerFolders = NewServerFolderHandler(serverFolderService, serverService)
+	h.ServerFolders = NewServerFolderHandler(serverFolderService)
 }
