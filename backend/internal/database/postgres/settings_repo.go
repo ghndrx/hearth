@@ -40,6 +40,9 @@ func (r *SettingsRepository) Get(ctx context.Context, userID uuid.UUID) (*models
 			COALESCE(privacy_friend_requests_all, true) as privacy_friend_requests_all,
 			COALESCE(privacy_read_receipts, true) as privacy_read_receipts,
 			COALESCE(locale, 'en-US') as locale,
+			COALESCE(thread_auto_follow, true) as thread_auto_follow,
+			COALESCE(thread_follow_on_reply, true) as thread_follow_on_reply,
+			COALESCE(thread_default_notification_level, 'all') as thread_default_notification_level,
 			updated_at
 		FROM user_settings 
 		WHERE user_id = $1
@@ -60,9 +63,11 @@ func (r *SettingsRepository) Create(ctx context.Context, settings *models.UserSe
 			notifications_enabled, notifications_sound, notifications_desktop, notifications_mentions_only,
 			notifications_dm, notifications_server_defaults,
 			privacy_dm_from_servers, privacy_dm_from_friends_only, privacy_show_activity,
-			privacy_friend_requests_all, privacy_read_receipts, locale, updated_at
+			privacy_friend_requests_all, privacy_read_receipts, locale,
+			thread_auto_follow, thread_follow_on_reply, thread_default_notification_level,
+			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
 		)
 	`
 	_, err := r.db.ExecContext(ctx, query,
@@ -71,7 +76,9 @@ func (r *SettingsRepository) Create(ctx context.Context, settings *models.UserSe
 		settings.NotificationsEnabled, settings.NotificationsSound, settings.NotificationsDesktop, settings.NotificationsMentionsOnly,
 		settings.NotificationsDM, settings.NotificationsServerDefaults,
 		settings.PrivacyDMFromServers, settings.PrivacyDMFromFriendsOnly, settings.PrivacyShowActivity,
-		settings.PrivacyFriendRequestsAll, settings.PrivacyReadReceipts, settings.Locale, settings.UpdatedAt,
+		settings.PrivacyFriendRequestsAll, settings.PrivacyReadReceipts, settings.Locale,
+		settings.ThreadAutoFollow, settings.ThreadFollowOnReply, settings.ThreadDefaultNotifLevel,
+		settings.UpdatedAt,
 	)
 	return err
 }
@@ -85,7 +92,9 @@ func (r *SettingsRepository) Update(ctx context.Context, settings *models.UserSe
 			notifications_enabled = $12, notifications_sound = $13, notifications_desktop = $14, notifications_mentions_only = $15,
 			notifications_dm = $16, notifications_server_defaults = $17,
 			privacy_dm_from_servers = $18, privacy_dm_from_friends_only = $19, privacy_show_activity = $20,
-			privacy_friend_requests_all = $21, privacy_read_receipts = $22, locale = $23, updated_at = $24
+			privacy_friend_requests_all = $21, privacy_read_receipts = $22, locale = $23,
+			thread_auto_follow = $24, thread_follow_on_reply = $25, thread_default_notification_level = $26,
+			updated_at = $27
 		WHERE user_id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query,
@@ -94,7 +103,9 @@ func (r *SettingsRepository) Update(ctx context.Context, settings *models.UserSe
 		settings.NotificationsEnabled, settings.NotificationsSound, settings.NotificationsDesktop, settings.NotificationsMentionsOnly,
 		settings.NotificationsDM, settings.NotificationsServerDefaults,
 		settings.PrivacyDMFromServers, settings.PrivacyDMFromFriendsOnly, settings.PrivacyShowActivity,
-		settings.PrivacyFriendRequestsAll, settings.PrivacyReadReceipts, settings.Locale, settings.UpdatedAt,
+		settings.PrivacyFriendRequestsAll, settings.PrivacyReadReceipts, settings.Locale,
+		settings.ThreadAutoFollow, settings.ThreadFollowOnReply, settings.ThreadDefaultNotifLevel,
+		settings.UpdatedAt,
 	)
 	return err
 }
@@ -109,9 +120,11 @@ func (r *SettingsRepository) Upsert(ctx context.Context, settings *models.UserSe
 			notifications_enabled, notifications_sound, notifications_desktop, notifications_mentions_only,
 			notifications_dm, notifications_server_defaults,
 			privacy_dm_from_servers, privacy_dm_from_friends_only, privacy_show_activity,
-			privacy_friend_requests_all, privacy_read_receipts, locale, updated_at
+			privacy_friend_requests_all, privacy_read_receipts, locale,
+			thread_auto_follow, thread_follow_on_reply, thread_default_notification_level,
+			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
 		)
 		ON CONFLICT (user_id) DO UPDATE SET
 			theme = EXCLUDED.theme,
@@ -136,6 +149,9 @@ func (r *SettingsRepository) Upsert(ctx context.Context, settings *models.UserSe
 			privacy_friend_requests_all = EXCLUDED.privacy_friend_requests_all,
 			privacy_read_receipts = EXCLUDED.privacy_read_receipts,
 			locale = EXCLUDED.locale,
+			thread_auto_follow = EXCLUDED.thread_auto_follow,
+			thread_follow_on_reply = EXCLUDED.thread_follow_on_reply,
+			thread_default_notification_level = EXCLUDED.thread_default_notification_level,
 			updated_at = EXCLUDED.updated_at
 	`
 	_, err := r.db.ExecContext(ctx, query,
@@ -144,7 +160,9 @@ func (r *SettingsRepository) Upsert(ctx context.Context, settings *models.UserSe
 		settings.NotificationsEnabled, settings.NotificationsSound, settings.NotificationsDesktop, settings.NotificationsMentionsOnly,
 		settings.NotificationsDM, settings.NotificationsServerDefaults,
 		settings.PrivacyDMFromServers, settings.PrivacyDMFromFriendsOnly, settings.PrivacyShowActivity,
-		settings.PrivacyFriendRequestsAll, settings.PrivacyReadReceipts, settings.Locale, settings.UpdatedAt,
+		settings.PrivacyFriendRequestsAll, settings.PrivacyReadReceipts, settings.Locale,
+		settings.ThreadAutoFollow, settings.ThreadFollowOnReply, settings.ThreadDefaultNotifLevel,
+		settings.UpdatedAt,
 	)
 	return err
 }
