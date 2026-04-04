@@ -2,20 +2,20 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"hearth/internal/models"
 )
 
 // ServerFolderRepository handles database operations for server folders
 type ServerFolderRepository struct {
-	db *sql.DB
+	db *sqlx.DB
 }
 
 // NewServerFolderRepository creates a new server folder repository
-func NewServerFolderRepository(db *sql.DB) *ServerFolderRepository {
+func NewServerFolderRepository(db *sqlx.DB) *ServerFolderRepository {
 	return &ServerFolderRepository{db: db}
 }
 
