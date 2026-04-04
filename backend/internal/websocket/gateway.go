@@ -42,6 +42,9 @@ type Gateway struct {
 	// Voice signaling
 	voiceService *VoiceSignalingService
 
+	// Soundboard signaling
+	soundboardService *SoundboardSignalingService
+
 	// Session management
 	sessions   map[string]*Session
 	sessionsMu sync.RWMutex
@@ -416,6 +419,9 @@ func (g *Gateway) handleClientDispatch(conn *websocket.Conn, client *Client, ses
 	// Voice signaling events
 	case VoiceSignalJoin, VoiceSignalLeave, VoiceSignalOffer, VoiceSignalAnswer, VoiceSignalICECandidate, VoiceSignalSpeaking:
 		g.handleVoiceDispatch(conn, client, session, dispatchData.T, dispatchData.D)
+	// Soundboard events
+	case SoundboardSignalPlay, SoundboardSignalStop:
+		g.handleSoundboardDispatch(conn, client, session, dispatchData.T, dispatchData.D)
 	default:
 		log.Printf("[Gateway] Unknown client dispatch type: %s", dispatchData.T)
 	}
@@ -431,6 +437,19 @@ func (g *Gateway) handleVoiceDispatch(conn *websocket.Conn, client *Client, sess
 	if err := g.voiceService.HandleVoiceMessage(ctx, client, session.ID, eventType, data); err != nil {
 		log.Printf("[Gateway] Voice dispatch error: %v", err)
 		g.sendError(conn, "voice operation failed")
+	}
+}
+
+func (g *Gateway) handleSoundboardDispatch(conn *websocket.Conn, client *Client, session *Session, eventType string, data json.RawMessage) {
+	if g.soundboardService == nil {
+		g.sendError(conn, "soundboard not available")
+		return
+	}
+
+	ctx := context.Background()
+	if err := g.soundboardService.HandleSoundboardMessage(ctx, client, session.ID, eventType, data); err != nil {
+		log.Printf("[Gateway] Soundboard dispatch error: %v", err)
+		g.sendError(conn, "soundboard operation failed")
 	}
 }
 
@@ -873,6 +892,11 @@ func (g *Gateway) GetActiveConnections() int64 {
 // SetVoiceService sets the voice signaling service
 func (g *Gateway) SetVoiceService(vs *VoiceSignalingService) {
 	g.voiceService = vs
+}
+
+// SetSoundboardService sets the soundboard signaling service
+func (g *Gateway) SetSoundboardService(ss *SoundboardSignalingService) {
+	g.soundboardService = ss
 }
 
 // CleanupSession cleans up voice state when a session disconnects
