@@ -757,7 +757,8 @@ func TestMapFAUserToPublic(t *testing.T) {
 			},
 		}
 
-		pub := mapFAUserToPublic(faU)
+		pub, err := mapFAUserToPublic(faU)
+		require.NoError(t, err)
 		assert.Equal(t, uid, pub.ID)
 		assert.Equal(t, "testuser", pub.Username)
 		assert.Equal(t, "Display Name", *pub.DisplayName)
@@ -772,7 +773,8 @@ func TestMapFAUserToPublic(t *testing.T) {
 			Username: "minimal",
 		}
 
-		pub := mapFAUserToPublic(faU)
+		pub, err := mapFAUserToPublic(faU)
+		require.NoError(t, err)
 		assert.Equal(t, "minimal", pub.Username)
 		assert.Nil(t, pub.DisplayName)
 		assert.Nil(t, pub.AvatarURL)
@@ -787,7 +789,8 @@ func TestMapFAUserToPublic(t *testing.T) {
 			LastName:  "Doe",
 		}
 
-		pub := mapFAUserToPublic(faU)
+		pub, err := mapFAUserToPublic(faU)
+		require.NoError(t, err)
 		assert.NotNil(t, pub.DisplayName)
 		assert.Equal(t, "John Doe", *pub.DisplayName)
 	})
@@ -807,7 +810,8 @@ func TestMapFAUserToModel(t *testing.T) {
 		},
 	}
 
-	user := mapFAUserToModel(faU)
+	user, err := mapFAUserToModel(faU)
+	require.NoError(t, err)
 	assert.Equal(t, uid, user.ID)
 	assert.Equal(t, "test@example.com", user.Email)
 	assert.True(t, user.MFAEnabled)

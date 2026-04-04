@@ -117,7 +117,10 @@ func decodeBody(resp *http.Response, v interface{}) error {
 
 func fusionAuthError(resp *http.Response) error {
 	defer resp.Body.Close()
-	data, _ := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("fusionauth: failed to read error response body: %w", err)
+	}
 
 	var faErr struct {
 		GeneralErrors []struct {
@@ -240,8 +243,11 @@ type faMFAEnableResponse struct {
 }
 
 // mapFAUserToPublic converts a FusionAuth user to Hearth's PublicUser.
-func mapFAUserToPublic(faU *faUser) *models.PublicUser {
-	uid, _ := uuid.Parse(faU.ID)
+func mapFAUserToPublic(faU *faUser) (*models.PublicUser, error) {
+	uid, err := uuid.Parse(faU.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID from FusionAuth: %w", err)
+	}
 
 	var displayName *string
 	if faU.Data.DisplayName != "" {
@@ -275,12 +281,15 @@ func mapFAUserToPublic(faU *faUser) *models.PublicUser {
 		Pronouns:    pronouns,
 		Status:      models.StatusOffline,
 		Flags:       0,
-	}
+	}, nil
 }
 
 // mapFAUserToModel converts a FusionAuth user to Hearth's internal User model.
-func mapFAUserToModel(faU *faUser) *models.User {
-	uid, _ := uuid.Parse(faU.ID)
+func mapFAUserToModel(faU *faUser) (*models.User, error) {
+	uid, err := uuid.Parse(faU.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID from FusionAuth: %w", err)
+	}
 
 	var displayName *string
 	if faU.Data.DisplayName != "" {
@@ -320,7 +329,7 @@ func mapFAUserToModel(faU *faUser) *models.User {
 		Verified:    faU.Verified,
 		CreatedAt:   createdAt,
 		UpdatedAt:   createdAt,
-	}
+	}, nil
 }
 
 func tokenExpiresIn(expirationInstant int64) int {
@@ -365,7 +374,10 @@ func (p *FusionAuthProvider) Register(ctx context.Context, req *RegisterRequest)
 		return nil, err
 	}
 
-	pub := mapFAUserToPublic(&faResp.User)
+	pub, err := mapFAUserToPublic(&faResp.User)
+	if err != nil {
+		return nil, err
+	}
 	return &AuthResult{
 		User:         pub,
 		AccessToken:  faResp.Token,
@@ -413,7 +425,10 @@ func (p *FusionAuthProvider) Login(ctx context.Context, req *LoginRequest) (*Aut
 		return nil, err
 	}
 
-	pub := mapFAUserToPublic(&faResp.User)
+	pub, err := mapFAUserToPublic(&faResp.User)
+	if err != nil {
+		return nil, err
+	}
 	return &AuthResult{
 		User:         pub,
 		AccessToken:  faResp.Token,
@@ -665,7 +680,11 @@ func (p *FusionAuthProvider) GetSessions(ctx context.Context, userID uuid.UUID) 
 
 	sessions := make([]*models.Session, 0, len(faResp.RefreshTokens))
 	for _, rt := range faResp.RefreshTokens {
-		sid, _ := uuid.Parse(rt.ID)
+		sid, err := uuid.Parse(rt.ID)
+		if err != nil {
+			// Skip sessions with invalid UUIDs rather than failing the entire operation
+			continue
+		}
 		created := time.UnixMilli(rt.InsertInstant)
 		lastUsed := time.UnixMilli(rt.MetaData.LastAccessInstant)
 		ua := rt.MetaData.UserAgent
@@ -753,7 +772,7 @@ func (p *FusionAuthProvider) GetUser(ctx context.Context, userID uuid.UUID) (*mo
 		return nil, err
 	}
 
-	return mapFAUserToModel(&faResp.User), nil
+	return mapFAUserToModel(&faResp.User)
 }
 
 // UpdateUser updates a user's profile in FusionAuth.
@@ -799,7 +818,7 @@ func (p *FusionAuthProvider) UpdateUser(ctx context.Context, userID uuid.UUID, r
 		return nil, err
 	}
 
-	return mapFAUserToModel(&faResp.User), nil
+	return mapFAUserToModel(&faResp.User)
 }
 
 // DeleteUser deactivates and deletes a user from FusionAuth.
