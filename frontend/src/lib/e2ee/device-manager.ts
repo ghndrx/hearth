@@ -313,7 +313,7 @@ class DeviceManagerClass {
 		await keyStorage.storeSignedPreKey(signedPreKey);
 		await keyStorage.storeOneTimePreKeys(oneTimePreKeys);
 
-		// Compute identity key hash for safety number verification
+		// Compute identity key hash for metadata storage and safety number verification
 		const identityKeyHash = await computeIdentityKeyHash(identityKey.publicKey);
 
 		// Store metadata
