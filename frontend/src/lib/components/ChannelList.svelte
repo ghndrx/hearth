@@ -147,7 +147,7 @@
 	}
 
 	function handleInviteCreated(event: CustomEvent<{ code: string; maxUses: number; expiresIn: number }>) {
-		console.log('Invite created:', event.detail);
+		// Invite creation handled by parent component
 	}
 
 	async function handleGenerateInvite(event: CustomEvent<{ maxUses: number; expiresIn: number }>) {
@@ -193,7 +193,7 @@
 	}
 
 	function handleChannelSettings(event: CustomEvent<Channel>) {
-		console.log('Open settings for channel:', event.detail.name);
+		// Channel settings functionality to be implemented
 	}
 
 	function handleOpenNewDM() {
