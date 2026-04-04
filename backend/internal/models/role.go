@@ -50,10 +50,8 @@ const (
 	PermSendTTS               int64 = 1 << 24
 	PermManageMessages        int64 = 1 << 25
 	PermManageThreads         int64 = 1 << 26
-	// Forum-specific permissions
-	PermCreateForumPosts      int64 = 1 << 36
-	PermParticipateInForums   int64 = 1 << 37
 	PermEmbedLinks            int64 = 1 << 27
+	PermParticipateInForums   int64 = 1 << 37
 	PermAttachFiles           int64 = 1 << 28
 	PermReadMessageHistory    int64 = 1 << 29
 	PermMentionEveryone       int64 = 1 << 30
