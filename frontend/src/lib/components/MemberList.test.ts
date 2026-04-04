@@ -572,11 +572,11 @@ describe('MemberList', () => {
 			render(MemberList);
 			
 			await waitFor(() => {
-				const memberName = document.querySelector('.member-name');
+				const memberName = document.querySelector('.member-name') as HTMLElement | null;
 				expect(memberName).toBeInTheDocument();
-				// Default color when no role color - jsdom computes vars to actual values
-				const styles = getComputedStyle(memberName!);
-				expect(styles.color).toBeTruthy();
+				// Default color when no role color - check inline style since jsdom
+				// does not resolve CSS variables via getComputedStyle
+				expect(memberName!.style.color).toBe('var(--text-normal)');
 			});
 		});
 	});
