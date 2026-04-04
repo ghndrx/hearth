@@ -680,6 +680,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	search.Get("/users", h.Search.SearchUsers)
 	search.Get("/channels", h.Search.SearchChannels)
 	search.Get("/suggestions", h.Search.GetSuggestions)
+	// Global cross-server search
+	search.Get("/global/messages", h.Search.GlobalSearchMessages)
 
 	// Server Discovery & Browse
 	if h.Discovery != nil {

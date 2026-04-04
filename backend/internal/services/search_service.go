@@ -16,6 +16,8 @@ type SearchRepository interface {
 	SearchUsers(ctx context.Context, query string, serverID *uuid.UUID, limit int) ([]*models.PublicUser, error)
 	// SearchChannels searches for channels
 	SearchChannels(ctx context.Context, query string, serverID *uuid.UUID, limit int) ([]*models.Channel, error)
+	// GlobalSearchMessages searches messages across all user's accessible servers and DMs
+	GlobalSearchMessages(ctx context.Context, opts GlobalSearchMessageOptions) (*GlobalSearchResult, error)
 }
 
 // SearchMessageOptions contains all possible search filters
@@ -58,6 +60,56 @@ type SearchResult struct {
 	Channels []*models.Channel
 	Total    int
 	HasMore  bool
+}
+
+// GlobalSearchMessageOptions contains search filters for cross-server search
+type GlobalSearchMessageOptions struct {
+	// Required parameters
+	Query string
+
+	// Author filter
+	AuthorID *uuid.UUID
+
+	// Time range filters
+	Before *time.Time
+	After  *time.Time
+
+	// Content filters
+	HasAttachments *bool
+	HasEmbeds      *bool
+	HasLinks       *bool
+	HasReactions   *bool
+	Pinned         *bool
+	Mentions       []uuid.UUID
+
+	// Filter by specific server IDs (optional, searches all accessible if empty)
+	ServerIDs []uuid.UUID
+
+	// Filter by DM channels only
+	IncludeDMs bool
+
+	// Pagination
+	Limit  int
+	Offset int
+
+	// Requester for permission checks
+	RequesterID uuid.UUID
+}
+
+// GlobalSearchResult contains search results with server context
+type GlobalSearchResult struct {
+	Messages []*GlobalSearchMessage
+	Total    int
+	HasMore  bool
+}
+
+// GlobalSearchMessage extends Message with server context for cross-server results
+type GlobalSearchMessage struct {
+	*models.Message
+	ServerID   *uuid.UUID `json:"server_id,omitempty"`
+	ServerName string     `json:"server_name,omitempty"`
+	ChannelName string    `json:"channel_name"`
+	IsDM       bool       `json:"is_dm"`
 }
 
 // SearchService handles search-related business logic
@@ -163,6 +215,100 @@ func (s *SearchService) SearchChannels(ctx context.Context, query string, server
 	}
 
 	return s.searchRepo.SearchChannels(ctx, query, serverID, limit)
+}
+
+// GlobalSearchMessages searches messages across all servers and DMs the user has access to
+func (s *SearchService) GlobalSearchMessages(ctx context.Context, opts GlobalSearchMessageOptions) (*GlobalSearchResult, error) {
+	// Validate and set defaults
+	if opts.Limit <= 0 || opts.Limit > 100 {
+		opts.Limit = 25
+	}
+
+	// Perform global search
+	result, err := s.searchRepo.GlobalSearchMessages(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enrich results with author, server, and channel info
+	if len(result.Messages) > 0 {
+		if err := s.enrichGlobalMessages(ctx, result.Messages); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// enrichGlobalMessages adds author, server, and channel information to global search results
+func (s *SearchService) enrichGlobalMessages(ctx context.Context, messages []*GlobalSearchMessage) error {
+	// Collect unique author IDs and channel IDs
+	authorIDs := make(map[uuid.UUID]bool)
+	channelIDs := make(map[uuid.UUID]bool)
+	serverIDs := make(map[uuid.UUID]bool)
+
+	for _, msg := range messages {
+		authorIDs[msg.AuthorID] = true
+		channelIDs[msg.ChannelID] = true
+		if msg.ServerID != nil {
+			serverIDs[*msg.ServerID] = true
+		}
+	}
+
+	// Fetch authors
+	userCache := make(map[uuid.UUID]*models.PublicUser)
+	for authorID := range authorIDs {
+		user, err := s.userRepo.GetByID(ctx, authorID)
+		if err != nil {
+			continue
+		}
+		if user != nil {
+			publicUser := user.ToPublic()
+			userCache[authorID] = &publicUser
+		}
+	}
+
+	// Fetch servers
+	serverCache := make(map[uuid.UUID]*models.Server)
+	for serverID := range serverIDs {
+		server, err := s.serverRepo.GetByID(ctx, serverID)
+		if err != nil {
+			continue
+		}
+		if server != nil {
+			serverCache[serverID] = server
+		}
+	}
+
+	// Fetch channels
+	channelCache := make(map[uuid.UUID]*models.Channel)
+	for channelID := range channelIDs {
+		channel, err := s.channelRepo.GetByID(ctx, channelID)
+		if err != nil {
+			continue
+		}
+		if channel != nil {
+			channelCache[channelID] = channel
+		}
+	}
+
+	// Enrich messages
+	for _, msg := range messages {
+		if author, ok := userCache[msg.AuthorID]; ok {
+			msg.Author = author
+		}
+		if ch, ok := channelCache[msg.ChannelID]; ok {
+			msg.ChannelName = ch.Name
+			if ch.ServerID != nil {
+				msg.ServerID = ch.ServerID
+				if srv, ok := serverCache[*ch.ServerID]; ok {
+					msg.ServerName = srv.Name
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // validateServerAccess checks if user can access the server
