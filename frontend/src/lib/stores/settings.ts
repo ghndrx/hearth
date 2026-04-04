@@ -1,7 +1,8 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { theme as themeStore, type ThemeChoice } from './theme';
 export type { ResolvedTheme } from './theme';
+import { api } from '$lib/api';
 
 export type Theme = ThemeChoice;
 export type MessageDisplay = 'cozy' | 'compact';
@@ -47,6 +48,38 @@ export interface SettingsState {
 	isServerSettingsOpen: boolean;
 	activeSection: string;
 	app: AppSettings;
+	loadedFromBackend: boolean;
+}
+
+// Backend API response shape
+interface BackendUserSettings {
+	user_id: string;
+	theme: string;
+	message_display: string;
+	compact_mode: boolean;
+	developer_mode: boolean;
+	inline_embeds: boolean;
+	inline_attachments: boolean;
+	render_reactions: boolean;
+	animate_emoji: boolean;
+	enable_tts: boolean;
+	custom_css?: string;
+	notifications_enabled: boolean;
+	notifications_sound: boolean;
+	notifications_desktop: boolean;
+	notifications_mentions_only: boolean;
+	notifications_dm: boolean;
+	notifications_server_defaults: boolean;
+	privacy_dm_from_servers: boolean;
+	privacy_dm_from_friends_only: boolean;
+	privacy_show_activity: boolean;
+	privacy_friend_requests_all: boolean;
+	privacy_read_receipts: boolean;
+	locale: string;
+	thread_auto_follow: boolean;
+	thread_follow_on_reply: boolean;
+	thread_default_notification_level: string;
+	updated_at: string;
 }
 
 const defaultNotificationSettings: NotificationSettings = {
@@ -176,16 +209,150 @@ function saveSettings(settings: AppSettings) {
 	}
 }
 
+// Map backend response to frontend AppSettings
+function mapBackendToFrontend(backend: BackendUserSettings): Partial<AppSettings> {
+	return {
+		theme: isValidTheme(backend.theme) ? backend.theme : defaultSettings.theme,
+		messageDisplay: isValidMessageDisplay(backend.message_display) ? backend.message_display as MessageDisplay : defaultSettings.messageDisplay,
+		compactMode: typeof backend.compact_mode === 'boolean' ? backend.compact_mode : defaultSettings.compactMode,
+		developerMode: typeof backend.developer_mode === 'boolean' ? backend.developer_mode : defaultSettings.developerMode,
+		notificationsEnabled: typeof backend.notifications_enabled === 'boolean' ? backend.notifications_enabled : defaultSettings.notificationsEnabled,
+		notifications: {
+			desktopEnabled: typeof backend.notifications_desktop === 'boolean' ? backend.notifications_desktop : defaultNotificationSettings.desktopEnabled,
+			soundsEnabled: typeof backend.notifications_sound === 'boolean' ? backend.notifications_sound : defaultNotificationSettings.soundsEnabled,
+			soundVolume: defaultNotificationSettings.soundVolume,
+			mentionSound: defaultNotificationSettings.mentionSound,
+			messageSound: defaultNotificationSettings.messageSound,
+			flashTaskbar: defaultNotificationSettings.flashTaskbar,
+			showPreviews: defaultNotificationSettings.showPreviews,
+			muteDMs: typeof backend.notifications_dm === 'boolean' ? !backend.notifications_dm : defaultNotificationSettings.muteDMs,
+			muteGroupDMs: defaultNotificationSettings.muteGroupDMs,
+			mentionEveryone: typeof backend.notifications_mentions_only === 'boolean' ? backend.notifications_mentions_only : defaultNotificationSettings.mentionEveryone,
+			mentionRoles: defaultNotificationSettings.mentionRoles,
+			mentionHighlight: defaultNotificationSettings.mentionHighlight,
+			suppressDND: defaultNotificationSettings.suppressDND,
+			threadNotifications: isValidThreadNotificationLevel(backend.thread_default_notification_level) 
+				? backend.thread_default_notification_level as ThreadNotificationLevel 
+				: defaultNotificationSettings.threadNotifications,
+			threadAutoFollow: typeof backend.thread_auto_follow === 'boolean' ? backend.thread_auto_follow : defaultNotificationSettings.threadAutoFollow,
+			threadFollowOnReply: typeof backend.thread_follow_on_reply === 'boolean' ? backend.thread_follow_on_reply : defaultNotificationSettings.threadFollowOnReply
+		}
+	};
+}
+
+// Map frontend partial settings to backend update request
+function mapFrontendToBackend(updates: Partial<AppSettings>): Record<string, unknown> {
+	const backend: Record<string, unknown> = {};
+	
+	if (updates.theme !== undefined) backend['theme'] = updates.theme;
+	if (updates.messageDisplay !== undefined) backend['message_display'] = updates.messageDisplay;
+	if (updates.compactMode !== undefined) backend['compact_mode'] = updates.compactMode;
+	if (updates.developerMode !== undefined) backend['developer_mode'] = updates.developerMode;
+	if (updates.notificationsEnabled !== undefined) backend['notifications_enabled'] = updates.notificationsEnabled;
+	
+	if (updates.notifications) {
+		const n = updates.notifications;
+		if (n.desktopEnabled !== undefined) backend['notifications_desktop'] = n.desktopEnabled;
+		if (n.soundsEnabled !== undefined) backend['notifications_sound'] = n.soundsEnabled;
+		if (n.muteDMs !== undefined) backend['notifications_dm'] = !n.muteDMs;
+		if (n.mentionEveryone !== undefined) backend['notifications_mentions_only'] = n.mentionEveryone;
+		// FEAT-001: Thread settings
+		if (n.threadAutoFollow !== undefined) backend['thread_auto_follow'] = n.threadAutoFollow;
+		if (n.threadFollowOnReply !== undefined) backend['thread_follow_on_reply'] = n.threadFollowOnReply;
+		if (n.threadNotifications !== undefined) backend['thread_default_notification_level'] = n.threadNotifications;
+	}
+	
+	return backend;
+}
+
+// Fetch user settings from backend API
+export async function fetchUserSettings(settingsStore: ReturnType<typeof createSettingsStore>): Promise<void> {
+	if (!browser) return;
+	
+	try {
+		const backendSettings = await api.get<BackendUserSettings | undefined>('/users/@me/settings');
+		if (!backendSettings) {
+			// No backend settings (user not authenticated or API error)
+			settingsStore.update(s => ({ ...s, loadedFromBackend: true }));
+			return;
+		}
+		const mapped = mapBackendToFrontend(backendSettings);
+		
+		// Merge with localStorage settings (localStorage takes precedence for fields not on backend)
+		const local = loadSettings();
+		const merged: AppSettings = {
+			...local,
+			...mapped,
+			notifications: {
+				...defaultNotificationSettings,
+				...local.notifications,
+				...mapped.notifications
+			}
+		};
+		
+		settingsStore.update(s => {
+			const newApp = merged;
+			saveSettings(newApp);
+			themeStore.set(newApp.theme);
+			if (browser) {
+				document.documentElement.style.setProperty('--message-font-size', `${newApp.fontSize}px`);
+			}
+			return { ...s, app: newApp, loadedFromBackend: true };
+		});
+	} catch (error) {
+		console.warn('Failed to fetch user settings from backend, using local defaults:', error);
+		// Still mark as loaded so we don't keep retrying
+		settingsStore.update(s => ({ ...s, loadedFromBackend: true }));
+	}
+}
+
+// Sync settings to backend API (fire-and-forget for thread-specific settings only)
+// Non-thread notification settings (desktopEnabled, soundsEnabled, etc.) remain local-only
+async function syncSettingsToBackend(updates: Partial<AppSettings>): Promise<void> {
+	if (!browser) return;
+	
+	try {
+		// Only sync thread-specific settings to backend (FEAT-001)
+		// Only include fields that were explicitly changed in updates
+		const backendUpdates: Record<string, unknown> = {};
+		
+		if (updates.notifications) {
+			const n = updates.notifications;
+			// Only sync thread settings if explicitly changed
+			if (Object.prototype.hasOwnProperty.call(n, 'threadAutoFollow')) backendUpdates['thread_auto_follow'] = n.threadAutoFollow;
+			if (Object.prototype.hasOwnProperty.call(n, 'threadFollowOnReply')) backendUpdates['thread_follow_on_reply'] = n.threadFollowOnReply;
+			if (Object.prototype.hasOwnProperty.call(n, 'threadNotifications')) backendUpdates['thread_default_notification_level'] = n.threadNotifications;
+		}
+		
+		// Also sync top-level app settings that map to backend
+		if (updates.theme !== undefined) backendUpdates['theme'] = updates.theme;
+		if (updates.messageDisplay !== undefined) backendUpdates['message_display'] = updates.messageDisplay;
+		if (updates.compactMode !== undefined) backendUpdates['compact_mode'] = updates.compactMode;
+		if (updates.developerMode !== undefined) backendUpdates['developer_mode'] = updates.developerMode;
+		if (updates.notificationsEnabled !== undefined) backendUpdates['notifications_enabled'] = updates.notificationsEnabled;
+		
+		if (Object.keys(backendUpdates).length > 0) {
+			await api.patch('/users/@me/settings', backendUpdates);
+		}
+	} catch (error) {
+		// Non-critical: log but don't throw
+		console.warn('Failed to sync settings to backend:', error);
+	}
+}
+
 const initialState: SettingsState = {
 	isOpen: false,
 	isServerSettingsOpen: false,
 	activeSection: 'account',
-	app: loadSettings()
+	app: loadSettings(),
+	loadedFromBackend: false
 };
 
 // Sync initial theme from settings to theme store
 if (browser) {
 	themeStore.set(initialState.app.theme);
+	// Apply initial font size
+	document.documentElement.style.setProperty('--message-font-size', `${initialState.app.fontSize}px`);
 }
 
 function createSettingsStore() {
@@ -193,6 +360,7 @@ function createSettingsStore() {
 	
 	return {
 		subscribe,
+		update,
 		
 		open(section = 'account') {
 			update(s => ({ ...s, isOpen: true, activeSection: section }));
@@ -229,6 +397,9 @@ function createSettingsStore() {
 					document.documentElement.style.setProperty('--message-font-size', `${updates.fontSize}px`);
 				}
 				
+				// Sync non-blocking to backend
+				syncSettingsToBackend(updates);
+				
 				return { ...s, app: newApp };
 			});
 		},
@@ -238,6 +409,18 @@ function createSettingsStore() {
 				const newNotifications = { ...s.app.notifications, ...updates };
 				const newApp = { ...s.app, notifications: newNotifications };
 				saveSettings(newApp);
+				
+				// Only sync thread-specific settings to backend (FEAT-001)
+				// If only non-thread notification fields are changed, skip backend sync
+				const hasThreadUpdate = 
+					Object.prototype.hasOwnProperty.call(updates, 'threadAutoFollow') ||
+					Object.prototype.hasOwnProperty.call(updates, 'threadFollowOnReply') ||
+					Object.prototype.hasOwnProperty.call(updates, 'threadNotifications');
+				
+				if (hasThreadUpdate) {
+					syncSettingsToBackend({ notifications: updates as NotificationSettings });
+				}
+				
 				return { ...s, app: newApp };
 			});
 		},
@@ -246,6 +429,10 @@ function createSettingsStore() {
 			update(s => {
 				saveSettings(defaultSettings);
 				themeStore.set(defaultSettings.theme);
+				if (browser) {
+					document.documentElement.style.setProperty('--message-font-size', `${defaultSettings.fontSize}px`);
+				}
+				// TODO: Also reset backend settings
 				return { ...s, app: defaultSettings };
 			});
 		}
@@ -253,6 +440,12 @@ function createSettingsStore() {
 }
 
 export const settings = createSettingsStore();
+
+// Attempt to load settings from backend (non-blocking)
+// This must be called after 'settings' is created
+if (browser) {
+	fetchUserSettings(settings);
+}
 
 // Convenience derived stores
 export const isSettingsOpen = derived(settings, $s => $s.isOpen);

@@ -142,6 +142,17 @@ func (s *SettingsService) UpdateSettings(ctx context.Context, userID uuid.UUID, 
 		settings.Locale = *updates.Locale
 	}
 
+	// Apply thread notification updates (FEAT-001)
+	if updates.ThreadAutoFollow != nil {
+		settings.ThreadAutoFollow = *updates.ThreadAutoFollow
+	}
+	if updates.ThreadFollowOnReply != nil {
+		settings.ThreadFollowOnReply = *updates.ThreadFollowOnReply
+	}
+	if updates.ThreadDefaultNotifLevel != nil {
+		settings.ThreadDefaultNotifLevel = *updates.ThreadDefaultNotifLevel
+	}
+
 	settings.UpdatedAt = time.Now()
 
 	// Upsert the settings
