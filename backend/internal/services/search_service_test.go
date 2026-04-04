@@ -40,6 +40,14 @@ func (m *MockSearchRepository) SearchChannels(ctx context.Context, query string,
 	return args.Get(0).([]*models.Channel), args.Error(1)
 }
 
+func (m *MockSearchRepository) GlobalSearchMessages(ctx context.Context, opts GlobalSearchMessageOptions) (*GlobalSearchResult, error) {
+	args := m.Called(ctx, opts)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*GlobalSearchResult), args.Error(1)
+}
+
 // MockUserRepositoryForSearch is a mock implementation of UserRepository
 type MockUserRepositoryForSearch struct {
 	mock.Mock
