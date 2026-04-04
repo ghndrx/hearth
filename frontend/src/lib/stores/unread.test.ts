@@ -20,6 +20,10 @@ import {
 	fetchUnreadState,
 	markChannelRead,
 	updateChannelUnread,
+	updateServerUnread,
+	hasUnreadForServer,
+	mentionCountForServer,
+	fetchServerUnreadState,
 	type UnreadState,
 	type UnreadChannel
 } from './unread';
@@ -226,6 +230,101 @@ describe('Unread Store', () => {
 			expect(unread.has('ch-1')).toBe(true);
 			expect(unread.has('ch-2')).toBe(false);
 			expect(unread.has('ch-3')).toBe(true);
+		});
+	});
+});
+
+// ---------- Server-level Unread Tests ----------
+
+describe('Server-level Unread Store', () => {
+	beforeEach(() => {
+		unreadStore.set(makeUnreadState());
+		vi.clearAllMocks();
+	});
+
+	// ---------- updateServerUnread ----------
+
+	describe('updateServerUnread', () => {
+		it('should update server unread state', () => {
+			updateServerUnread('server-1', true, 5, 2);
+
+			expect(get(hasUnreadForServer).get('server-1')).toBe(true);
+			expect(get(mentionCountForServer).get('server-1')).toBe(2);
+		});
+
+		it('should update multiple servers independently', () => {
+			updateServerUnread('server-1', true, 5, 2);
+			updateServerUnread('server-2', false, 0, 0);
+			updateServerUnread('server-3', true, 10, 5);
+
+			expect(get(hasUnreadForServer).get('server-1')).toBe(true);
+			expect(get(hasUnreadForServer).get('server-2')).toBe(false);
+			expect(get(hasUnreadForServer).get('server-3')).toBe(true);
+			expect(get(mentionCountForServer).get('server-1')).toBe(2);
+			expect(get(mentionCountForServer).get('server-2')).toBe(0);
+			expect(get(mentionCountForServer).get('server-3')).toBe(5);
+		});
+
+		it('should overwrite previous server state', () => {
+			updateServerUnread('server-1', true, 5, 2);
+			updateServerUnread('server-1', false, 0, 0);
+
+			expect(get(hasUnreadForServer).get('server-1')).toBe(false);
+			expect(get(mentionCountForServer).get('server-1')).toBe(0);
+		});
+	});
+
+	// ---------- fetchServerUnreadState ----------
+
+	describe('fetchServerUnreadState', () => {
+		it('should fetch and aggregate server unread state', async () => {
+			// Mock server list
+			mockApi.get
+				.mockResolvedValueOnce([
+					{ id: 'server-1' },
+					{ id: 'server-2' }
+				])
+				// Mock server-1 unread
+				.mockResolvedValueOnce({
+					total_unread: 5,
+					total_mentions: 2,
+					channels: []
+				})
+				// Mock server-2 unread
+				.mockResolvedValueOnce({
+					total_unread: 0,
+					total_mentions: 0,
+					channels: []
+				});
+
+			await fetchServerUnreadState();
+
+			expect(get(hasUnreadForServer).get('server-1')).toBe(true);
+			expect(get(hasUnreadForServer).get('server-2')).toBe(false);
+			expect(get(mentionCountForServer).get('server-1')).toBe(2);
+			expect(get(mentionCountForServer).get('server-2')).toBe(0);
+		});
+
+		it('should handle partial server fetch failures gracefully', async () => {
+			mockApi.get
+				.mockResolvedValueOnce([
+					{ id: 'server-1' },
+					{ id: 'server-2' }
+				])
+				// server-1 fails (silently ignored in Promise.allSettled)
+				.mockRejectedValueOnce(new Error('Network error'))
+				// server-2 succeeds
+				.mockResolvedValueOnce({
+					total_unread: 3,
+					total_mentions: 1,
+					channels: []
+				});
+
+			await fetchServerUnreadState();
+
+			// server-2 should be set, server-1 should not be in the map (silently ignored)
+			expect(get(hasUnreadForServer).get('server-2')).toBe(true);
+			expect(get(hasUnreadForServer).get('server-1')).toBeUndefined();
 		});
 	});
 });
