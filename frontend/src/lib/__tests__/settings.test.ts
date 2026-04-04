@@ -113,7 +113,7 @@ describe('Settings Store', () => {
       expect(value.isOpen).toBe(false);
       expect(value.isServerSettingsOpen).toBe(false);
       expect(value.activeSection).toBe('account');
-      expect(value.app.theme).toBe('dark');
+      expect(value.app.theme).toBe('system');
       expect(value.app.messageDisplay).toBe('cozy');
       expect(value.app.compactMode).toBe(false);
       expect(value.app.showSendButton).toBe(false);
@@ -183,7 +183,7 @@ describe('Settings Store', () => {
       
       const value = get(settings);
       
-      expect(value.app.theme).toBe('dark');
+      expect(value.app.theme).toBe('system');
       expect(value.app.fontSize).toBe(16);
     });
 
@@ -361,7 +361,7 @@ describe('Settings Store', () => {
       settings.reset();
       
       const value = get(settings);
-      expect(value.app.theme).toBe('dark');
+      expect(value.app.theme).toBe('system');
       expect(value.app.fontSize).toBe(16);
       expect(value.app.developerMode).toBe(false);
       expect(value.app.enableAnimations).toBe(true);
@@ -434,7 +434,7 @@ describe('Settings Store', () => {
       const { settings, appSettings } = await import('../stores/settings');
       
       const initialAppSettings = get(appSettings);
-      expect(initialAppSettings.theme).toBe('dark');
+      expect(initialAppSettings.theme).toBe('system');
       expect(initialAppSettings.fontSize).toBe(16);
       
       settings.updateApp({ fontSize: 20 });
@@ -447,7 +447,7 @@ describe('Settings Store', () => {
       vi.resetModules();
       const { settings, currentTheme } = await import('../stores/settings');
       
-      expect(get(currentTheme)).toBe('dark');
+      expect(get(currentTheme)).toBe('system');
       
       settings.updateApp({ theme: 'light' });
       expect(get(currentTheme)).toBe('light');
