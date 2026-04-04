@@ -57,6 +57,7 @@ type Handlers struct {
 	Digest                   *DigestHandler
 	ChannelNotificationPrefs *ChannelNotificationPreferenceHandler
 	ServerNotificationPrefs  *ServerNotificationPreferenceHandler
+	ContentSafety            *ContentSafetyHandler
 }
 
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
@@ -360,4 +361,12 @@ func (h *Handlers) SetNotificationCoordinatorHandler(
 ) {
 	h.ChannelNotificationPrefs = NewChannelNotificationPreferenceHandler(coordinator)
 	h.ServerNotificationPrefs = NewServerNotificationPreferenceHandler(coordinator)
+}
+
+// SetContentSafetyHandler sets the content safety handler
+func (h *Handlers) SetContentSafetyHandler(
+	contentSafetyService *services.ContentSafetyService,
+	serverService *services.ServerService,
+) {
+	h.ContentSafety = NewContentSafetyHandler(contentSafetyService, serverService)
 }
