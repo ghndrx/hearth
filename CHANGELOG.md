@@ -2,6 +2,43 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-04-04](https://github.com/ghndrx/hearth/compare/2026-04-03...HEAD)
+
+### Features
+* feat: video calling core system
+* feat(channels): add forum channels with threaded discussions and tagging
+* feat: add critical competitive feature gap PRDs and update task priorities
+
+### Bug Fixes
+* fix/clipboard polyfill test failure (#109)
+* fix: remove duplicate declarations causing CI build failure
+* fix: add missing GetTotalMessageCount to simpleMockThreadRepo
+* fix(slashCommands): handle multi-word string args and fix autocomplete test (#106)
+* fix(frontend): import ForumTag type in ForumChannelView (#103)
+* fix(security): restore correct G115 guard in CheckMentionAbuse (#100)
+* fix(frontend): correct discovery component tests for Svelte 5 compatibility (#96)
+* fix(tests): polyfill navigator.clipboard for happy-dom compatibility (#95)
+* fix(security): restore G115 integer overflow guard in CheckMentionAbuse (#94)
+
+### Other Changes
+* fix/clipboard polyfill test failure (#109)
+* chore: fix critical P1 database error handling
+* chore: address tech debt in backend/internal/websocket/gateway.go
+* docs: auto-generate changelog for 2026-04-03
+* fix(slashCommands): handle multi-word string args and fix autocomplete test (#106)
+* test(handlers): add AppDirectoryHandler tests (#105)
+* chore: address critical tech debt in websocket gateway (#98)
+* test(handlers): add soundboard handler tests (#99)
+* fix(frontend): correct discovery component tests for Svelte 5 compatibility (#96)
+* fix(tests): polyfill navigator.clipboard for happy-dom compatibility (#95)
+
+### Miscellaneous
+* Merge remote-tracking branch 'origin/chore/tech-debt-20260403' into fix-ci
+* Merge pull request #108 from ghndrx/chore/tech-debt-20260403
+* security: fix G115 integer overflow in content filter via proper Unicode handling (#107)
+* 🔒 Fix Critical P1 Security Vulnerabilities (#104)
+* coverage/improve 20260403 00 (#90)
+
 ## [2026-04-03](https://github.com/ghndrx/hearth/compare/2026-04-02...HEAD)
 
 ### Features
