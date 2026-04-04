@@ -11,6 +11,11 @@
 		toggleFolderCollapsed,
 		type ServerFolder as ServerFolderType
 	} from '$lib/stores/serverFolders';
+	import { 
+		hasUnreadForServer, 
+		mentionCountForServer,
+		fetchServerUnreadState 
+	} from '$lib/stores/unread';
 	import { getAuthToken } from '$lib/api';
 	import { createEventDispatcher } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -25,10 +30,6 @@
 	let showCreateModal = false;
 	let serverListElement: HTMLElement;
 	let localFolderStates: Record<string, boolean> = {}; // Local state for folder expanded/collapsed
-
-	// Mock unread data - in real app would come from store
-	const unreadServers: Record<string, boolean> = {};
-	const mentionCounts: Record<string, number> = {};
 
 	// Folder colors based on folder index (cycles through these colors)
 	const folderColors = [
@@ -55,8 +56,9 @@
 		
 		try {
 			await loadServerFolders();
+			await fetchServerUnreadState();
 		} catch (error) {
-			console.error('Failed to load server folders:', error);
+			console.error('Failed to load server data:', error);
 		}
 	});
 
@@ -179,8 +181,8 @@
 				name={folder.name}
 				servers={folderServers.map((s) => ({
 					...s,
-					hasUnread: unreadServers[s.id] || false,
-					mentionCount: mentionCounts[s.id] || 0
+					hasUnread: $hasUnreadForServer.get(s.id) ?? false,
+					mentionCount: $mentionCountForServer.get(s.id) ?? 0
 				}))}
 				selectedServerId={$currentServer?.id || null}
 				expanded={isExpanded}
@@ -199,8 +201,8 @@
 			<ServerIcon
 				{server}
 				isSelected={$currentServer?.id === server.id}
-				hasUnread={unreadServers[server.id] || false}
-				mentionCount={mentionCounts[server.id] || 0}
+				hasUnread={$hasUnreadForServer.get(server.id) ?? false}
+				mentionCount={$mentionCountForServer.get(server.id) ?? 0}
 				on:click={() => selectServer(server)}
 			/>
 		{/each}

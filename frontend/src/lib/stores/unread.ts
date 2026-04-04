@@ -1,5 +1,6 @@
 import { writable, derived, type Readable } from 'svelte/store';
 import { api } from '$lib/api';
+import { servers } from './servers';
 
 export interface UnreadChannel {
 	channel_id: string;
@@ -12,6 +13,14 @@ export interface UnreadState {
 	total_unread: number;
 	total_mentions: number;
 	channels: UnreadChannel[];
+}
+
+// Server-level unread info (from /servers/:id/unread endpoint)
+export interface ServerUnreadInfo {
+	server_id: string;
+	has_unread: boolean;
+	unread_count: number;
+	mention_count: number;
 }
 
 // Map of channel_id -> UnreadChannel
@@ -50,8 +59,55 @@ export const hasUnreadForChannel: Readable<Map<string, boolean>> = derived(
 	}
 );
 
+// Server-level unread state
+const serverUnreadMap = writable<Map<string, ServerUnreadInfo>>(new Map());
+
+// Exported server-level unread store
+export const serverUnreadStore = derived(
+	serverUnreadMap,
+	($map) => $map
+);
+
+// Derived store: Set of server IDs with unread messages
+export const unreadServerIds: Readable<Set<string>> = derived(
+	serverUnreadMap,
+	($map) => {
+		const unread = new Set<string>();
+		for (const [serverId, info] of $map) {
+			if (info.has_unread) {
+				unread.add(serverId);
+			}
+		}
+		return unread;
+	}
+);
+
+// Derived store: Map of server_id -> has_unread for quick lookup
+export const hasUnreadForServer: Readable<Map<string, boolean>> = derived(
+	serverUnreadMap,
+	($map) => {
+		const result = new Map<string, boolean>();
+		for (const [serverId, info] of $map) {
+			result.set(serverId, info.has_unread);
+		}
+		return result;
+	}
+);
+
+// Derived store: Map of server_id -> mention_count for badges
+export const mentionCountForServer: Readable<Map<string, number>> = derived(
+	serverUnreadMap,
+	($map) => {
+		const result = new Map<string, number>();
+		for (const [serverId, info] of $map) {
+			result.set(serverId, info.mention_count);
+		}
+		return result;
+	}
+);
+
 /**
- * Fetch unread state from the API
+ * Fetch unread state from the API (channel-level)
  */
 export async function fetchUnreadState(): Promise<void> {
 	try {
@@ -69,6 +125,49 @@ export async function fetchUnreadState(): Promise<void> {
 		});
 	} catch (error) {
 		console.error('Failed to fetch unread state:', error);
+	}
+}
+
+/**
+ * Fetch server-level unread state for all servers the user is in
+ * Calls /servers/:id/unread for each server and aggregates the results
+ */
+export async function fetchServerUnreadState(): Promise<void> {
+	try {
+		const serverList = await api.get<{ id: string }[]>('/users/@me/servers');
+		
+		// Fetch unread state for each server in parallel
+		const results = await Promise.allSettled(
+			serverList.map(async (server: { id: string }) => {
+				const unread = await api.get<{ 
+					total_unread: number; 
+					total_mentions: number;
+					channels: Array<{ channel_id: string; unread_count: number; mention_count: number }>;
+				}>(`/servers/${server.id}/unread`);
+				return {
+					serverId: server.id,
+					info: {
+						server_id: server.id,
+						has_unread: unread.total_unread > 0,
+						unread_count: unread.total_unread,
+						mention_count: unread.total_mentions
+					}
+				};
+			})
+		);
+
+		// Update the server unread map
+		serverUnreadMap.update((map) => {
+			const newMap = new Map<string, ServerUnreadInfo>();
+			for (const result of results) {
+				if (result.status === 'fulfilled') {
+					newMap.set(result.value.serverId, result.value.info);
+				}
+			}
+			return newMap;
+		});
+	} catch (error) {
+		console.error('Failed to fetch server unread state:', error);
 	}
 }
 
@@ -131,6 +230,21 @@ export function updateChannelUnread(channelId: string, hasUnread: boolean, unrea
 }
 
 /**
+ * Update server-level unread state (e.g., when a new message arrives in any channel)
+ */
+export function updateServerUnread(serverId: string, hasUnread: boolean, unreadCount: number, mentionCount: number): void {
+	serverUnreadMap.update((map) => {
+		map.set(serverId, {
+			server_id: serverId,
+			has_unread: hasUnread,
+			unread_count: unreadCount,
+			mention_count: mentionCount
+		});
+		return new Map(map);
+	});
+}
+
+/**
  * Get unread count for a specific channel
  */
 export function getUnreadCount(channelId: string): number {
@@ -154,4 +268,18 @@ export function getChannelUnread(channelId: string): boolean {
 		hasUnread = channel ? channel.unread_count > 0 : false;
 	})();
 	return hasUnread;
+}
+
+/**
+ * Get mention count for a specific server
+ */
+export function getServerMentionCount(serverId: string): number {
+	let count = 0;
+	serverUnreadMap.subscribe((map) => {
+		const info = map.get(serverId);
+		if (info) {
+			count = info.mention_count;
+		}
+	})();
+	return count;
 }
