@@ -86,23 +86,31 @@ func (s *ServerFolderService) GetUserFolders(ctx context.Context, userID uuid.UU
 	}
 
 	// Build tree structure
-	var rootFolders []models.ServerFolderTreeItem
+	// First pass: build all items with their server assignments
+	var rootFolders []*models.ServerFolderTreeItem
 	for _, f := range folders {
 		item := folderMap[f.ID]
 		// Add servers to this folder
 		if servers, ok := assignmentsByFolder[f.ID.String()]; ok {
 			item.Servers = servers
 		}
-		// Add children
+		// Add children - for items with parents, add to parent's children
+		// For root items, add to rootFolders
 		if f.ParentID != nil {
 			if parent, ok := folderMap[*f.ParentID]; ok {
 				parent.Children = append(parent.Children, *item)
 			} else {
-				rootFolders = append(rootFolders, *item)
+				rootFolders = append(rootFolders, item)
 			}
 		} else {
-			rootFolders = append(rootFolders, *item)
+			rootFolders = append(rootFolders, item)
 		}
+	}
+
+	// Convert rootFolders to value type for return
+	rootFoldersVals := make([]models.ServerFolderTreeItem, len(rootFolders))
+	for i, rf := range rootFolders {
+		rootFoldersVals[i] = *rf
 	}
 
 	// Calculate depth recursively
@@ -115,10 +123,10 @@ func (s *ServerFolderService) GetUserFolders(ctx context.Context, userID uuid.UU
 			}
 		}
 	}
-	setDepth(rootFolders, 0)
+	setDepth(rootFoldersVals, 0)
 
 	return &models.ServerFolderTree{
-		Folders: rootFolders,
+		Folders: rootFoldersVals,
 		Servers: unassigned,
 	}, nil
 }
