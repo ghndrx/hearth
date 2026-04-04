@@ -24,12 +24,15 @@ var (
 	ErrSoundboardTooLarge      = errors.New("sound file too large (max 5 seconds / 500KB)")
 	ErrSoundboardFormat        = errors.New("invalid sound format (only MP3, OGG, WAV, OPUS allowed)")
 	ErrSoundboardDuration      = errors.New("sound duration too long (max 5000ms)")
+	ErrSoundboardPackNotFound  = errors.New("soundboard pack not found")
+	ErrSoundboardPackNameReq   = errors.New("pack name is required")
 )
 
 // SoundboardService handles soundboard business logic
 type SoundboardService struct {
 	mu      sync.RWMutex
 	sounds  map[uuid.UUID]*models.SoundboardSound
+	packs   map[uuid.UUID]*models.SoundboardSoundPack
 	storage *storage.Service
 }
 
@@ -37,6 +40,7 @@ type SoundboardService struct {
 func NewSoundboardService(storageService *storage.Service) *SoundboardService {
 	return &SoundboardService{
 		sounds:  make(map[uuid.UUID]*models.SoundboardSound),
+		packs:   make(map[uuid.UUID]*models.SoundboardSoundPack),
 		storage: storageService,
 	}
 }
@@ -286,6 +290,162 @@ func (s *SoundboardService) Search(ctx context.Context, query string, serverID *
 	}
 
 	return sounds, nil
+}
+
+// --- Pack methods ---
+
+// CreatePack creates a new soundboard pack
+func (s *SoundboardService) CreatePack(ctx context.Context, serverID *uuid.UUID, name string, emojiName string, isDefault bool) (*models.SoundboardSoundPack, error) {
+	if name == "" {
+		return nil, ErrSoundboardPackNameReq
+	}
+	if len(name) > 100 {
+		return nil, ErrSoundboardNameTooLong
+	}
+
+	pack := &models.SoundboardSoundPack{
+		ID:        uuid.New(),
+		ServerID:  serverID,
+		Name:      name,
+		EmojiName: emojiName,
+		IsDefault: isDefault,
+		Position:  0,
+		Sounds:    []*models.SoundboardSound{},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	s.mu.Lock()
+	s.packs[pack.ID] = pack
+	s.mu.Unlock()
+
+	return pack, nil
+}
+
+// GetPack retrieves a pack by ID
+func (s *SoundboardService) GetPack(ctx context.Context, packID uuid.UUID) (*models.SoundboardSoundPack, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pack, ok := s.packs[packID]
+	if !ok {
+		return nil, ErrSoundboardPackNotFound
+	}
+	return pack, nil
+}
+
+// GetPacksByServer retrieves all packs for a server
+func (s *SoundboardService) GetPacksByServer(ctx context.Context, serverID uuid.UUID) ([]*models.SoundboardSoundPack, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var packs []*models.SoundboardSoundPack
+	for _, pack := range s.packs {
+		if pack.ServerID != nil && *pack.ServerID == serverID {
+			packs = append(packs, pack)
+		}
+	}
+	return packs, nil
+}
+
+// GetDefaultPacks retrieves all default/global packs
+func (s *SoundboardService) GetDefaultPacks(ctx context.Context) ([]*models.SoundboardSoundPack, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var packs []*models.SoundboardSoundPack
+	for _, pack := range s.packs {
+		if pack.ServerID == nil {
+			packs = append(packs, pack)
+		}
+	}
+	return packs, nil
+}
+
+// UpdatePack updates a pack's properties
+func (s *SoundboardService) UpdatePack(ctx context.Context, packID uuid.UUID, name string, emojiName string) (*models.SoundboardSoundPack, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pack, ok := s.packs[packID]
+	if !ok {
+		return nil, ErrSoundboardPackNotFound
+	}
+
+	if name != "" {
+		if len(name) > 100 {
+			return nil, ErrSoundboardNameTooLong
+		}
+		pack.Name = name
+	}
+	if emojiName != "" {
+		pack.EmojiName = emojiName
+	}
+	pack.UpdatedAt = time.Now()
+
+	return pack, nil
+}
+
+// DeletePack deletes a pack
+func (s *SoundboardService) DeletePack(ctx context.Context, packID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.packs[packID]; !ok {
+		return ErrSoundboardPackNotFound
+	}
+
+	delete(s.packs, packID)
+	return nil
+}
+
+// AddSoundToPack adds a sound to a pack
+func (s *SoundboardService) AddSoundToPack(ctx context.Context, packID, soundID uuid.UUID, position int, isDefault bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pack, ok := s.packs[packID]
+	if !ok {
+		return ErrSoundboardPackNotFound
+	}
+	sound, ok := s.sounds[soundID]
+	if !ok {
+		return ErrSoundboardSoundNotFound
+	}
+	_ = position
+	_ = isDefault
+	pack.Sounds = append(pack.Sounds, sound)
+	return nil
+}
+
+// RemoveSoundFromPack removes a sound from a pack
+func (s *SoundboardService) RemoveSoundFromPack(ctx context.Context, packID, soundID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pack, ok := s.packs[packID]
+	if !ok {
+		return ErrSoundboardPackNotFound
+	}
+	for i, sound := range pack.Sounds {
+		if sound.ID == soundID {
+			pack.Sounds = append(pack.Sounds[:i], pack.Sounds[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
+
+// GetSoundsInPack retrieves all sounds in a pack
+func (s *SoundboardService) GetSoundsInPack(ctx context.Context, packID uuid.UUID) ([]*models.SoundboardSound, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pack, ok := s.packs[packID]
+	if !ok {
+		return nil, ErrSoundboardPackNotFound
+	}
+	return pack.Sounds, nil
 }
 
 // Add_Test is a test helper to add a sound directly

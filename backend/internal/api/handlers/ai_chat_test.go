@@ -283,6 +283,84 @@ func TestCreateConversation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 	})
+
+	t.Run("handler success", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		userID := uuid.New()
+		body := models.CreateConversationRequest{
+			Title: "Handler Test",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		defaultModel := "default"
+		createdConv := &models.AIConversation{
+			ID:        uuid.New(),
+			UserID:    userID,
+			Title:     "Handler Test",
+			ModelID:   &defaultModel,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		mockSvc.On("CreateConversation", mock.Anything, userID, mock.MatchedBy(func(req *models.CreateConversationRequest) bool {
+			return req.Title == "Handler Test"
+		})).Return(createdConv, nil)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusCreated, resp.StatusCode)
+
+		respBody, _ := io.ReadAll(resp.Body)
+		var result models.AIConversation
+		err = json.Unmarshal(respBody, &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Handler Test", result.Title)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("handler unauthorized without user ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		body := models.CreateConversationRequest{Title: "Test"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		// No X-Test-User-ID header
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("handler internal error", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		userID := uuid.New()
+		body := models.CreateConversationRequest{Title: "Test"}
+		jsonBody, _ := json.Marshal(body)
+
+		mockSvc.On("CreateConversation", mock.Anything, userID, mock.Anything).Return(nil, errors.New("database error"))
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
 }
 
 func TestGetConversation(t *testing.T) {
@@ -357,6 +435,87 @@ func TestUpdateConversation(t *testing.T) {
 		resp, err := app.Test(req)
 		require.NoError(t, err)
 		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("handler success", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		userID := uuid.New()
+		conversationID := uuid.New()
+		title := "Updated Title"
+		body := models.UpdateConversationRequest{Title: &title}
+		jsonBody, _ := json.Marshal(body)
+
+		defaultModel := "default"
+		updatedConv := &models.AIConversation{
+			ID:        conversationID,
+			UserID:    userID,
+			Title:     "Updated Title",
+			ModelID:   &defaultModel,
+			UpdatedAt: time.Now(),
+		}
+		mockSvc.On("UpdateConversation", mock.Anything, userID, conversationID, mock.MatchedBy(func(req *models.UpdateConversationRequest) bool {
+			return req.Title != nil && *req.Title == "Updated Title"
+		})).Return(updatedConv, nil)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/conversations/"+conversationID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+
+		respBody, _ := io.ReadAll(resp.Body)
+		var result models.AIConversation
+		err = json.Unmarshal(respBody, &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Updated Title", result.Title)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("handler unauthorized without user ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		conversationID := uuid.New()
+		title := "Updated Title"
+		body := models.UpdateConversationRequest{Title: &title}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/conversations/"+conversationID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		// No X-Test-User-ID header
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("handler internal error", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		userID := uuid.New()
+		conversationID := uuid.New()
+		title := "Updated Title"
+		body := models.UpdateConversationRequest{Title: &title}
+		jsonBody, _ := json.Marshal(body)
+
+		mockSvc.On("UpdateConversation", mock.Anything, userID, conversationID, mock.Anything).Return(nil, errors.New("database error"))
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/conversations/"+conversationID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
 	})
 }
 
