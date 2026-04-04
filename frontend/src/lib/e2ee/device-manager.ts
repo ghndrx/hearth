@@ -122,6 +122,18 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 /**
+ * Compute SHA-256 hash of identity key public key.
+ * Returns hex-encoded hash string for use in safety number computation.
+ */
+async function computeIdentityKeyHash(publicKey: ArrayBuffer): Promise<string> {
+	const hashBuffer = await crypto.subtle.digest('SHA-256', publicKey);
+	const hashArray = new Uint8Array(hashBuffer);
+	return Array.from(hashArray)
+		.map(b => b.toString(16).padStart(2, '0'))
+		.join('');
+}
+
+/**
  * DeviceManager singleton
  */
 class DeviceManagerClass {
@@ -301,11 +313,14 @@ class DeviceManagerClass {
 		await keyStorage.storeSignedPreKey(signedPreKey);
 		await keyStorage.storeOneTimePreKeys(oneTimePreKeys);
 
+		// Compute identity key hash for safety number verification
+		const identityKeyHash = await computeIdentityKeyHash(identityKey.publicKey);
+
 		// Store metadata
 		await keyStorage.storeMetadata({
 			deviceId: this.deviceId,
 			registrationId: this.registrationId,
-			identityKeyHash: '', // TODO: compute hash
+			identityKeyHash,
 			createdAt: Date.now(),
 			lastKeyRotation: Date.now(),
 			signedPreKeyId: signedPreKey.keyId,
