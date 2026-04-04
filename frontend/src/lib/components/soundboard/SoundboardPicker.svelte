@@ -8,6 +8,10 @@
 
 	const dispatch = createEventDispatcher<{ play: { id: string; name: string; url: string; volume: number }; close: void }>();
 
+	function getHotkeyLabel(index: number): string {
+		return String(index + 1);
+	}
+
 	interface Sound {
 		id: string;
 		name: string;
