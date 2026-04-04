@@ -342,7 +342,7 @@ func TestSoundboardHandler_DeleteSound_NotFound(t *testing.T) {
 	resp, err := app.Test(req, -1)
 
 	require.NoError(t, err)
-	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
 }
 
 // Test validateAudioURL function

@@ -539,6 +539,28 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		servers.Delete("/:id/stickers/:stickerId", h.Stickers.DeleteSticker)
 	}
 
+	// Soundboard (if handler is configured)
+	if h.Soundboard != nil {
+		// Global soundboard sounds
+		api.Get("/soundboard/defaults", h.Soundboard.ListDefaultSounds)
+
+		// Server-specific soundboard sounds and packs
+		servers.Get("/:id/soundboard", h.Soundboard.ListServerSounds)
+		servers.Post("/:id/soundboard", h.Soundboard.CreateSound)
+		servers.Get("/:id/soundboard/sounds/:soundId", h.Soundboard.GetSound)
+		servers.Patch("/:id/soundboard/sounds/:soundId", h.Soundboard.ModifySound)
+		servers.Delete("/:id/soundboard/sounds/:soundId", h.Soundboard.DeleteSound)
+
+		// Soundboard packs
+		servers.Get("/:id/soundboard/packs", h.Soundboard.ListServerPacks)
+		servers.Post("/:id/soundboard/packs", h.Soundboard.CreatePack)
+		servers.Get("/:id/soundboard/packs/:packId", h.Soundboard.GetPack)
+		servers.Patch("/:id/soundboard/packs/:packId", h.Soundboard.ModifyPack)
+		servers.Delete("/:id/soundboard/packs/:packId", h.Soundboard.DeletePack)
+		servers.Put("/:id/soundboard/packs/:packId/sounds/:soundId", h.Soundboard.AddSoundToPack)
+		servers.Delete("/:id/soundboard/packs/:packId/sounds/:soundId", h.Soundboard.RemoveSoundFromPack)
+	}
+
 	// Server Templates (if handler is configured)
 	if h.Templates != nil {
 		// List public templates
