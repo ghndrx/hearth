@@ -429,7 +429,7 @@ function createSettingsStore() {
 					Object.prototype.hasOwnProperty.call(updates, 'threadNotifications');
 				
 				if (hasThreadUpdate) {
-					syncSettingsToBackend({ notifications: updates as NotificationSettings });
+					syncSettingsToBackend({ notifications: updates });
 				}
 				
 				return { ...s, app: newApp };
