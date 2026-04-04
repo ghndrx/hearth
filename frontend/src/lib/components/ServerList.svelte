@@ -1,5 +1,17 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { servers, currentServer } from '$lib/stores/servers';
+	import { 
+		serverFolderTree, 
+		serverFolders, 
+		unassignedServers,
+		serverFoldersLoading,
+		loadServerFolders,
+		toggleFolderCollapsed,
+		type ServerFolder as ServerFolderType
+	} from '$lib/stores/serverFolders';
+	import { getAuthToken } from '$lib/api';
 	import { createEventDispatcher } from 'svelte';
 	import { goto } from '$app/navigation';
 	import CreateServerModal from './CreateServerModal.svelte';
@@ -12,34 +24,71 @@
 
 	let showCreateModal = false;
 	let serverListElement: HTMLElement;
-
-	// Server folders - can be populated from a store in production
-	interface ServerFolderData {
-		id: string;
-		name: string;
-		serverIds: string[];
-		color: string;
-		expanded: boolean;
-	}
-
-	// Example folders - in production this would come from a store
-	let folders: ServerFolderData[] = [];
+	let localFolderStates: Record<string, boolean> = {}; // Local state for folder expanded/collapsed
 
 	// Mock unread data - in real app would come from store
 	const unreadServers: Record<string, boolean> = {};
 	const mentionCounts: Record<string, number> = {};
 
-	// Get servers in a folder
-	function getFolderServers(folder: ServerFolderData): Server[] {
-		return folder.serverIds
-			.map((id) => $servers.find((s) => s.id === id))
+	// Folder colors based on folder index (cycles through these colors)
+	const folderColors = [
+		'#5865f2', // Discord Blurple
+		'#57f287', // Green
+		'#fee75c', // Yellow
+		'#eb459e', // Pink
+		'#ed4245', // Red
+		'#3ba55c', // Dark green
+		'#faa61a', // Orange
+		'#9b59b6', // Purple
+	];
+
+	function getFolderColor(index: number): string {
+		return folderColors[index % folderColors.length];
+	}
+
+	// Load folders on mount if user is logged in
+	onMount(async () => {
+		// Only load folders if we're in browser and have an auth token
+		if (!browser) return;
+		const token = getAuthToken();
+		if (!token) return;
+		
+		try {
+			await loadServerFolders();
+		} catch (error) {
+			console.error('Failed to load server folders:', error);
+		}
+	});
+
+	// Get the actual servers from folder data
+	function getServersFromFolder(folder: ServerFolderType): Server[] {
+		if (!folder.servers) return [];
+		return folder.servers
+			.map(sif => sif.server)
 			.filter((s): s is Server => s !== undefined);
 	}
 
-	// Get servers not in any folder
-	$: standaloneServers = $servers.filter(
-		(server) => !folders.some((folder) => folder.serverIds.includes(server.id))
-	);
+	// Get effective expanded state (local override or from store)
+	function getFolderExpanded(folder: ServerFolderType): boolean {
+		return localFolderStates[folder.id] ?? !folder.is_collapsed;
+	}
+
+	// Toggle folder expanded/collapsed state
+	async function handleToggleFolder(folder: ServerFolderType) {
+		const newCollapsed = getFolderExpanded(folder);
+		localFolderStates[folder.id] = !newCollapsed;
+		localFolderStates = localFolderStates; // Trigger reactivity
+		
+		// Persist to backend
+		try {
+			await toggleFolderCollapsed(folder.id, !newCollapsed);
+		} catch (error) {
+			// Revert on error
+			localFolderStates[folder.id] = newCollapsed;
+			localFolderStates = localFolderStates;
+			console.error('Failed to toggle folder:', error);
+		}
+	}
 
 	function selectServer(server: Server | null) {
 		currentServer.set(server);
@@ -72,12 +121,6 @@
 		goto(`/channels/${server.id}/general`);
 	}
 
-	function toggleFolder(folderId: string) {
-		folders = folders.map((f) =>
-			f.id === folderId ? { ...f, expanded: !f.expanded } : f
-		);
-	}
-
 	function getServerButtons(): HTMLElement[] {
 		if (!serverListElement) return [];
 		return Array.from(serverListElement.querySelectorAll<HTMLElement>('button.server-icon, button.explore-icon'));
@@ -99,6 +142,11 @@
 			buttons[newIndex]?.focus();
 		}
 	}
+
+	// Recursive function to render folders with proper indentation
+	function renderFolderRecursive(folder: ServerFolderType, depth: number = 0): void {
+		// Folders are rendered in the template via the recursive component
+	}
 </script>
 
 <nav 
@@ -117,38 +165,46 @@
 	<!-- Separator -->
 	<div class="separator" role="separator"></div>
 
-	<!-- Server folders -->
-	{#each folders as folder (folder.id)}
-		{@const folderServers = getFolderServers(folder)}
-		<ServerFolder
-			name={folder.name}
-			servers={folderServers.map((s) => ({
-				...s,
-				hasUnread: unreadServers[s.id] || false,
-				mentionCount: mentionCounts[s.id] || 0
-			}))}
-			selectedServerId={$currentServer?.id || null}
-			expanded={folder.expanded}
-			color={folder.color}
-			on:click={(e) => {
-				const detail = (e as unknown as CustomEvent<{server: any}>).detail;
-				if (detail?.server) {
-					selectServer(detail.server);
-				}
-			}}
-		/>
-	{/each}
+	{#if $serverFoldersLoading}
+		<!-- Loading state: show skeleton folders -->
+		<div class="folder-loading">
+			<div class="loading-pill"></div>
+		</div>
+	{:else}
+		<!-- Server folders -->
+		{#each $serverFolders as folder, index (folder.id)}
+			{@const folderServers = getServersFromFolder(folder)}
+			{@const isExpanded = getFolderExpanded(folder)}
+			<ServerFolder
+				name={folder.name}
+				servers={folderServers.map((s) => ({
+					...s,
+					hasUnread: unreadServers[s.id] || false,
+					mentionCount: mentionCounts[s.id] || 0
+				}))}
+				selectedServerId={$currentServer?.id || null}
+				expanded={isExpanded}
+				color={getFolderColor(index)}
+				on:click={(e) => {
+					const detail = (e as unknown as CustomEvent<{server: any}>).detail;
+					if (detail?.server) {
+						selectServer(detail.server);
+					}
+				}}
+			/>
+		{/each}
 
-	<!-- Standalone servers (not in folders) -->
-	{#each standaloneServers as server (server.id)}
-		<ServerIcon
-			{server}
-			isSelected={$currentServer?.id === server.id}
-			hasUnread={unreadServers[server.id] || false}
-			mentionCount={mentionCounts[server.id] || 0}
-			on:click={() => selectServer(server)}
-		/>
-	{/each}
+		<!-- Standalone servers (not in folders) -->
+		{#each $unassignedServers as server (server.id)}
+			<ServerIcon
+				{server}
+				isSelected={$currentServer?.id === server.id}
+				hasUnread={unreadServers[server.id] || false}
+				mentionCount={mentionCounts[server.id] || 0}
+				on:click={() => selectServer(server)}
+			/>
+		{/each}
+	{/if}
 
 	<!-- Add server button -->
 	<ServerIcon
@@ -213,6 +269,30 @@
 		border-radius: 1px;
 		flex-shrink: 0;
 		margin: 4px 0;
+	}
+
+	/* Loading state */
+	.folder-loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: 48px;
+		width: 48px;
+	}
+
+	.loading-pill {
+		width: 32px;
+		height: 8px;
+		background: linear-gradient(90deg, #2b2d31 0%, #35363c 50%, #2b2d31 100%);
+		background-size: 200% 100%;
+		border-radius: 4px;
+		animation: shimmer 1.5s infinite;
+	}
+
+	@keyframes shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
 	}
 
 	/* Explore button styles */
