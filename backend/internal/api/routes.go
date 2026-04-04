@@ -126,6 +126,19 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	users.Get("/:id", h.Users.GetUser)
 	users.Get("/:id/profile", h.Users.GetUserProfile)
 
+	// Server Folders
+	if h.ServerFolders != nil {
+		serverFolders := users.Group("/@me/server-folders")
+		serverFolders.Get("/", h.ServerFolders.GetAll)
+		serverFolders.Post("/", h.ServerFolders.Create)
+		serverFolders.Post("/move", h.ServerFolders.MoveServer)
+		serverFolders.Post("/move-batch", h.ServerFolders.MoveServers)
+		serverFolders.Post("/reorder", h.ServerFolders.ReorderServers)
+		serverFolders.Get("/:id", h.ServerFolders.Get)
+		serverFolders.Patch("/:id", h.ServerFolders.Update)
+		serverFolders.Delete("/:id", h.ServerFolders.Delete)
+	}
+
 	// User Settings
 	if h.Settings != nil {
 		users.Get("/@me/settings", h.Settings.GetSettings)
