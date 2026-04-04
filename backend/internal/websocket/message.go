@@ -107,6 +107,13 @@ const (
 	EventForumPostUnpin     = "FORUM_POST_UNPIN"
 	EventForumPostArchive   = "FORUM_POST_ARCHIVE"
 	EventForumPostUnarchive = "FORUM_POST_UNARCHIVE"
+
+	// Server Folder events
+	EventServerFolderCreate   = "SERVER_FOLDER_CREATE"
+	EventServerFolderUpdate   = "SERVER_FOLDER_UPDATE"
+	EventServerFolderDelete   = "SERVER_FOLDER_DELETE"
+	EventServerFolderMove     = "SERVER_FOLDER_MOVE"
+	EventServerFolderReorder  = "SERVER_FOLDER_REORDER"
 )
 
 // DispatchEvent creates a dispatch message
@@ -297,5 +304,32 @@ type ForumPostPinData struct {
 	GuildID   string `json:"guild_id,omitempty"`
 	PostID    string `json:"post_id"`
 	Pinned    bool   `json:"pinned"`
+}
+
+// ServerFolderCreateData represents a server folder creation event
+type ServerFolderCreateData struct {
+	Folder interface{} `json:"folder"`
+}
+
+// ServerFolderUpdateData represents a server folder update event
+type ServerFolderUpdateData struct {
+	Folder interface{} `json:"folder"`
+}
+
+// ServerFolderDeleteData represents a server folder deletion event
+type ServerFolderDeleteData struct {
+	FolderID string `json:"folder_id"`
+}
+
+// ServerFolderMoveData represents a server being moved to a folder
+type ServerFolderMoveData struct {
+	ServerID string  `json:"server_id"`
+	FolderID *string `json:"folder_id,omitempty"` // nil means unassigned
+}
+
+// ServerFolderReorderData represents servers being reordered
+type ServerFolderReorderData struct {
+	FolderID    *string `json:"folder_id,omitempty"`
+	ServerIDs   []string `json:"server_ids"`
 }
 

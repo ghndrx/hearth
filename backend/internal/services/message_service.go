@@ -323,7 +323,14 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 
 	// Auto-create thread when a message gets 3+ replies
 	if replyTo != nil && s.threadService != nil {
-		go s.maybeAutoCreateThread(ctx, channelID, *replyTo, authorID)
+		go func() {
+			// G118 fix: Use a detached context with timeout instead of request context.
+			// Request context will be cancelled when HTTP request completes, but this
+			// background operation should continue independently with bounded execution time.
+			threadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			s.maybeAutoCreateThread(threadCtx, channelID, *replyTo, authorID)
+		}()
 	}
 
 	return message, nil
