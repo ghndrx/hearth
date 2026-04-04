@@ -11,16 +11,13 @@ import (
 // ServerFolderHandler handles server folder HTTP requests
 type ServerFolderHandler struct {
 	folderService *services.ServerFolderService
-	serverService *services.ServerService
 }
 
 func NewServerFolderHandler(
 	folderService *services.ServerFolderService,
-	serverService *services.ServerService,
 ) *ServerFolderHandler {
 	return &ServerFolderHandler{
 		folderService: folderService,
-		serverService: serverService,
 	}
 }
 

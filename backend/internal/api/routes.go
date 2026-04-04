@@ -248,6 +248,19 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		savedMessages.Delete("/message/:messageId", h.SavedMessages.RemoveSavedMessageByMessage)
 	}
 
+	// Server Folders
+	if h.ServerFolders != nil {
+		serverFolders := users.Group("/@me/server-folders")
+		serverFolders.Get("/", h.ServerFolders.GetAll)
+		serverFolders.Post("/", h.ServerFolders.Create)
+		serverFolders.Get("/:id", h.ServerFolders.Get)
+		serverFolders.Patch("/:id", h.ServerFolders.Update)
+		serverFolders.Delete("/:id", h.ServerFolders.Delete)
+		serverFolders.Post("/move", h.ServerFolders.MoveServer)
+		serverFolders.Post("/move-batch", h.ServerFolders.MoveServers)
+		serverFolders.Post("/reorder", h.ServerFolders.ReorderServers)
+	}
+
 	// Relationships
 	users.Get("/@me/relationships", h.Users.GetRelationships)
 	users.Post("/@me/relationships", h.Users.CreateRelationship)
