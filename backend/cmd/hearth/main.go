@@ -581,6 +581,11 @@ func main() {
 	h.SetStickerHandler(stickerService, serverService, permService, premiumService)
 	log.Printf("✅ Premium & Billing services initialized")
 
+	// Initialize Server Folder service and handler
+	serverFolderService := services.NewServerFolderService(repos.ServerFolders, repos.Servers, serviceBus)
+	h.SetServerFolderHandler(serverFolderService, serverService)
+	log.Printf("✅ Server Folder service initialized")
+
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Wire up API rate limiter for per-endpoint rate limiting

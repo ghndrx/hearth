@@ -164,6 +164,7 @@ type Repositories struct {
 	Premium             *PremiumRepository
 	Search              *SearchRepository
 	Polls               *PollRepository
+	ServerFolders       *ServerFolderRepository
 }
 
 // NewRepositories creates all repositories
@@ -192,5 +193,6 @@ func NewRepositories(db *sqlx.DB) *Repositories {
 		Premium:             NewPremiumRepository(db),
 		Search:              NewSearchRepository(db),
 		Polls:               NewPollRepository(db),
+		ServerFolders:       NewServerFolderRepository(db),
 	}
 }
