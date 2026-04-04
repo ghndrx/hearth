@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { api } from '$lib/api';
 import { onGatewayEvent } from './gateway';
+import { auth } from '$lib/stores/auth';
 
 export interface Notification {
 	id: string;
@@ -259,9 +260,22 @@ function createReadStateStore() {
 			}));
 		});
 
-		onGatewayEvent('MESSAGE_CREATE', (_data) => {
-			// TODO: Check if this is a message from someone else (would cause unread)
-			// We'll handle this in the component level for now
+		onGatewayEvent('MESSAGE_CREATE', (data) => {
+			// Mark channel as unread if the message is from someone else
+			const msg = data as { channel_id: string; author_id?: string; author?: { id: string } };
+			const currentUserId = get(auth).user?.id;
+			const authorId = (msg.author as { id?: string })?.id || msg.author_id || '';
+
+			if (currentUserId && authorId && authorId !== currentUserId) {
+				update(state => ({
+					...state,
+					[msg.channel_id]: {
+						lastMessageId: state[msg.channel_id]?.lastMessageId,
+						mentionCount: state[msg.channel_id]?.mentionCount ?? 0,
+						hasUnread: true
+					}
+				}));
+			}
 		});
 	}
 
