@@ -114,6 +114,10 @@ const (
 	EventServerFolderDelete   = "SERVER_FOLDER_DELETE"
 	EventServerFolderMove     = "SERVER_FOLDER_MOVE"
 	EventServerFolderReorder  = "SERVER_FOLDER_REORDER"
+
+	// Soundboard events
+	EventSoundboardPlay = "SOUNDBOARD_PLAY"
+	EventSoundboardStop = "SOUNDBOARD_STOP"
 )
 
 // DispatchEvent creates a dispatch message

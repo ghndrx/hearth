@@ -8,6 +8,10 @@
 
 	const dispatch = createEventDispatcher<{ play: { id: string; name: string; url: string; volume: number }; close: void }>();
 
+	function getHotkeyLabel(index: number): string {
+		return String(index + 1);
+	}
+
 	interface Sound {
 		id: string;
 		name: string;
@@ -334,10 +338,13 @@
 						class:playing={playingSoundId === sound.id}
 						on:click={() => playSound(sound)}
 						on:focus={() => handleSoundFocus(index)}
-						title={sound.name}
+						title="{sound.name}{index < 9 ? ` (${getHotkeyLabel(index)})` : ''}"
 						aria-label={sound.name}
 						type="button"
 					>
+						{#if index < 9}
+							<span class="hotkey-badge">{getHotkeyLabel(index)}</span>
+						{/if}
 						<span class="sound-emoji" aria-hidden="true">{sound.emoji_name || '🔊'}</span>
 						<span class="sound-name">{sound.name}</span>
 						{#if playingSoundId === sound.id}
@@ -373,6 +380,9 @@
 
 	.header {
 		padding: 12px 16px 8px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 	}
 
 	.title {
@@ -380,6 +390,14 @@
 		font-size: 14px;
 		font-weight: 600;
 		color: var(--text-primary, #f2f3f5);
+	}
+
+	.hotkey-hint {
+		font-size: 11px;
+		color: var(--text-muted, #949ba4);
+		background: var(--bg-tertiary, #1e1f22);
+		padding: 2px 6px;
+		border-radius: 4px;
 	}
 
 	.search-container {
@@ -489,6 +507,23 @@
 
 	.sound-btn.playing {
 		background: var(--bg-modifier-selected, rgba(79, 84, 92, 0.24));
+	}
+
+	.sound-btn {
+		position: relative;
+	}
+
+	.hotkey-badge {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		font-size: 9px;
+		font-weight: 600;
+		color: var(--text-muted, #949ba4);
+		background: var(--bg-tertiary, #1e1f22);
+		padding: 1px 3px;
+		border-radius: 3px;
+		line-height: 1.2;
 	}
 
 	.sound-emoji {
