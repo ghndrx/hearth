@@ -427,3 +427,219 @@ func (r *SearchRepository) GetMessagesByAuthor(ctx context.Context, authorID, ch
 
 	return result.Messages, nil
 }
+
+// GlobalSearchMessages searches messages across all servers and DMs the user has access to
+func (r *SearchRepository) GlobalSearchMessages(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error) {
+	var conditions []string
+	var args []interface{}
+	argNum := 1
+
+	// Check if search_vector column exists for optimized FTS
+	var hasFTS bool
+	r.db.GetContext(ctx, &hasFTS, "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='messages' AND column_name='search_vector')")
+
+	// Base query - join with channels to get server context
+	query := `
+		SELECT m.*, c.server_id, c.name as channel_name,
+		       COUNT(*) OVER() as total_count
+		FROM messages m
+		INNER JOIN channels c ON m.channel_id = c.id
+		WHERE 1=1
+	`
+
+	// Build accessible channels subquery - user's servers and DMs
+	accessibleChannelsSubquery := `
+		-- Channels from servers user is a member of
+		(SELECT c.id FROM channels c
+		 INNER JOIN server_members sm ON c.server_id = sm.server_id
+		 WHERE sm.user_id = $1 AND c.type IN (0, 1))  -- text and announcement channels
+
+		UNION
+
+		-- User's DM channels
+		(SELECT c.id FROM channels c
+		 WHERE c.type = 3 AND c.recipients @> ARRAY[$1]::uuid[])  -- DM channels where user is recipient
+	`
+
+	// Apply accessible channels filter
+	if len(opts.ServerIDs) > 0 {
+		// If specific servers requested, filter to those
+		serverPlaceholders := make([]string, len(opts.ServerIDs))
+		for i, sid := range opts.ServerIDs {
+			serverPlaceholders[i] = fmt.Sprintf("$%d", argNum)
+			args = append(args, sid)
+			argNum++
+		}
+		conditions = append(conditions, fmt.Sprintf(`m.channel_id IN (
+			SELECT c.id FROM channels c
+			WHERE c.server_id IN (%s) AND c.type IN (0, 1)
+		)`, strings.Join(serverPlaceholders, ", ")))
+	} else if opts.IncludeDMs {
+		// Search all accessible servers AND DMs
+		conditions = append(conditions, fmt.Sprintf("m.channel_id IN (%s)", accessibleChannelsSubquery))
+		args = append(args, opts.RequesterID)
+		argNum++
+	} else {
+		// Search all accessible servers only (no DMs)
+		conditions = append(conditions, fmt.Sprintf(`m.channel_id IN (
+			SELECT c.id FROM channels c
+			INNER JOIN server_members sm ON c.server_id = sm.server_id
+			WHERE sm.user_id = $%d AND c.type IN (0, 1)
+		)`, argNum))
+		args = append(args, opts.RequesterID)
+		argNum++
+	}
+
+	// Text search
+	if opts.Query != "" {
+		if hasFTS {
+			conditions = append(conditions, fmt.Sprintf("(m.content ILIKE $%d OR m.search_vector @@ plainto_tsquery('english', $%d))", argNum, argNum))
+		} else {
+			conditions = append(conditions, fmt.Sprintf("m.content ILIKE $%d", argNum))
+		}
+		args = append(args, opts.Query)
+		argNum++
+	}
+
+	// Author filter
+	if opts.AuthorID != nil {
+		conditions = append(conditions, fmt.Sprintf("m.author_id = $%d", argNum))
+		args = append(args, *opts.AuthorID)
+		argNum++
+	}
+
+	// Time range filters
+	if opts.Before != nil {
+		conditions = append(conditions, fmt.Sprintf("m.created_at < $%d", argNum))
+		args = append(args, *opts.Before)
+		argNum++
+	}
+
+	if opts.After != nil {
+		conditions = append(conditions, fmt.Sprintf("m.created_at > $%d", argNum))
+		args = append(args, *opts.After)
+		argNum++
+	}
+
+	// Content filters
+	if opts.HasAttachments != nil && *opts.HasAttachments {
+		conditions = append(conditions, `EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id)`)
+	} else if opts.HasAttachments != nil && !*opts.HasAttachments {
+		conditions = append(conditions, `NOT EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id)`)
+	}
+
+	if opts.HasEmbeds != nil && *opts.HasEmbeds {
+		conditions = append(conditions, `EXISTS (SELECT 1 FROM embeds e WHERE e.message_id = m.id)`)
+	}
+
+	if opts.HasLinks != nil && *opts.HasLinks {
+		conditions = append(conditions, `(m.content LIKE '%http://%' OR m.content LIKE '%https://%')`)
+	}
+
+	if opts.HasReactions != nil && *opts.HasReactions {
+		conditions = append(conditions, `EXISTS (SELECT 1 FROM reactions r WHERE r.message_id = m.id)`)
+	} else if opts.HasReactions != nil && !*opts.HasReactions {
+		conditions = append(conditions, `NOT EXISTS (SELECT 1 FROM reactions r WHERE r.message_id = m.id)`)
+	}
+
+	// Pinned filter
+	if opts.Pinned != nil {
+		conditions = append(conditions, fmt.Sprintf("m.pinned = $%d", argNum))
+		args = append(args, *opts.Pinned)
+		argNum++
+	}
+
+	// Mentions filter
+	if len(opts.Mentions) > 0 {
+		placeholders := make([]string, len(opts.Mentions))
+		for i := range opts.Mentions {
+			placeholders[i] = fmt.Sprintf("$%d", argNum)
+			args = append(args, opts.Mentions[i])
+			argNum++
+		}
+		conditions = append(conditions, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM message_mentions mm
+			WHERE mm.message_id = m.id AND mm.user_id IN (%s)
+		)`, strings.Join(placeholders, ", ")))
+	}
+
+	// Add conditions
+	for _, condition := range conditions {
+		query += " AND " + condition
+	}
+
+	// Use FTS ranking when available
+	if hasFTS && opts.Query != "" {
+		query = strings.Replace(query, "SELECT m.*, c.server_id, c.name as channel_name,",
+			"SELECT m.*, c.server_id, c.name as channel_name, ts_rank(m.search_vector, plainto_tsquery('english', $1)) as rank", 1)
+		query = strings.Replace(query, "ORDER BY m.created_at DESC", "ORDER BY rank DESC, m.created_at DESC", 1)
+	} else {
+		query += " ORDER BY m.created_at DESC"
+	}
+
+	// Limit
+	query += fmt.Sprintf(" LIMIT $%d", argNum)
+	args = append(args, opts.Limit+1)
+	argNum++
+
+	if opts.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", argNum)
+		args = append(args, opts.Offset)
+	}
+
+	// Execute query
+	var results []struct {
+		models.Message
+		ServerID    *uuid.UUID `db:"server_id"`
+		ChannelName string     `db:"channel_name"`
+		TotalCount  int        `db:"total_count"`
+	}
+
+	err := r.db.SelectContext(ctx, &results, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("global search messages failed: %w", err)
+	}
+
+	// Process results
+	total := 0
+	hasMore := false
+	messages := make([]*services.GlobalSearchMessage, len(results))
+	for i, r := range results {
+		if i == 0 {
+			total = r.TotalCount
+			if len(results) > opts.Limit {
+				hasMore = true
+			}
+		}
+		if i >= opts.Limit {
+			break
+		}
+		msg := r.Message
+		messages[i] = &services.GlobalSearchMessage{
+			Message:     &msg,
+			ServerID:    r.ServerID,
+			ChannelName: r.ChannelName,
+			IsDM:        r.ServerID == nil,
+		}
+	}
+
+	// Load attachments for found messages
+	if len(messages) > 0 {
+		r.loadAttachments(ctx, extractMessages(messages))
+	}
+
+	return &services.GlobalSearchResult{
+		Messages: messages,
+		Total:    total,
+		HasMore:  hasMore,
+	}, nil
+}
+
+// extractMessages extracts the underlying Message pointers from GlobalSearchMessage slice
+func extractMessages(msgs []*services.GlobalSearchMessage) []*models.Message {
+	result := make([]*models.Message, len(msgs))
+	for i, m := range msgs {
+		result[i] = m.Message
+	}
+	return result
+}

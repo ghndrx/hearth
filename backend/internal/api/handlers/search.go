@@ -589,3 +589,213 @@ func (h *SearchHandler) GetSuggestions(c *fiber.Ctx) error {
 
 	return c.JSON(result)
 }
+
+// GlobalSearchMessagesRequest represents a global message search request
+type GlobalSearchMessagesRequest struct {
+	Query          string   `query:"q"`
+	AuthorID       string   `query:"author_id"`
+	Before         string   `query:"before"`
+	After          string   `query:"after"`
+	HasAttachments string   `query:"has_attachments"`
+	HasEmbeds      string   `query:"has_embeds"`
+	HasLinks       string   `query:"has_links"`
+	HasReactions   string   `query:"has_reactions"`
+	Pinned         string   `query:"pinned"`
+	ServerIDs      []string `query:"server_ids"`
+	IncludeDMs     string   `query:"include_dms"`
+	Limit          int      `query:"limit"`
+	Offset         int      `query:"offset"`
+}
+
+// GlobalSearchMessagesResponse represents the global message search response
+type GlobalSearchMessagesResponse struct {
+	Messages   []*GlobalMessageSearchResult `json:"messages"`
+	TotalCount int                         `json:"total_count"`
+	HasMore    bool                        `json:"has_more"`
+}
+
+// GlobalMessageSearchResult represents a message in global search results with server context
+type GlobalMessageSearchResult struct {
+	ID          string               `json:"id"`
+	ChannelID   string               `json:"channel_id"`
+	ServerID    *string              `json:"guild_id,omitempty"`
+	ServerName  string               `json:"server_name,omitempty"`
+	ChannelName string               `json:"channel_name"`
+	IsDM        bool                 `json:"is_dm"`
+	Author      *models.PublicUser   `json:"author"`
+	Content     string               `json:"content"`
+	Timestamp   time.Time            `json:"timestamp"`
+	EditedAt    *time.Time           `json:"edited_timestamp,omitempty"`
+	Attachments []models.Attachment  `json:"attachments,omitempty"`
+	Embeds      []models.Embed       `json:"embeds,omitempty"`
+	Reactions   []models.Reaction    `json:"reactions,omitempty"`
+	Pinned      bool                 `json:"pinned"`
+}
+
+// GlobalSearchMessages handles cross-server message search requests
+// @Summary Global cross-server message search
+// @Description Searches for messages across all servers and DMs the user has access to
+// @Tags Search
+// @Accept json
+// @Produce json
+// @Param q query string true "Search query string"
+// @Param author_id query string false "Filter by author ID"
+// @Param before query string false "Filter messages before timestamp (ISO8601)"
+// @Param after query string false "Filter messages after timestamp (ISO8601)"
+// @Param has_attachments query string false "Filter by attachments (true/false)"
+// @Param has_embeds query string false "Filter by embeds (true/false)"
+// @Param has_links query string false "Filter by links (true/false)"
+// @Param has_reactions query string false "Filter by reactions (true/false)"
+// @Param pinned query string false "Filter by pinned status (true/false)"
+// @Param server_ids query []string false "Filter to specific server IDs"
+// @Param include_dms query string false "Include DMs in search (true/false)"
+// @Param limit query int false "Number of results to return (default 25, max 100)"
+// @Param offset query int false "Offset for pagination"
+// @Success 200 {object} GlobalSearchMessagesResponse "Global search results with messages"
+// @Failure 400 {object} fiber.Map "Invalid query parameters"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Search failed"
+// @Router /search/global/messages [get]
+func (h *SearchHandler) GlobalSearchMessages(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Unauthorized",
+		})
+	}
+
+	var req GlobalSearchMessagesRequest
+	if err := c.QueryParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid query parameters",
+		})
+	}
+
+	// Require a query string
+	if req.Query == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Query parameter 'q' is required",
+		})
+	}
+
+	// Build search options
+	opts := services.GlobalSearchMessageOptions{
+		Query:       req.Query,
+		RequesterID: userID,
+		Limit:       req.Limit,
+		Offset:      req.Offset,
+	}
+
+	// Parse optional author ID
+	if req.AuthorID != "" {
+		authorID, err := uuid.Parse(req.AuthorID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid author_id",
+			})
+		}
+		opts.AuthorID = &authorID
+	}
+
+	// Parse time filters
+	if req.Before != "" {
+		before, err := time.Parse(time.RFC3339, req.Before)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid 'before' timestamp (expected ISO8601)",
+			})
+		}
+		opts.Before = &before
+	}
+
+	if req.After != "" {
+		after, err := time.Parse(time.RFC3339, req.After)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid 'after' timestamp (expected ISO8601)",
+			})
+		}
+		opts.After = &after
+	}
+
+	// Parse boolean filters
+	if req.HasAttachments != "" {
+		val := req.HasAttachments == "true"
+		opts.HasAttachments = &val
+	}
+
+	if req.HasEmbeds != "" {
+		val := req.HasEmbeds == "true"
+		opts.HasEmbeds = &val
+	}
+
+	if req.HasLinks != "" {
+		val := req.HasLinks == "true"
+		opts.HasLinks = &val
+	}
+
+	if req.HasReactions != "" {
+		val := req.HasReactions == "true"
+		opts.HasReactions = &val
+	}
+
+	if req.Pinned != "" {
+		val := req.Pinned == "true"
+		opts.Pinned = &val
+	}
+
+	// Parse server IDs filter
+	for _, sid := range req.ServerIDs {
+		serverID, err := uuid.Parse(sid)
+		if err != nil {
+			continue
+		}
+		opts.ServerIDs = append(opts.ServerIDs, serverID)
+	}
+
+	// Parse include DMs flag
+	if req.IncludeDMs != "" {
+		opts.IncludeDMs = req.IncludeDMs == "true"
+	}
+
+	// Perform global search
+	result, err := h.searchService.GlobalSearchMessages(c.Context(), opts)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Search failed",
+		})
+	}
+
+	// Convert to response format
+	messages := make([]*GlobalMessageSearchResult, 0, len(result.Messages))
+	for _, msg := range result.Messages {
+		var serverIDStr *string
+		if msg.ServerID != nil {
+			s := msg.ServerID.String()
+			serverIDStr = &s
+		}
+		searchResult := &GlobalMessageSearchResult{
+			ID:          msg.ID.String(),
+			ChannelID:   msg.ChannelID.String(),
+			ServerID:    serverIDStr,
+			ServerName:  msg.ServerName,
+			ChannelName: msg.ChannelName,
+			IsDM:        msg.IsDM,
+			Author:      msg.Author,
+			Content:     msg.Content,
+			Timestamp:   msg.CreatedAt,
+			EditedAt:    msg.EditedAt,
+			Attachments: msg.Attachments,
+			Embeds:      msg.Embeds,
+			Reactions:   msg.Reactions,
+			Pinned:      msg.Pinned,
+		}
+		messages = append(messages, searchResult)
+	}
+
+	return c.JSON(GlobalSearchMessagesResponse{
+		Messages:   messages,
+		TotalCount: result.Total,
+		HasMore:    result.HasMore,
+	})
+}
