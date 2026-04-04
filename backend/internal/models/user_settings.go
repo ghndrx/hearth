@@ -42,6 +42,11 @@ type UserSettings struct {
 	// Locale settings
 	Locale string `json:"locale" db:"locale"` // e.g., "en-US", "es", "fr"
 
+	// Thread notification settings
+	ThreadAutoFollow             bool   `json:"thread_auto_follow" db:"thread_auto_follow"`
+	ThreadFollowOnReply         bool   `json:"thread_follow_on_reply" db:"thread_follow_on_reply"`
+	ThreadDefaultNotifLevel     string `json:"thread_default_notification_level" db:"thread_default_notification_level"` // "all", "mentions", "none"
+
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
@@ -82,6 +87,11 @@ func DefaultUserSettings(userID uuid.UUID) *UserSettings {
 		// Locale default
 		Locale: "en-US",
 
+		// Thread notification defaults (FEAT-001)
+		ThreadAutoFollow:         true,
+		ThreadFollowOnReply:      true,
+		ThreadDefaultNotifLevel:  "all",
+
 		UpdatedAt: time.Now(),
 	}
 }
@@ -119,4 +129,9 @@ type UpdateUserSettingsRequest struct {
 
 	// Locale settings
 	Locale *string `json:"locale,omitempty" validate:"omitempty,min=2,max=10"`
+
+	// Thread notification settings (FEAT-001)
+	ThreadAutoFollow         *bool   `json:"thread_auto_follow,omitempty"`
+	ThreadFollowOnReply     *bool   `json:"thread_follow_on_reply,omitempty"`
+	ThreadDefaultNotifLevel *string `json:"thread_default_notification_level,omitempty" validate:"omitempty,oneof=all mentions none"`
 }
