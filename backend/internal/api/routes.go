@@ -581,6 +581,34 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		api.Post("/automod/test", h.AutoMod.TestContent)
 	}
 
+	// Content Safety (NSFW filters, age verification, user preferences)
+	if h.ContentSafety != nil {
+		// Server content filters
+		servers.Get("/:id/content-filters", h.ContentSafety.ListContentFilters)
+		servers.Post("/:id/content-filters", h.ContentSafety.CreateContentFilter)
+
+		// Global content filter operations
+		api.Get("/content-filters/:id", h.ContentSafety.GetContentFilter)
+		api.Patch("/content-filters/:id", h.ContentSafety.UpdateContentFilter)
+		api.Delete("/content-filters/:id", h.ContentSafety.DeleteContentFilter)
+
+		// Age verification settings
+		servers.Get("/:id/age-verification", h.ContentSafety.GetAgeVerification)
+		servers.Put("/:id/age-verification", h.ContentSafety.CreateAgeVerification)
+		servers.Patch("/:id/age-verification", h.ContentSafety.UpdateAgeVerification)
+		servers.Delete("/:id/age-verification", h.ContentSafety.DeleteAgeVerification)
+
+		// Server content safety settings (comprehensive)
+		servers.Get("/:id/content-safety", h.ContentSafety.GetServerSafetySettings)
+
+		// Content safety testing
+		servers.Post("/:id/content-safety/test", h.ContentSafety.TestContentScan)
+
+		// User content preferences
+		users.Get("/@me/content-preferences", h.ContentSafety.GetUserContentPreferences)
+		users.Put("/@me/content-preferences", h.ContentSafety.UpdateUserContentPreferences)
+	}
+
 	// Webhooks (authenticated CRUD)
 	if h.Webhooks != nil {
 		webhooks := api.Group("/webhooks")
