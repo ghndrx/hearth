@@ -335,6 +335,12 @@ func HandleServiceError(c *fiber.Ctx, err error) error {
 	case errors.Is(err, services.ErrAuditLogNotFound):
 		return httpErr(fiber.StatusNotFound, "not_found", "audit log entry not found")
 
+	case errors.Is(err, services.ErrFolderNotFound):
+		return httpErr(fiber.StatusNotFound, "not_found", "folder not found")
+
+	case errors.Is(err, services.ErrFolderNameRequired):
+		return httpErr(fiber.StatusBadRequest, "bad_request", "folder name is required")
+
 	case errors.Is(err, services.ErrRegistrationClosed):
 		return httpErr(fiber.StatusForbidden, "forbidden", "registration is currently closed")
 
