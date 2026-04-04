@@ -18,15 +18,22 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // happy-dom does not implement navigator.clipboard (or only provides a getter)
-// Polyfill clipboard for tests that need to mock it
-const mockClipboard = {
-  writeText: vi.fn().mockResolvedValue(undefined),
-  readText: vi.fn().mockResolvedValue(''),
-};
-Object.defineProperty(navigator, 'clipboard', {
-  writable: true,
-  value: mockClipboard,
-});
+try {
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+    // Remove any existing non-configurable property first
+    delete (navigator as unknown as Record<string, unknown>)['clipboard'];
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+      readText: vi.fn().mockResolvedValue(''),
+    };
+    Object.defineProperty(navigator, 'clipboard', {
+      writable: true,
+      value: mockClipboard,
+    });
+  }
+} catch {
+  // Ignore if clipboard access fails (some test environments restrict this)
+}
 
 // Mock ApiError class exported for use in tests that need to mock $lib/api
 // Usage: import { MockApiError } from '../test-setup'; 

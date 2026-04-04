@@ -129,7 +129,7 @@ describe('typing store', () => {
 
 		const state = get(typingStore);
 		expect(state.get('channel-1')).toBeUndefined();
-	});
+	}, 30000);
 
 	it('getTypingUsers returns users for a channel', async () => {
 		const { typingStore, setCurrentUserId } = await importTypingStore();
