@@ -316,7 +316,6 @@ async function resetBackendSettings(): Promise<void> {
 		console.warn('Failed to reset settings on backend:', error);
 	}
 }
-
 // Sync settings to backend API (fire-and-forget for thread-specific settings only)
 // Non-thread notification settings (desktopEnabled, soundsEnabled, etc.) remain local-only
 async function syncSettingsToBackend(updates: Partial<AppSettings>): Promise<void> {
@@ -443,7 +442,7 @@ function createSettingsStore() {
 				if (browser) {
 					document.documentElement.style.setProperty('--message-font-size', `${defaultSettings.fontSize}px`);
 				}
-				// Reset backend settings to defaults
+// Reset backend settings to defaults
 				resetBackendSettings();
 				return { ...s, app: defaultSettings };
 			});
