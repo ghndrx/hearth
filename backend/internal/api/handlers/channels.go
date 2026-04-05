@@ -291,7 +291,6 @@ func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
 
 	messages, err := h.messageService.GetMessages(c.Context(), channelID, userID, before, after, limit)
 	if err != nil {
-		log.Printf("DEBUG GetMessages error for channel %s user %s: %v", channelID, userID, err)
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -337,7 +336,6 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 
 	message, err := h.messageService.SendMessage(c.Context(), userID, channelID, req.Content, nil, req.ReplyTo, req.StickerID)
 	if err != nil {
-		log.Printf("DEBUG SendMessage error for channel %s user %s: %v", channelID, userID, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
