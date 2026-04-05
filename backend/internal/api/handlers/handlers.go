@@ -59,6 +59,7 @@ type Handlers struct {
 	ServerNotificationPrefs  *ServerNotificationPreferenceHandler
 	ContentSafety            *ContentSafetyHandler
 	ServerFolders            *ServerFolderHandler
+	SmartModeration          *SmartModerationHandler
 }
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
 func (h *Handlers) SetE2EEHandler(e2eeService *services.E2EEServiceImpl) {
@@ -376,4 +377,12 @@ func (h *Handlers) SetServerFolderHandler(
 	serverFolderService *services.ServerFolderService,
 ) {
 	h.ServerFolders = NewServerFolderHandler(serverFolderService)
+}
+
+// SetSmartModerationHandler sets the smart moderation handler
+func (h *Handlers) SetSmartModerationHandler(
+	smartModService *services.SmartModerationService,
+	serverService *services.ServerService,
+) {
+	h.SmartModeration = NewSmartModerationHandler(smartModService, serverService)
 }
