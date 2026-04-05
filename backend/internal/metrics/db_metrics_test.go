@@ -180,11 +180,29 @@ func TestDBStatsCollector_NewAndDescribe(t *testing.T) {
 	collector := NewDBStatsCollector(nil, "test-collector", m)
 	require.NotNil(t, collector)
 
+	// Describe is a no-op because metrics are registered via promauto,
+	// but we verify it doesn't panic and drains the channel
 	ch := make(chan *prometheus.Desc, 100)
 	require.NotPanics(t, func() {
 		collector.Describe(ch)
 	})
+	// Channel should be empty (no descriptors sent by this collector)
 	close(ch)
+
+	// Verify the collector can be registered with a real prometheus registry.
+	// Use a mock db so Collect() doesn't panic on nil pointer.
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	collector2 := NewDBStatsCollector(db, "test-registry", m)
+	registry := prometheus.NewRegistry()
+	require.NotPanics(t, func() {
+		registry.MustRegister(collector2)
+		// Describe is called implicitly via MustRegister
+		_, err := registry.Gather()
+		require.NoError(t, err)
+	})
 }
 
 func TestQueryTimer_Done(t *testing.T) {
