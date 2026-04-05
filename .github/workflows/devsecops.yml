@@ -64,12 +64,11 @@ jobs:
         if: matrix.ecosystem == 'go'
         working-directory: ./backend
         run: |
-          # Pin to v1.0.6 to avoid CGO type resolution bug in later versions.
-          # Later govulncheck versions (v1.1.0+) have a regression where
-          # "govulncheck -mode=binary" fails with
-          # "internal error: package golang.org/x/sys/unix without types"
-          # due to CGO type information incompatibility in Go 1.24+ toolchain.
-          go install golang.org/x/vuln/cmd/govulncheck@v1.0.6
+          # Use @latest for best compatibility with current Go toolchain.
+          # Note: govulncheck exits 1 when vulnerabilities ARE found (not a bug).
+          # v1.0.6 does not exist — v1.0.0 was the first stable; pinning to @latest
+          # ensures support for the newest Go versions (1.25+).
+          go install golang.org/x/vuln/cmd/govulncheck@latest
           go build -o hearth ./cmd/hearth
           govulncheck -mode=binary hearth
 
