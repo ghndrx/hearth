@@ -485,6 +485,11 @@ func main() {
 	h.SetAutoModHandler(automodService, serverService)
 	log.Printf("✅ AutoMod service initialized")
 
+	// Initialize Smart Moderation service and handler
+	smartModService := services.NewSmartModerationService(repos.SmartModeration)
+	h.SetSmartModerationHandler(smartModService, serverService)
+	log.Printf("✅ Smart Moderation service initialized")
+
 	// Initialize Template service and handler
 	templateService := services.NewTemplateService(repos.Templates, repos.Channels, repos.Roles, repos.Servers)
 	h.SetTemplateHandler(templateService, serverService)
