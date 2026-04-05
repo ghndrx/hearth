@@ -117,3 +117,11 @@ Discord's video calling capabilities including direct video calls, group video c
 2. **Phase 2**: Group video calls up to 5 participants (simple SFU)
 3. **Phase 3**: Channel video calling and screen share integration
 4. **Phase 4**: Advanced features (PiP, quality controls, recordings)
+
+## Security TODO (from security-webrtc-video-calls.md)
+- [ ] **WSS mandatory** for all video signaling (VIDEO_RING, VIDEO_OFFER, etc.)
+- [ ] **TURN credential rotation** — hourly HMAC credentials, never static
+- [ ] **ICE candidate filtering** — prevent IP leaks by filtering host candidates
+- [ ] **Permission checks** — verify channel membership before establishing calls
+- [ ] **Audit logging** — log call initiation, join/leave, screen share events
+- [ ] **E2EE consideration** — Discord-style app-layer encryption for v2 (privacy codes)
