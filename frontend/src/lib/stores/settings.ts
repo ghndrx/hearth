@@ -306,6 +306,17 @@ export async function fetchUserSettings(settingsStore: ReturnType<typeof createS
 	}
 }
 
+// Reset settings on backend to defaults (fire-and-forget)
+async function resetBackendSettings(): Promise<void> {
+	if (!browser) return;
+	try {
+		await api.delete('/users/@me/settings');
+	} catch (error) {
+		// Non-critical: log but don't throw
+		console.warn('Failed to reset settings on backend:', error);
+	}
+}
+
 // Sync settings to backend API (fire-and-forget for thread-specific settings only)
 // Non-thread notification settings (desktopEnabled, soundsEnabled, etc.) remain local-only
 async function syncSettingsToBackend(updates: Partial<AppSettings>): Promise<void> {
@@ -432,7 +443,8 @@ function createSettingsStore() {
 				if (browser) {
 					document.documentElement.style.setProperty('--message-font-size', `${defaultSettings.fontSize}px`);
 				}
-				// TODO: Also reset backend settings
+				// Reset backend settings to defaults
+				resetBackendSettings();
 				return { ...s, app: defaultSettings };
 			});
 		}
