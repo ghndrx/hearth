@@ -64,11 +64,12 @@ jobs:
         if: matrix.ecosystem == 'go'
         working-directory: ./backend
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          # Build the binary first (source-mode govulncheck ./... fails with
-          # "internal error: package golang.org/x/sys/unix without types" due to
-          # cgo compatibility in Go 1.24+ toolchain). Binary mode is used as
-          # a workaround that still provides accurate vulnerability detection.
+          # Pin to v1.0.6 to avoid CGO type resolution bug in later versions.
+          # Later govulncheck versions (v1.1.0+) have a regression where
+          # "govulncheck -mode=binary" fails with
+          # "internal error: package golang.org/x/sys/unix without types"
+          # due to CGO type information incompatibility in Go 1.24+ toolchain.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.0.6
           go build -o hearth ./cmd/hearth
           govulncheck -mode=binary hearth
 
