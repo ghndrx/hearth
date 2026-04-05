@@ -1,9 +1,19 @@
+## 2026-04-05 Competitive Pipeline - CRITICAL PARITY COMPLETION
+
+**Analysis**: Deep codebase audit reveals 3 critical Discord parity gaps that block mainstream adoption. While 95% parity achieved on web, mobile apps and video calling SFU are essential for competitive positioning.
+**Status**: CRITICAL PARITY - Complete these gaps before full differentiation focus
+
+### TOP 3 CRITICAL PARITY GAPS (3 NEW PRDs Created)
+- [ ] **[P0]** Feature: Native Mobile Apps Shipping — iOS/Android apps to app stores, 70% of Discord users are mobile-first, critical user acquisition blocker (8-12 weeks)
+- [ ] **[P0]** Feature: Video Calling SFU Architecture — Multi-user video calls with SFU infrastructure, group video essential for team communication parity (10-14 weeks)
+- [ ] **[P1]** Feature: Rich Presence Activities Platform — Gaming activity detection, party system, social engagement feature that Discord users expect (12-16 weeks)
+
 ## 2026-04-05 Competitive Pipeline - DIFFERENTIATION FOCUS
 
-**Analysis**: With 97%+ Discord parity achieved, focus shifts to competitive differentiation through features Discord lacks entirely. Identified 3 major opportunities where Hearth can exceed Discord's capabilities and create unique value propositions.
-**Status**: MARKET LEADERSHIP - Build features Discord cannot match
+**Analysis**: With core parity gaps addressed above, focus shifts to competitive differentiation through features Discord lacks entirely. Identified 3 major opportunities where Hearth can exceed Discord's capabilities.
+**Status**: MARKET LEADERSHIP - Build features Discord cannot match (AFTER parity completion)
 
-### TOP 3 DIFFERENTIATION OPPORTUNITIES (3 PRDs Created)
+### TOP 3 DIFFERENTIATION OPPORTUNITIES (3 PRDs Created) 
 - [ ] **[P0]** Feature: AI-Powered Smart Moderation Suite — Intelligent toxicity detection and community health management vs Discord's basic keyword filtering (12-16 weeks)
 - [ ] **[P1]** Feature: Cross-Platform Gaming Integration Hub — Unified gaming social platform with cross-platform friends, LFG, achievements vs Discord's basic game status (16-20 weeks)  
 - [ ] **[P2]** Feature: Collaborative Workspace Suite — Real-time whiteboard, documents, code editor that Discord completely lacks - major differentiation (20-26 weeks)
