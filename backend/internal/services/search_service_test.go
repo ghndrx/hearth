@@ -774,3 +774,253 @@ func TestSearchMessages_DMChannelNotParticipant(t *testing.T) {
 	assert.Equal(t, ErrNoPermission, err)
 	assert.Nil(t, result)
 }
+
+func TestGlobalSearchMessages_Basic(t *testing.T) {
+	service, searchRepo, _, _, _, userRepo, _ := setupSearchService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	authorID := uuid.New()
+	channelID := uuid.New()
+	serverID := uuid.New()
+
+	globalMessages := []*GlobalSearchMessage{
+		{
+			Message: &models.Message{
+				ID:        uuid.New(),
+				ChannelID: channelID,
+				AuthorID:  authorID,
+				Content:   "Hello from global search",
+			},
+			ServerID:    &serverID,
+			ChannelName: "general",
+		},
+	}
+
+	expectedResult := &GlobalSearchResult{
+		Messages: globalMessages,
+		Total:    1,
+		HasMore:  false,
+	}
+
+	searchRepo.On("GlobalSearchMessages", ctx, mock.AnythingOfType("GlobalSearchMessageOptions")).Return(expectedResult, nil)
+
+	user := &models.User{
+		ID:       authorID,
+		Username: "testuser",
+	}
+	userRepo.On("GetByID", ctx, authorID).Return(user, nil)
+
+	channelObj := &models.Channel{
+		ID:       channelID,
+		Name:     "general",
+		ServerID: &serverID,
+	}
+
+	channelRepo := new(MockChannelRepositoryForMessages)
+	channelRepo.On("GetByID", ctx, channelID).Return(channelObj, nil)
+	service.channelRepo = channelRepo
+
+	serverObj := &models.Server{
+		ID:   serverID,
+		Name: "Test Server",
+	}
+	serverRepo := new(MockServerRepository)
+	serverRepo.On("GetByID", ctx, serverID).Return(serverObj, nil)
+	service.serverRepo = serverRepo
+
+	opts := GlobalSearchMessageOptions{
+		Query:       "hello",
+		RequesterID: requesterID,
+		Limit:       25,
+	}
+
+	result, err := service.GlobalSearchMessages(ctx, opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Messages, 1)
+	assert.Equal(t, "Hello from global search", result.Messages[0].Content)
+}
+
+func TestGlobalSearchMessages_DefaultLimit(t *testing.T) {
+	service, searchRepo, _, _, _, _, _ := setupSearchService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+
+	expectedResult := &GlobalSearchResult{
+		Messages: []*GlobalSearchMessage{},
+		Total:    0,
+		HasMore:  false,
+	}
+
+	searchRepo.On("GlobalSearchMessages", ctx, mock.AnythingOfType("GlobalSearchMessageOptions")).Return(expectedResult, nil)
+
+	opts := GlobalSearchMessageOptions{
+		Query:       "test",
+		RequesterID: requesterID,
+		Limit:       0, // Should default to 25
+	}
+
+	result, err := service.GlobalSearchMessages(ctx, opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestGlobalSearchMessages_ExceedMaxLimit(t *testing.T) {
+	service, searchRepo, _, _, _, _, _ := setupSearchService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+
+	expectedResult := &GlobalSearchResult{
+		Messages: []*GlobalSearchMessage{},
+		Total:    0,
+		HasMore:  false,
+	}
+
+	searchRepo.On("GlobalSearchMessages", ctx, mock.AnythingOfType("GlobalSearchMessageOptions")).Return(expectedResult, nil)
+
+	opts := GlobalSearchMessageOptions{
+		Query:       "test",
+		RequesterID: requesterID,
+		Limit:       200, // Should default to 25
+	}
+
+	result, err := service.GlobalSearchMessages(ctx, opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestGlobalSearchMessages_RepoError(t *testing.T) {
+	service, searchRepo, _, _, _, _, _ := setupSearchService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+
+	searchRepo.On("GlobalSearchMessages", ctx, mock.AnythingOfType("GlobalSearchMessageOptions")).Return((*GlobalSearchResult)(nil), assert.AnError)
+
+	opts := GlobalSearchMessageOptions{
+		Query:       "test",
+		RequesterID: requesterID,
+		Limit:       25,
+	}
+
+	result, err := service.GlobalSearchMessages(ctx, opts)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestGlobalSearchMessages_WithFilters(t *testing.T) {
+	service, searchRepo, _, _, _, _, _ := setupSearchService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	authorID := uuid.New()
+	before := time.Now()
+	after := before.Add(-24 * time.Hour)
+	hasAttachments := true
+	pinned := true
+	serverID1 := uuid.New()
+
+	expectedResult := &GlobalSearchResult{
+		Messages: []*GlobalSearchMessage{},
+		Total:    0,
+		HasMore:  false,
+	}
+
+	searchRepo.On("GlobalSearchMessages", ctx, mock.AnythingOfType("GlobalSearchMessageOptions")).Return(expectedResult, nil)
+
+	opts := GlobalSearchMessageOptions{
+		Query:          "filtered",
+		AuthorID:       &authorID,
+		Before:         &before,
+		After:          &after,
+		HasAttachments: &hasAttachments,
+		Pinned:         &pinned,
+		ServerIDs:      []uuid.UUID{serverID1},
+		IncludeDMs:     true,
+		RequesterID:    requesterID,
+		Limit:          25,
+	}
+
+	result, err := service.GlobalSearchMessages(ctx, opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestGlobalSearchMessages_EnrichesAuthorsAndServers(t *testing.T) {
+	service, searchRepo, _, _, _, userRepo, _ := setupSearchService()
+	ctx := context.Background()
+	requesterID := uuid.New()
+	authorID1 := uuid.New()
+	authorID2 := uuid.New()
+	channelID1 := uuid.New()
+	channelID2 := uuid.New()
+	serverID := uuid.New()
+
+	globalMessages := []*GlobalSearchMessage{
+		{
+			Message: &models.Message{
+				ID:        uuid.New(),
+				ChannelID: channelID1,
+				AuthorID:  authorID1,
+				Content:   "Message 1",
+			},
+			ServerID: &serverID,
+		},
+		{
+			Message: &models.Message{
+				ID:        uuid.New(),
+				ChannelID: channelID2,
+				AuthorID:  authorID2,
+				Content:   "Message 2",
+			},
+			ServerID: &serverID,
+		},
+	}
+
+	expectedResult := &GlobalSearchResult{
+		Messages: globalMessages,
+		Total:    2,
+		HasMore:  false,
+	}
+
+	searchRepo.On("GlobalSearchMessages", ctx, mock.AnythingOfType("GlobalSearchMessageOptions")).Return(expectedResult, nil)
+
+	user1 := &models.User{ID: authorID1, Username: "user1"}
+	user2 := &models.User{ID: authorID2, Username: "user2"}
+	userRepo.On("GetByID", ctx, authorID1).Return(user1, nil)
+	userRepo.On("GetByID", ctx, authorID2).Return(user2, nil)
+
+	channelObj1 := &models.Channel{ID: channelID1, Name: "general", ServerID: &serverID}
+	channelObj2 := &models.Channel{ID: channelID2, Name: "random", ServerID: &serverID}
+	channelRepo := new(MockChannelRepositoryForMessages)
+	channelRepo.On("GetByID", ctx, channelID1).Return(channelObj1, nil)
+	channelRepo.On("GetByID", ctx, channelID2).Return(channelObj2, nil)
+	service.channelRepo = channelRepo
+
+	serverObj := &models.Server{ID: serverID, Name: "My Server"}
+	serverRepo := new(MockServerRepository)
+	serverRepo.On("GetByID", ctx, serverID).Return(serverObj, nil)
+	service.serverRepo = serverRepo
+
+	opts := GlobalSearchMessageOptions{
+		Query:       "message",
+		RequesterID: requesterID,
+		Limit:       25,
+	}
+
+	result, err := service.GlobalSearchMessages(ctx, opts)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Messages, 2)
+	assert.NotNil(t, result.Messages[0].Author)
+	assert.Equal(t, "user1", result.Messages[0].Author.Username)
+	assert.NotNil(t, result.Messages[1].Author)
+	assert.Equal(t, "user2", result.Messages[1].Author.Username)
+	assert.Equal(t, "general", result.Messages[0].ChannelName)
+	assert.Equal(t, "random", result.Messages[1].ChannelName)
+	assert.Equal(t, "My Server", result.Messages[0].ServerName)
+}
