@@ -138,7 +138,9 @@ describe('DeviceManagement', () => {
   it('revokes all sessions when confirmed', async () => {
     vi.mocked(api.get).mockResolvedValue({ sessions: mockSessions });
     vi.mocked(api.delete).mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    // Mock window.confirm for happy-dom compatibility
+    const originalConfirm = window.confirm;
+    window.confirm = vi.fn().mockReturnValue(true);
 
     render(DeviceManagement);
 
@@ -152,11 +154,16 @@ describe('DeviceManagement', () => {
     await waitFor(() => {
       expect(api.delete).toHaveBeenCalledWith('/auth/sessions');
     });
+
+    // Restore original confirm
+    window.confirm = originalConfirm;
   });
 
   it('does not revoke all sessions when cancelled', async () => {
     vi.mocked(api.get).mockResolvedValue({ sessions: mockSessions });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    // Mock window.confirm for happy-dom compatibility
+    const originalConfirm = window.confirm;
+    window.confirm = vi.fn().mockReturnValue(false);
 
     render(DeviceManagement);
 
@@ -168,6 +175,9 @@ describe('DeviceManagement', () => {
     await fireEvent.click(revokeAllButton);
 
     expect(api.delete).not.toHaveBeenCalled();
+
+    // Restore original confirm
+    window.confirm = originalConfirm;
   });
 
   it('shows error message on API failure', async () => {
