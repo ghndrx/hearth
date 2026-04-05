@@ -596,17 +596,16 @@ func (b *DistributedEventBridge) onModalSubmitted(event events.Event) {
 		return
 	}
 	wsData := map[string]interface{}{
-		"id":             data.ID.String(),
-		"type":           data.Type,
-		"application_id": data.AppID.String(),
-		"user_id":        data.UserID.String(),
-		"channel_id":     data.ChannelID.String(),
-		"token":          data.Token,
+		"id":        data.ID.String(),
+		"type":      int(data.Type),
+		"custom_id": data.Token,
+		"user_id":   data.UserID.String(),
+		"channel_id": data.ChannelID.String(),
 	}
 	if data.ServerID != nil {
 		wsData["guild_id"] = data.ServerID.String()
 	}
-	b.sendToChannelDistributed(data.ChannelID, EventInteractionUpdate, wsData)
+	b.sendToUserDistributed(data.UserID, EventModalSubmit, wsData)
 }
 
 // DM event handlers
