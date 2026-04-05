@@ -34,8 +34,11 @@ func TestLoad(t *testing.T) {
 		os.Unsetenv("SECRET_KEY")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
 
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 	if cfg == nil {
 		t.Fatal("Load returned nil")
 	}
@@ -93,7 +96,10 @@ func TestLoadWithEnvVars(t *testing.T) {
 		os.Unsetenv("INVITE_ONLY")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	if cfg.Host != "127.0.0.1" {
 		t.Errorf("expected Host '127.0.0.1', got '%s'", cfg.Host)
@@ -286,7 +292,10 @@ func TestRateLimitConfig_Defaults(t *testing.T) {
 		os.Unsetenv("SECRET_KEY")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	// Rate limiting should be enabled by default
 	if !cfg.RateLimitEnabled {
@@ -308,7 +317,10 @@ func TestRateLimitConfig_Disabled(t *testing.T) {
 		os.Unsetenv("RATE_LIMIT_ENABLED")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	if cfg.RateLimitEnabled {
 		t.Error("expected RateLimitEnabled false when RATE_LIMIT_ENABLED=false")
@@ -327,7 +339,10 @@ func TestRateLimitConfig_CustomValues(t *testing.T) {
 		os.Unsetenv("RATE_LIMIT_WINDOW")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	if !cfg.RateLimitEnabled {
 		t.Error("expected RateLimitEnabled true")
@@ -350,7 +365,10 @@ func TestBcryptPoolConfig_Defaults(t *testing.T) {
 		os.Unsetenv("SECRET_KEY")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	// Default: 0 means NumCPU (handled by pool initialization)
 	if cfg.BcryptPoolWorkers != 0 {
@@ -376,7 +394,10 @@ func TestBcryptPoolConfig_CustomValues(t *testing.T) {
 		os.Unsetenv("BCRYPT_POOL_TIMEOUT")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	if cfg.BcryptPoolWorkers != 4 {
 		t.Errorf("expected BcryptPoolWorkers 4, got %d", cfg.BcryptPoolWorkers)
@@ -398,7 +419,10 @@ func TestDrainConfig_Defaults(t *testing.T) {
 		os.Unsetenv("SECRET_KEY")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	if cfg.DrainTimeout != 30*time.Second {
 		t.Errorf("expected default DrainTimeout 30s, got %v", cfg.DrainTimeout)
@@ -418,7 +442,10 @@ func TestDrainConfig_CustomValues(t *testing.T) {
 		os.Unsetenv("DRAIN_GRACE_PERIOD")
 	}()
 
-	cfg := Load()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	if cfg.DrainTimeout != 60*time.Second {
 		t.Errorf("expected DrainTimeout 60s, got %v", cfg.DrainTimeout)
