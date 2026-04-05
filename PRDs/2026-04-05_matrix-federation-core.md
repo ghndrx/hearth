@@ -6,28 +6,33 @@
 
 ## Overview
 
-Enable Hearth servers to federate with each other over the Matrix protocol, allowing users to:
-- Send DMs to users on other Hearth servers
-- Join rooms (channels) on remote Hearth servers
-- Participate in cross-server communities without a single centralized server
+**Matrix Federation is ONLY for cross-server communication.**
+In-server live chat uses Hearth's existing WebSocket infrastructure — that does NOT change.
 
-This makes Hearth a true decentralized alternative to Discord, not just self-hosted.
+This PRD enables Hearth servers to federate with each other over the Matrix protocol for:
+- Sending DMs to users on **other** Hearth servers
+- Joining rooms (channels) on **remote** Hearth servers
+- Participating in cross-server communities
 
-## Why Matrix Protocol
+In-server messaging (real-time chat within a single Hearth instance) stays on Hearth's existing WebSocket gateway — no Matrix involvement.
 
-Matrix (via matrix.org) is the open standard for decentralized chat. Key benefits:
+## Why Matrix Protocol (for Federation Only)
+
+Matrix is the open standard for decentralized cross-server communication. Key benefits:
 - **No vendor lock-in**: Any Matrix-compatible server can talk to any other
 - **Existing ecosystem**: Clients (Element), servers (Synapse, Dendrite, Conduit), bridges
 - **Proven at scale**: Used by governments, enterprises, communities
 - **Spec is stable**: Client-Server API r0.6.1, Server-Server API r6.0
 
-## User Value Proposition
+## User Value Proposition (Cross-Server)
 
 - **True decentralization**: No single Hearth server required — anyone can run their own
 - **Censorship resistance**: No single point of control or failure
 - **Interoperability**: Can DM users on any Matrix server (Element, Synapse, etc.)
 - **Data sovereignty**: Users own their messages on their server
 - **Bridge potential**: Eventually bridge to IRC, Slack, Discord, Telegram
+
+**Note**: In-server chat UX is unaffected — it remains real-time via Hearth's own WebSocket infrastructure.
 
 ## Technical Architecture
 
