@@ -1,9 +1,9 @@
 name: 🔬 Competitive Analysis Pipeline
 
 on:
-  schedule:
+  # schedule DISABLED - no AI code generation from CI
     # Every 6 hours - refresh competitive intel
-    - cron: '30 */6 * * *'
+
   workflow_dispatch:
     inputs:
       force_refresh:
