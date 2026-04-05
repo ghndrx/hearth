@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import type { Channel } from '$lib/stores/channels';
 import { goto } from '$app/navigation';
+import * as api from '$lib/api';
 
 // Create mock stores before the vi.mock calls
 const mockChannelsStore = writable<Channel[]>([]);
@@ -67,6 +68,17 @@ vi.mock('$lib/e2ee', () => ({
 	deserializeEncryptedPayload: vi.fn()
 }));
 
+// Mock API to prevent real HTTP calls (e.g., voice-states on server selection)
+vi.mock('$lib/api', () => ({
+	api: {
+		get: vi.fn(),
+		post: vi.fn(),
+		put: vi.fn(),
+		patch: vi.fn(),
+		delete: vi.fn()
+	}
+}));
+
 function createMockChannel(overrides: Partial<Channel> = {}): Channel {
 	const base: Channel = {
 		id: `channel-${Math.random().toString(36).slice(2)}`,
@@ -122,6 +134,8 @@ describe('ChannelList', () => {
 		mockCurrentChannelStore.set(null);
 		mockCurrentServerStore.set(null);
 		mockUserStore.set({ id: 'user-1', username: 'testuser' });
+		// Default: return empty voice states for server selection
+		vi.mocked(api.api.get).mockResolvedValue([]);
 	});
 
 	afterEach(() => {
@@ -278,6 +292,16 @@ describe('ChannelList', () => {
 			mockCurrentServerStore.set(server);
 			const textChannel = createMockChannel({ name: 'general', type: 0, server_id: 'server-1' });
 			mockChannelsStore.set([textChannel]);
+			mockCategorizedChannelsStore.set({
+				categories: [{
+					id: 'cat-text',
+					name: 'Text Channels',
+					type: 4,
+					server_id: 'server-1',
+					channels: [textChannel]
+				}],
+				uncategorized: []
+			});
 			const ChannelList = (await import('./ChannelList.svelte')).default;
 
 			render(ChannelList);
@@ -295,6 +319,16 @@ describe('ChannelList', () => {
 				server_id: 'server-1'
 			});
 			mockChannelsStore.set([voiceChannel]);
+			mockCategorizedChannelsStore.set({
+				categories: [{
+					id: 'cat-voice',
+					name: 'Voice Channels',
+					type: 4,
+					server_id: 'server-1',
+					channels: [voiceChannel]
+				}],
+				uncategorized: []
+			});
 			const ChannelList = (await import('./ChannelList.svelte')).default;
 
 			render(ChannelList);
@@ -309,6 +343,16 @@ describe('ChannelList', () => {
 			const channel1 = createMockChannel({ id: 'c1', name: 'channel-1', server_id: 'server-1' });
 			const channel2 = createMockChannel({ id: 'c2', name: 'other-server', server_id: 'server-2' });
 			mockChannelsStore.set([channel1, channel2]);
+			mockCategorizedChannelsStore.set({
+				categories: [{
+					id: 'cat-1',
+					name: 'Text Channels',
+					type: 4,
+					server_id: 'server-1',
+					channels: [channel1]
+				}],
+				uncategorized: []
+			});
 			const ChannelList = (await import('./ChannelList.svelte')).default;
 
 			render(ChannelList);
@@ -322,6 +366,16 @@ describe('ChannelList', () => {
 			mockCurrentServerStore.set(server);
 			const channel = createMockChannel({ id: 'ch-123', name: 'general', server_id: 'srv-1' });
 			mockChannelsStore.set([channel]);
+			mockCategorizedChannelsStore.set({
+				categories: [{
+					id: 'cat-srv',
+					name: 'Text Channels',
+					type: 4,
+					server_id: 'srv-1',
+					channels: [channel]
+				}],
+				uncategorized: []
+			});
 			const ChannelList = (await import('./ChannelList.svelte')).default;
 
 			render(ChannelList);
@@ -335,8 +389,17 @@ describe('ChannelList', () => {
 		it('should show text channels category even if no text channels (for creation)', async () => {
 			const server = createMockServer();
 			mockCurrentServerStore.set(server);
-			const voiceChannel = createMockChannel({ type: 2, server_id: 'server-1' });
-			mockChannelsStore.set([voiceChannel]);
+			mockChannelsStore.set([]);
+			mockCategorizedChannelsStore.set({
+				categories: [{
+					id: 'cat-text',
+					name: 'Text Channels',
+					type: 4,
+					server_id: 'server-1',
+					channels: []
+				}],
+				uncategorized: []
+			});
 			const ChannelList = (await import('./ChannelList.svelte')).default;
 
 			render(ChannelList);
@@ -348,8 +411,17 @@ describe('ChannelList', () => {
 		it('should show voice channels category even if no voice channels (for creation)', async () => {
 			const server = createMockServer();
 			mockCurrentServerStore.set(server);
-			const textChannel = createMockChannel({ type: 0, server_id: 'server-1' });
-			mockChannelsStore.set([textChannel]);
+			mockChannelsStore.set([]);
+			mockCategorizedChannelsStore.set({
+				categories: [{
+					id: 'cat-voice',
+					name: 'Voice Channels',
+					type: 4,
+					server_id: 'server-1',
+					channels: []
+				}],
+				uncategorized: []
+			});
 			const ChannelList = (await import('./ChannelList.svelte')).default;
 
 			render(ChannelList);
