@@ -121,6 +121,9 @@ func (b *EventBridge) registerHandlers() {
 	b.bus.Subscribe(events.ComponentInteraction, b.onComponentInteraction)
 	b.bus.Subscribe(events.ComponentUpdated, b.onComponentUpdated)
 
+	// Modal events
+	b.bus.Subscribe(events.ModalSubmitted, b.onModalSubmitted)
+
 	// DM events
 	b.bus.Subscribe(events.DMRecipientAdded, b.onDMRecipientAdded)
 	b.bus.Subscribe(events.DMRecipientRemoved, b.onDMRecipientRemoved)
@@ -754,6 +757,29 @@ func (b *EventBridge) onComponentUpdated(event events.Event) {
 		"channel_id": data.ChannelID.String(),
 	}
 	b.sendToChannel(data.ChannelID, EventTypeComponentUpdate, wsData)
+}
+
+// Modal event handlers
+
+func (b *EventBridge) onModalSubmitted(event events.Event) {
+	data, ok := event.Data.(*services.InteractionCreatedEvent)
+	if !ok {
+		log.Printf("[EventBridge] onModalSubmitted: wrong type %T", event.Data)
+		return
+	}
+	log.Printf("[EventBridge] Broadcasting MODAL_SUBMIT for user %s", data.UserID)
+	wsData := ModalSubmitData{
+		ID:        data.ID.String(),
+		Type:      int(data.Type),
+		CustomID:  data.Token,
+		UserID:    data.UserID.String(),
+		ChannelID: data.ChannelID.String(),
+	}
+	if data.ServerID != nil {
+		wsData.GuildID = data.ServerID.String()
+	}
+	// Send to the user who submitted the modal
+	b.sendToUser(data.UserID, EventModalSubmit, wsData)
 }
 
 // DM event handlers
