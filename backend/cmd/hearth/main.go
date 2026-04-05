@@ -519,6 +519,13 @@ func main() {
 	wsGateway.SetSoundboardService(soundboardSignaling)
 	log.Printf("✅ Soundboard service initialized")
 
+	// Initialize Voice Activity service and handler (Poker, Chess, Watch Together)
+	voiceActivityService := services.NewVoiceActivityService(repos.VoiceActivities, serviceBus)
+	h.SetVoiceActivityHandler(voiceActivityService, channelService, permService)
+	activitySignaling := websocket.NewActivitySignalingService(wsHub, voiceActivityService)
+	wsGateway.SetActivityService(activitySignaling)
+	log.Printf("✅ Voice Activity service initialized")
+
 	// Initialize Discovery service and handler
 	discoveryRepo := postgres.NewDiscoveryRepository(db)
 	discoveryService := services.NewDiscoveryService(
