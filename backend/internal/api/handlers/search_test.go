@@ -16,10 +16,10 @@ import (
 )
 
 type mockSearchService struct {
-	searchMessagesFunc       func(ctx context.Context, opts services.SearchMessageOptions) (*services.SearchResult, error)
-	searchUsersFunc          func(ctx context.Context, query string, serverID *uuid.UUID, requesterID uuid.UUID, limit int) ([]*models.PublicUser, error)
-	searchChannelsFunc       func(ctx context.Context, query string, serverID *uuid.UUID, requesterID uuid.UUID, limit int) ([]*models.Channel, error)
-	getSuggestionsFunc       func(ctx context.Context, req services.SearchSuggestionsRequest) (*services.SearchSuggestionsResult, error)
+	searchMessagesFunc      func(ctx context.Context, opts services.SearchMessageOptions) (*services.SearchResult, error)
+	searchUsersFunc         func(ctx context.Context, query string, serverID *uuid.UUID, requesterID uuid.UUID, limit int) ([]*models.PublicUser, error)
+	searchChannelsFunc      func(ctx context.Context, query string, serverID *uuid.UUID, requesterID uuid.UUID, limit int) ([]*models.Channel, error)
+	getSuggestionsFunc      func(ctx context.Context, req services.SearchSuggestionsRequest) (*services.SearchSuggestionsResult, error)
 	globalSearchMessagesFunc func(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error)
 }
 
@@ -342,141 +342,6 @@ func setupSearchTestApp(mock *mockSearchService) *fiber.App {
 		}
 
 		return c.JSON(result)
-	})
-
-	app.Get("/search/global/messages", func(c *fiber.Ctx) error {
-		userID, ok := c.Locals("userID").(uuid.UUID)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Unauthorized",
-			})
-		}
-
-		var req GlobalSearchMessagesRequest
-		if err := c.QueryParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid query parameters",
-			})
-		}
-
-		if req.Query == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Query parameter 'q' is required",
-			})
-		}
-
-		opts := services.GlobalSearchMessageOptions{
-			Query:       req.Query,
-			RequesterID: userID,
-			Limit:       req.Limit,
-			Offset:      req.Offset,
-		}
-
-		if req.AuthorID != "" {
-			authorID, err := uuid.Parse(req.AuthorID)
-			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Invalid author_id",
-				})
-			}
-			opts.AuthorID = &authorID
-		}
-
-		if req.Before != "" {
-			before, err := time.Parse(time.RFC3339, req.Before)
-			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Invalid 'before' timestamp (expected ISO8601)",
-				})
-			}
-			opts.Before = &before
-		}
-
-		if req.After != "" {
-			after, err := time.Parse(time.RFC3339, req.After)
-			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Invalid 'after' timestamp (expected ISO8601)",
-				})
-			}
-			opts.After = &after
-		}
-
-		if req.HasAttachments != "" {
-			val := req.HasAttachments == "true"
-			opts.HasAttachments = &val
-		}
-
-		if req.HasEmbeds != "" {
-			val := req.HasEmbeds == "true"
-			opts.HasEmbeds = &val
-		}
-
-		if req.HasLinks != "" {
-			val := req.HasLinks == "true"
-			opts.HasLinks = &val
-		}
-
-		if req.HasReactions != "" {
-			val := req.HasReactions == "true"
-			opts.HasReactions = &val
-		}
-
-		if req.Pinned != "" {
-			val := req.Pinned == "true"
-			opts.Pinned = &val
-		}
-
-		for _, sid := range req.ServerIDs {
-			serverID, err := uuid.Parse(sid)
-			if err != nil {
-				continue
-			}
-			opts.ServerIDs = append(opts.ServerIDs, serverID)
-		}
-
-		if req.IncludeDMs != "" {
-			opts.IncludeDMs = req.IncludeDMs == "true"
-		}
-
-		result, err := mock.globalSearchMessagesFunc(c.Context(), opts)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Search failed",
-			})
-		}
-
-		messages := make([]*GlobalMessageSearchResult, 0, len(result.Messages))
-		for _, msg := range result.Messages {
-			var serverIDStr *string
-			if msg.ServerID != nil {
-				s := msg.ServerID.String()
-				serverIDStr = &s
-			}
-			searchResult := &GlobalMessageSearchResult{
-				ID:          msg.ID.String(),
-				ChannelID:   msg.ChannelID.String(),
-				ServerID:    serverIDStr,
-				ServerName:  msg.ServerName,
-				ChannelName: msg.ChannelName,
-				IsDM:        msg.IsDM,
-				Author:      msg.Author,
-				Content:     msg.Content,
-				Timestamp:   msg.CreatedAt,
-				EditedAt:    msg.EditedAt,
-				Attachments: msg.Attachments,
-				Embeds:      msg.Embeds,
-				Reactions:   msg.Reactions,
-				Pinned:      msg.Pinned,
-			}
-			messages = append(messages, searchResult)
-		}
-
-		return c.JSON(GlobalSearchMessagesResponse{
-			Messages:   messages,
-			TotalCount: result.Total,
-			HasMore:    result.HasMore,
-		})
 	})
 
 	app.Get("/search", func(c *fiber.Ctx) error {
@@ -1000,10 +865,6 @@ func TestGlobalSearchMessages_Success(t *testing.T) {
 	msgID := uuid.New()
 	channelID := uuid.New()
 	serverID := uuid.New()
-<<<<<<< HEAD
-=======
-	authorID := uuid.New()
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 
 	mock := &mockSearchService{
 		globalSearchMessagesFunc: func(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error) {
@@ -1013,13 +874,8 @@ func TestGlobalSearchMessages_Success(t *testing.T) {
 						Message: &models.Message{
 							ID:        msgID,
 							ChannelID: channelID,
-<<<<<<< HEAD
 							AuthorID:  uuid.New(),
 							Content:   "hello world from another server",
-=======
-							AuthorID:  authorID,
-							Content:   "hello from server",
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 							CreatedAt: time.Now(),
 						},
 						ServerID:    &serverID,
@@ -1048,10 +904,6 @@ func TestGlobalSearchMessages_Success(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, result.TotalCount)
-<<<<<<< HEAD
-=======
-	assert.False(t, result.HasMore)
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 	assert.Len(t, result.Messages, 1)
 	assert.Equal(t, msgID.String(), result.Messages[0].ID)
 	assert.Equal(t, "Test Server", result.Messages[0].ServerName)
@@ -1059,7 +911,6 @@ func TestGlobalSearchMessages_Success(t *testing.T) {
 	assert.False(t, result.Messages[0].IsDM)
 }
 
-<<<<<<< HEAD
 func TestGlobalSearchMessages_WithFilters(t *testing.T) {
 	userID := uuid.New()
 	msgID := uuid.New()
@@ -1118,8 +969,6 @@ func TestGlobalSearchMessages_WithFilters(t *testing.T) {
 	assert.Len(t, result.Messages, 1)
 }
 
-=======
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 func TestGlobalSearchMessages_MissingQuery(t *testing.T) {
 	userID := uuid.New()
 
@@ -1142,136 +991,19 @@ func TestGlobalSearchMessages_Unauthorized(t *testing.T) {
 	app := setupSearchTestApp(mock)
 	t.Cleanup(func() { _ = app.Shutdown() })
 
-<<<<<<< HEAD
 	req := httptest.NewRequest("GET", "/search/global/messages?q=test", nil)
 	// No X-Test-User-ID header - simulates unauthenticated request
-=======
-	req := httptest.NewRequest("GET", "/search/global/messages?q=hello", nil)
-	// No user ID header
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, 401, resp.StatusCode)
 }
 
-<<<<<<< HEAD
 func TestGlobalSearchMessages_WithDateRange(t *testing.T) {
-=======
-func TestGlobalSearchMessages_WithFilters(t *testing.T) {
-	userID := uuid.New()
-	authorID := uuid.New()
-
-	mock := &mockSearchService{
-		globalSearchMessagesFunc: func(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error) {
-			assert.Equal(t, "filtered", opts.Query)
-			assert.NotNil(t, opts.AuthorID)
-			assert.Equal(t, authorID, *opts.AuthorID)
-			assert.NotNil(t, opts.HasAttachments)
-			assert.True(t, *opts.HasAttachments)
-			assert.NotNil(t, opts.Before)
-			assert.NotNil(t, opts.After)
-			assert.True(t, opts.IncludeDMs)
-			return &services.GlobalSearchResult{
-				Messages: []*services.GlobalSearchMessage{},
-				Total:    0,
-				HasMore:  false,
-			}, nil
-		},
-	}
-
-	app := setupSearchTestApp(mock)
-	t.Cleanup(func() { _ = app.Shutdown() })
-
-	url := "/search/global/messages?q=filtered" +
-		"&author_id=" + authorID.String() +
-		"&has_attachments=true" +
-		"&before=2026-01-01T00:00:00Z" +
-		"&after=2025-01-01T00:00:00Z" +
-		"&include_dms=true"
-	req := httptest.NewRequest("GET", url, nil)
-	req.Header.Set("X-Test-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-}
-
-func TestGlobalSearchMessages_InvalidAuthorID(t *testing.T) {
-	userID := uuid.New()
-
-	mock := &mockSearchService{}
-
-	app := setupSearchTestApp(mock)
-	t.Cleanup(func() { _ = app.Shutdown() })
-
-	req := httptest.NewRequest("GET", "/search/global/messages?q=test&author_id=not-a-uuid", nil)
-	req.Header.Set("X-Test-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, 400, resp.StatusCode)
-}
-
-func TestGlobalSearchMessages_InvalidBeforeTimestamp(t *testing.T) {
-	userID := uuid.New()
-
-	mock := &mockSearchService{}
-
-	app := setupSearchTestApp(mock)
-	t.Cleanup(func() { _ = app.Shutdown() })
-
-	req := httptest.NewRequest("GET", "/search/global/messages?q=test&before=not-a-date", nil)
-	req.Header.Set("X-Test-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, 400, resp.StatusCode)
-}
-
-func TestGlobalSearchMessages_InvalidAfterTimestamp(t *testing.T) {
-	userID := uuid.New()
-
-	mock := &mockSearchService{}
-
-	app := setupSearchTestApp(mock)
-	t.Cleanup(func() { _ = app.Shutdown() })
-
-	req := httptest.NewRequest("GET", "/search/global/messages?q=test&after=not-a-date", nil)
-	req.Header.Set("X-Test-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, 400, resp.StatusCode)
-}
-
-func TestGlobalSearchMessages_ServiceError(t *testing.T) {
-	userID := uuid.New()
-
-	mock := &mockSearchService{
-		globalSearchMessagesFunc: func(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error) {
-			return nil, assert.AnError
-		},
-	}
-
-	app := setupSearchTestApp(mock)
-	t.Cleanup(func() { _ = app.Shutdown() })
-
-	req := httptest.NewRequest("GET", "/search/global/messages?q=test", nil)
-	req.Header.Set("X-Test-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, 500, resp.StatusCode)
-}
-
-func TestGlobalSearchMessages_WithDMResults(t *testing.T) {
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 	userID := uuid.New()
 	msgID := uuid.New()
 	channelID := uuid.New()
 
-<<<<<<< HEAD
 	beforeTime := time.Now().Add(-24 * time.Hour)
 	afterTime := time.Now().Add(-48 * time.Hour)
 
@@ -1283,32 +1015,18 @@ func TestGlobalSearchMessages_WithDMResults(t *testing.T) {
 			assert.Equal(t, beforeTime.Unix(), opts.Before.Unix())
 			assert.Equal(t, afterTime.Unix(), opts.After.Unix())
 
-=======
-	mock := &mockSearchService{
-		globalSearchMessagesFunc: func(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error) {
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 			return &services.GlobalSearchResult{
 				Messages: []*services.GlobalSearchMessage{
 					{
 						Message: &models.Message{
 							ID:        msgID,
 							ChannelID: channelID,
-<<<<<<< HEAD
 							Content:   "dated message",
 							CreatedAt: time.Now().Add(-36 * time.Hour),
 						},
 						ServerID:    nil,
 						ServerName:  "",
 						ChannelName: "general",
-=======
-							AuthorID:  uuid.New(),
-							Content:   "DM message found",
-							CreatedAt: time.Now(),
-						},
-						ServerID:    nil,
-						ServerName:  "",
-						ChannelName: "DM",
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 						IsDM:        true,
 					},
 				},
@@ -1321,13 +1039,9 @@ func TestGlobalSearchMessages_WithDMResults(t *testing.T) {
 	app := setupSearchTestApp(mock)
 	t.Cleanup(func() { _ = app.Shutdown() })
 
-<<<<<<< HEAD
 	beforeStr := beforeTime.Format(time.RFC3339)
 	afterStr := afterTime.Format(time.RFC3339)
 	req := httptest.NewRequest("GET", "/search/global/messages?q=dated&before="+beforeStr+"&after="+afterStr, nil)
-=======
-	req := httptest.NewRequest("GET", "/search/global/messages?q=DM&include_dms=true", nil)
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 	req.Header.Set("X-Test-User-ID", userID.String())
 
 	resp, err := app.Test(req, -1)
@@ -1338,7 +1052,6 @@ func TestGlobalSearchMessages_WithDMResults(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	assert.NoError(t, err)
 	assert.Len(t, result.Messages, 1)
-<<<<<<< HEAD
 	assert.True(t, result.Messages[0].IsDM) // DM since ServerID is nil
 }
 
@@ -1429,15 +1142,10 @@ func TestGlobalSearchMessages_WithBooleanFilters(t *testing.T) {
 			assert.Equal(t, 200, resp.StatusCode)
 		})
 	}
-=======
-	assert.True(t, result.Messages[0].IsDM)
-	assert.Nil(t, result.Messages[0].ServerID)
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 }
 
 func TestGlobalSearchMessages_Pagination(t *testing.T) {
 	userID := uuid.New()
-<<<<<<< HEAD
 	msgID1 := uuid.New()
 	msgID2 := uuid.New()
 	channelID := uuid.New()
@@ -1475,31 +1183,6 @@ func TestGlobalSearchMessages_Pagination(t *testing.T) {
 				},
 				Total:   50,
 				HasMore: true,
-=======
-
-	messages := make([]*services.GlobalSearchMessage, 25)
-	for i := 0; i < 25; i++ {
-		messages[i] = &services.GlobalSearchMessage{
-			Message: &models.Message{
-				ID:        uuid.New(),
-				ChannelID: uuid.New(),
-				AuthorID:  uuid.New(),
-				Content:   "paginated message",
-				CreatedAt: time.Now(),
-			},
-			ChannelName: "general",
-		}
-	}
-
-	mock := &mockSearchService{
-		globalSearchMessagesFunc: func(ctx context.Context, opts services.GlobalSearchMessageOptions) (*services.GlobalSearchResult, error) {
-			assert.Equal(t, 25, opts.Limit)
-			assert.Equal(t, 50, opts.Offset)
-			return &services.GlobalSearchResult{
-				Messages: messages,
-				Total:    100,
-				HasMore:  true,
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 			}, nil
 		},
 	}
@@ -1507,11 +1190,7 @@ func TestGlobalSearchMessages_Pagination(t *testing.T) {
 	app := setupSearchTestApp(mock)
 	t.Cleanup(func() { _ = app.Shutdown() })
 
-<<<<<<< HEAD
 	req := httptest.NewRequest("GET", "/search/global/messages?q=test&limit=10&offset=25", nil)
-=======
-	req := httptest.NewRequest("GET", "/search/global/messages?q=test&limit=25&offset=50", nil)
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 	req.Header.Set("X-Test-User-ID", userID.String())
 
 	resp, err := app.Test(req, -1)
@@ -1521,13 +1200,7 @@ func TestGlobalSearchMessages_Pagination(t *testing.T) {
 	var result GlobalSearchMessagesResponse
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	assert.NoError(t, err)
-<<<<<<< HEAD
 	assert.Equal(t, 50, result.TotalCount)
 	assert.True(t, result.HasMore)
 	assert.Len(t, result.Messages, 2)
-=======
-	assert.Equal(t, 100, result.TotalCount)
-	assert.True(t, result.HasMore)
-	assert.Len(t, result.Messages, 25)
->>>>>>> ed0915a3 (feat(search): implement global cross-server search)
 }
