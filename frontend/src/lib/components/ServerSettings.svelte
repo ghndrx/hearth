@@ -142,11 +142,6 @@
 	];
 	
 	$: isOwner = $currentServer?.owner_id === $user?.id;
-	$: console.log('ServerSettings ownership check:', { 
-		serverOwnerId: $currentServer?.owner_id, 
-		userId: $user?.id, 
-		isOwner 
-	});
 	
 	$: if (open && $currentServer) {
 		serverForm = {

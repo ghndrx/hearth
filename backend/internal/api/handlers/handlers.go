@@ -60,7 +60,6 @@ type Handlers struct {
 	ContentSafety            *ContentSafetyHandler
 	ServerFolders            *ServerFolderHandler
 }
-
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
 func (h *Handlers) SetE2EEHandler(e2eeService *services.E2EEServiceImpl) {
 	h.E2EE = NewE2EEHandler(e2eeService)
