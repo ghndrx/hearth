@@ -112,7 +112,9 @@ function testRegistration() {
         token: body.access_token,
         refresh: body.refresh_token,
       });
-    } catch {}
+    } catch (e) {
+      console.warn(`Failed to parse JSON response for user ${uniqueId}:`, e.message);
+    }
   }
 }
 
