@@ -64,7 +64,10 @@ func main() {
 	_ = wsMetrics // Used implicitly via metrics.GetMetrics()
 
 	// Load configuration
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
 
 	// Connect to database
 	db, err := postgres.NewDBFromURL(cfg.DatabaseURL)
