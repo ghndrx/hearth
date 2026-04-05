@@ -2,6 +2,47 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-04-05](https://github.com/ghndrx/hearth/compare/2026-04-04...HEAD)
+
+### Features
+* feat: implement global cross-server search (#127)
+* feat: add intelligent cron ship pipeline for faster feature delivery
+* feat: implement backend sync for user settings with thread notification fields (FEAT-001) (#122)
+* feat: Global Cross-Server Search - cross-server message search with filters
+* feat: competitive intelligence analysis reveals 95% Discord parity
+* feat: implement server folders and organization system
+* feat(unread): add server-level unread badge tracking (#116)
+* feat(server-folders): implement server folders and organization system
+
+### Bug Fixes
+* fix(frontend): skip InviteLink select-change regeneration tests
+* fix(tests): properly mock WebCrypto API for x3dh.test.ts integration tests
+* fix(settings): reset backend settings when user resets all settings (#123)
+* fix(ci): resolve svelte-check errors in GlobalSearch.svelte
+* fix(e2ee): compute identity key hash for device metadata (#120)
+* fix(e2ee): compute identity key hash for device metadata (#115)
+* fix(notifications): mark channels as unread when receiving messages from other users (#114)
+* fix: G118 - use detached context for background goroutine (#113)
+* fix(tests): correct settings test expectations to use 'system' default theme (#110)
+* fix(tests): correct settings test expectations to use 'system' default theme (#111)
+
+### Other Changes
+* chore: replace panic with proper error handling in config loading
+* chore(task-queue): add 2026-04-05 GitHub Issues Pipeline analysis
+* fix(frontend): skip InviteLink select-change regeneration tests
+* fix(tests): properly mock WebCrypto API for x3dh.test.ts integration tests
+* test(ComponentModal): fix Svelte 5 event handling in component tests (#126)
+* chore: tech debt cleanup - remove console.log statements (#125)
+* test(coverage): add comprehensive tests for MentionsHandler (#119)
+* test(coverage): improve models test coverage from 65% to 98.5% (#118)
+* test(handlers): add handler tests for CreateConversation and UpdateConversation (#117)
+* fix(tests): correct settings test expectations to use 'system' default theme (#110)
+* fix(tests): correct settings test expectations to use 'system' default theme (#111)
+* chore: address critical error handling tech debt in FusionAuth (#112)
+
+### Miscellaneous
+  (none)
+
 ## [2026-04-04](https://github.com/ghndrx/hearth/compare/2026-04-03...HEAD)
 
 ### Features

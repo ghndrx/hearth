@@ -21,18 +21,64 @@ const mockIndexedDB = {
   })),
 };
 
+// Helper to create mock CryptoKey objects
+function createMockCryptoKey(): CryptoKey {
+  return {
+    type: 'public',
+    extractable: true,
+    algorithm: { name: 'ECDH', namedCurve: 'P-256' },
+    usages: ['deriveBits', 'deriveKey'],
+  } as CryptoKey;
+}
+
+function createMockCryptoKeyPair(): CryptoKeyPair {
+  return {
+    publicKey: createMockCryptoKey(),
+    privateKey: {
+      type: 'private',
+      extractable: true,
+      algorithm: { name: 'ECDH', namedCurve: 'P-256' },
+      usages: ['deriveBits', 'deriveKey'],
+    } as CryptoKey,
+  };
+}
+
 const mockCrypto = {
   subtle: {
-    generateKey: vi.fn(),
-    importKey: vi.fn(),
-    exportKey: vi.fn(),
-    deriveBits: vi.fn(),
-    sign: vi.fn(),
-    verify: vi.fn(),
-    encrypt: vi.fn(),
-    decrypt: vi.fn(),
+    generateKey: vi.fn((alg: any, extractable: boolean, keyUsages: string[]) => {
+      // Return proper CryptoKeyPair for ECDH key generation
+      if (alg.name === 'ECDH' || alg.name === 'ECDSA') {
+        return Promise.resolve(createMockCryptoKeyPair());
+      }
+      return Promise.resolve(createMockCryptoKeyPair());
+    }),
+    importKey: vi.fn((format: string, keyData: any, alg?: any) => {
+      // For ECDH/EC DSA keys, validate that the key data has correct length
+      // P-256 public keys: 65 bytes (uncompressed) or 33 bytes (compressed)
+      if (format === 'raw' && alg && (alg.name === 'ECDH' || alg.name === 'ECDSA')) {
+        if (keyData instanceof ArrayBuffer || ArrayBuffer.isView(keyData)) {
+          const bytes = keyData instanceof ArrayBuffer ? new Uint8Array(keyData) : new Uint8Array(keyData.buffer);
+          // Reject if clearly invalid length for EC keys
+          if (bytes.length !== 65 && bytes.length !== 33) {
+            return Promise.reject(new DOMException('Invalid key data', 'InvalidAccessError'));
+          }
+        } else if (typeof keyData === 'string') {
+          // String input that can't be decoded to valid length is invalid
+          return Promise.reject(new DOMException('Invalid key data', 'InvalidAccessError'));
+        }
+      }
+      // For non-EC keys (like HKDF), just return a mock key
+      return Promise.resolve(createMockCryptoKey());
+    }),
+    exportKey: vi.fn(() => Promise.resolve(new Uint8Array(65))),
+    deriveBits: vi.fn(() => Promise.resolve(new Uint8Array(32))),
+    deriveKey: vi.fn(() => Promise.resolve(createMockCryptoKey())),
+    sign: vi.fn(() => Promise.resolve(new Uint8Array(64))),
+    verify: vi.fn(() => Promise.resolve(true)),
+    encrypt: vi.fn(() => Promise.resolve(new Uint8Array(16))),
+    decrypt: vi.fn(() => Promise.resolve(new Uint8Array(16))),
   },
-  getRandomValues: vi.fn((arr) => arr),
+  getRandomValues: vi.fn((arr: Uint8Array) => arr),
 };
 
 // Set up globals for testing

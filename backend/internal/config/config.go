@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -107,7 +108,7 @@ type Config struct {
 }
 
 // Load loads configuration from environment variables
-func Load() *Config {
+func Load() (*Config, error) {
 	cfg := &Config{
 		// Server
 		Host: getEnv("HOST", "0.0.0.0"),
@@ -131,7 +132,7 @@ func Load() *Config {
 		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "./data/uploads"),
 
 		// Auth
-		SecretKey:     getRequiredEnv("SECRET_KEY"), // No default - must be set for security
+		SecretKey:     "", // Will be set below with error handling
 		TokenExpiry:   getEnvDuration("TOKEN_EXPIRY", 1*time.Hour),
 		RefreshExpiry: getEnvDuration("REFRESH_EXPIRY", 30*24*time.Hour),
 		AuthProvider:  getEnv("AUTH_PROVIDER", "native"),
@@ -203,6 +204,13 @@ func Load() *Config {
 		AIAllowUserOverride: getEnvBool("AI_ALLOW_USER_OVERRIDE", true),
 	}
 
+	// Validate required environment variables
+	secretKey, err := getRequiredEnv("SECRET_KEY")
+	if err != nil {
+		return nil, fmt.Errorf("configuration error: %w", err)
+	}
+	cfg.SecretKey = secretKey
+
 	// Use SECRET_KEY as fallback for AI encryption
 	if cfg.AIEncryptionKey == "" {
 		cfg.AIEncryptionKey = cfg.SecretKey
@@ -213,7 +221,7 @@ func Load() *Config {
 		cfg.OAuthRedirectBase = cfg.PublicURL
 	}
 
-	return cfg
+	return cfg, nil
 }
 
 func loadQuotaConfig() *models.QuotaConfig {
@@ -280,10 +288,10 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-func getRequiredEnv(key string) string {
+func getRequiredEnv(key string) (string, error) {
 	value := os.Getenv(key)
 	if value == "" {
-		panic("required environment variable " + key + " is not set")
+		return "", fmt.Errorf("required environment variable %s is not set", key)
 	}
-	return value
+	return value, nil
 }
