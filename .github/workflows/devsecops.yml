@@ -64,7 +64,10 @@ jobs:
         if: matrix.ecosystem == 'go'
         working-directory: ./backend
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Pin to v1.1.4 — the @latest query does not work for cmd/govulncheck
+          # subpath (the module uses pseudo-version tags, not semantic versioning).
+          # v1.0.6 was attempted in earlier CI runs but that tag does not exist.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           # Build the binary first (source-mode govulncheck ./... fails with
           # "internal error: package golang.org/x/sys/unix without types" due to
           # cgo compatibility in Go 1.24+ toolchain). Binary mode is used as
