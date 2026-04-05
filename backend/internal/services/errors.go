@@ -115,4 +115,8 @@ var (
 	// Poll errors
 	ErrPollClosed   = errors.New("poll is closed")
 	ErrPollNotFound = errors.New("poll not found")
+
+	// Moderation errors
+	ErrModerationRuleNotFound = errors.New("moderation rule not found")
+	ErrModerationRateLimited  = errors.New("rate limit exceeded for moderation actions")
 )

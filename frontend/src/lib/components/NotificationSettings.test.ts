@@ -184,8 +184,7 @@ describe('NotificationSettings Component', () => {
 			expect(notifications.threadNotifications).toBe('none');
 		});
 
-		it.skip('should sync to backend when thread settings change', async () => {
-			// TODO: Backend sync not yet implemented - settings only persist to localStorage
+		it('should sync to backend when thread settings change', async () => {
 			render(NotificationSettings);
 			
 			const autoFollowCheckbox = screen.getAllByRole('checkbox').find(

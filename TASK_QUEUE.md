@@ -1,3 +1,19 @@
+## 2026-04-05 Competitive Pipeline - DIFFERENTIATION FOCUS
+
+**Analysis**: With 97%+ Discord parity achieved, focus shifts to competitive differentiation through features Discord lacks entirely. Identified 3 major opportunities where Hearth can exceed Discord's capabilities and create unique value propositions.
+**Status**: MARKET LEADERSHIP - Build features Discord cannot match
+
+### TOP 3 DIFFERENTIATION OPPORTUNITIES (3 PRDs Created)
+- [ ] **[P0]** Feature: AI-Powered Smart Moderation Suite — Intelligent toxicity detection and community health management vs Discord's basic keyword filtering (12-16 weeks)
+- [ ] **[P1]** Feature: Cross-Platform Gaming Integration Hub — Unified gaming social platform with cross-platform friends, LFG, achievements vs Discord's basic game status (16-20 weeks)  
+- [ ] **[P2]** Feature: Collaborative Workspace Suite — Real-time whiteboard, documents, code editor that Discord completely lacks - major differentiation (20-26 weeks)
+
+## 2026-04-05 GitHub Issues Pipeline (Latest Analysis)
+
+**Status**: No open issues found in repository
+**Analysis**: Checked for unclaimed issues with labels: 'help wanted', 'good first issue', 'P0', 'P1', 'bug', 'enhancement'
+**Action**: HEARTBEAT_OK - No unclaimed issues to process
+
 ## 2026-04-05 GitHub Issues Pipeline
 
 **Status**: No open issues found in repository
@@ -213,4 +229,48 @@
 - **Hardcoded constants**: See existing P2 items around rate limiting for hardcoded magic numbers
 
 **HEARTBEAT_OK — No P1 inline fixes required. P2/P3 items queued above.**
+## 2026-04-05 Hearth Tech Debt Hunter — Inline Findings
+
+**Scope**: Go backend, Frontend TS/Svelte, Mobile iOS/Android
+**Findings**: P1 billing STUBs (previously missed), P2 E2EE WASM gap, P3 JSDoc fix
+
+### P1 — Inline Fixes This Cycle
+
+**Billing Service — STUB Implementations (PREVIOUSLY MISSED by automated scan):**
+`backend/internal/services/billing_service.go` contains 10 STUB markers. This service is explicitly
+marked as a stub with the comment: "This is a STUB implementation - integrate with real payment provider
+(Stripe/Paddle) before production." The `isProd` flag gate means stubs only run in dev, but any billing
+feature flag flipped to production would expose these as silent no-ops:
+
+- `CreateCustomer()` — creates `mock_*` external IDs; real path calls `stripe.Customer.New()`
+- `CreateSubscription()` — creates in-repo subscription record; no Stripe call made
+- `CancelSubscription()` — marks SubStatusCanceled locally; no Stripe subscription cancelled
+- `HandleWebhook()` — `fmt.Printf` only; no signature verification, no event processing
+- `ProcessPayment()` — returns `errors.New("payment processing not implemented")`
+- `UpdatePaymentMethod()` — returns `errors.New("payment method update not implemented")`
+- `CreateBillingPortalSession()` — returns hardcoded `https://mock-billing-portal.example.com/...`
+- `GiftSubscription()` — creates in-repo sub only; no Stripe gift payment flow
+- `GetSubscriptionByExternalID()` — always returns `ErrSubscriptionNotFound`; no real query
+
+**Risk**: If `BillingService` is instantiated with `isProd=true` and a real `stripeKey`, all operations
+still silently mock. The code appears to be wired up for Stripe but the integration is absent.
+No P1 inline fix possible (requires full Stripe/Paddle integration — tracked as Premium Subscription
+System in competitive pipeline, 2026-04-02).
+
+### P2 — Queued in TASK_QUEUE.md (from codebase TODOs)
+
+**Frontend:**
+- `[P2]` `frontend/src/lib/e2ee/keys.ts:66` — Load and initialize libsignal-client WASM (E2EE)
+- `[P2]` `frontend/src/lib/stores/settings.test.ts` — `fetchUserSettings` backend sync not implemented; settings use localStorage only (already queued 2026-04-04)
+- `[P2]` `frontend/src/lib/components/NotificationSettings.test.ts:188` — Same backend sync gap (already queued 2026-04-04)
+
+### P3 — Queued (new this cycle)
+
+- `[P3]` `frontend/src/lib/crypto/safety-number.ts:56` — Misleading `@returns` JSDoc: says "60-digit safety number" but E2EE safety numbers are 60-*digits* formatted as 6 groups of 5 digits (30 numeric characters + spaces). Fix: update `@returns` to accurately describe the 30-character digit format.
+
+**HEARTBEAT_OK — P1 requires full Stripe/Paddle integration (tracked separately). P3 JSDoc fix is a one-line inline edit. P2 E2EE WASM gap carries over from 2026-04-04 report.**
+
+---
+
 ## 2026-04-04 Vulnerability Findings
+## 2026-04-05 Vulnerability Findings
