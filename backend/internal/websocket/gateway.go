@@ -45,6 +45,9 @@ type Gateway struct {
 	// Soundboard signaling
 	soundboardService *SoundboardSignalingService
 
+	// Activity signaling
+	activityService *ActivitySignalingService
+
 	// Session management
 	sessions   map[string]*Session
 	sessionsMu sync.RWMutex
@@ -422,6 +425,9 @@ func (g *Gateway) handleClientDispatch(conn *websocket.Conn, client *Client, ses
 	// Soundboard events
 	case SoundboardSignalPlay, SoundboardSignalStop:
 		g.handleSoundboardDispatch(conn, client, session, dispatchData.T, dispatchData.D)
+	// Activity events
+	case ActivitySignalStart, ActivitySignalJoin, ActivitySignalLeave, ActivitySignalEnd, ActivitySignalGameMove, ActivitySignalSync:
+		g.handleActivityDispatch(conn, client, session, dispatchData.T, dispatchData.D)
 	default:
 		log.Printf("[Gateway] Unknown client dispatch type: %s", dispatchData.T)
 	}
@@ -450,6 +456,19 @@ func (g *Gateway) handleSoundboardDispatch(conn *websocket.Conn, client *Client,
 	if err := g.soundboardService.HandleSoundboardMessage(ctx, client, session.ID, eventType, data); err != nil {
 		log.Printf("[Gateway] Soundboard dispatch error: %v", err)
 		g.sendError(conn, "soundboard operation failed")
+	}
+}
+
+func (g *Gateway) handleActivityDispatch(conn *websocket.Conn, client *Client, session *Session, eventType string, data json.RawMessage) {
+	if g.activityService == nil {
+		g.sendError(conn, "activities not available")
+		return
+	}
+
+	ctx := context.Background()
+	if err := g.activityService.HandleActivityMessage(ctx, client, session.ID, eventType, data); err != nil {
+		log.Printf("[Gateway] Activity dispatch error: %v", err)
+		g.sendError(conn, "activity operation failed")
 	}
 }
 
@@ -897,6 +916,11 @@ func (g *Gateway) SetVoiceService(vs *VoiceSignalingService) {
 // SetSoundboardService sets the soundboard signaling service
 func (g *Gateway) SetSoundboardService(ss *SoundboardSignalingService) {
 	g.soundboardService = ss
+}
+
+// SetActivityService sets the activity signaling service
+func (g *Gateway) SetActivityService(as *ActivitySignalingService) {
+	g.activityService = as
 }
 
 // CleanupSession cleans up voice state when a session disconnects

@@ -118,6 +118,14 @@ const (
 	// Soundboard events
 	EventSoundboardPlay = "SOUNDBOARD_PLAY"
 	EventSoundboardStop = "SOUNDBOARD_STOP"
+
+	// Voice Activity events
+	EventVoiceActivityStart         = "ACTIVITY_START"
+	EventVoiceActivityParticipantJoin  = "ACTIVITY_PARTICIPANT_JOIN"
+	EventVoiceActivityParticipantLeave = "ACTIVITY_PARTICIPANT_LEAVE"
+	EventVoiceActivityEnd           = "ACTIVITY_END"
+	EventVoiceActivityStateSync     = "ACTIVITY_STATE_SYNC"
+	EventVoiceActivityGameMove      = "ACTIVITY_GAME_MOVE"
 )
 
 // DispatchEvent creates a dispatch message
