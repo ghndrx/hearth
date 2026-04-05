@@ -1,9 +1,9 @@
 name: 🤖 AI Review Cycle
 
 on:
-  schedule:
+  # schedule DISABLED - no AI code generation from CI
     # Every 8 hours - review recently merged PRs
-    - cron: '0 */8 * * *'
+
   workflow_dispatch:
     inputs:
       pr_number:
