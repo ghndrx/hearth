@@ -469,6 +469,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		api.Post("/interactions/:interaction_id/callback/:token", h.Interactions.RespondToInteractionWithToken)
 		api.Patch("/interactions/:interaction_id/messages/:messageId", h.Interactions.EditInteractionResponse)
 		api.Delete("/interactions/:interaction_id/messages/:messageId", h.Interactions.DeleteInteractionResponse)
+
+		// Modal submit endpoint
+		api.Post("/interactions/modals/submit", h.Interactions.HandleModalSubmit)
 	}
 
 	// Server channels
