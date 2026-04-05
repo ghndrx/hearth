@@ -795,6 +795,20 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		voice.Post("/participants/:channelId/:userId/mute", h.LiveKitVoice.MuteParticipant)
 	}
 
+	// Voice Activities (Poker, Chess, Watch Together)
+	if h.VoiceActivities != nil {
+		channels.Post("/:id/activities", h.VoiceActivities.StartActivity)
+		channels.Get("/:id/activities", h.VoiceActivities.GetChannelActivity)
+
+		activities := api.Group("/activities")
+		activities.Get("/:activityId", h.VoiceActivities.GetActivity)
+		activities.Post("/:activityId/join", h.VoiceActivities.JoinActivity)
+		activities.Delete("/:activityId/participants/@me", h.VoiceActivities.LeaveActivity)
+		activities.Delete("/:activityId", h.VoiceActivities.EndActivity)
+		activities.Get("/:activityId/state", h.VoiceActivities.GetGameState)
+		activities.Post("/:activityId/moves", h.VoiceActivities.GameMove)
+	}
+
 	// Screen Share / Streams (if handler is configured)
 	if h.ScreenShare != nil {
 		// Channel streams
