@@ -86,6 +86,10 @@ const (
 	EventCommandExecute    = "COMMAND_EXECUTE"
 	EventCommandResponse   = "COMMAND_RESPONSE"
 
+	// Modal events
+	EventModalSubmit = "MODAL_SUBMIT"
+	EventModalClose  = "MODAL_CLOSE"
+
 	// Thread auto-archive events
 	EventThreadAutoArchiveUpdate = "THREAD_AUTO_ARCHIVE_UPDATE"
 	EventThreadAutoArchive       = "THREAD_AUTO_ARCHIVE"
@@ -343,5 +347,20 @@ type ServerFolderMoveData struct {
 type ServerFolderReorderData struct {
 	FolderID    *string `json:"folder_id,omitempty"`
 	ServerIDs   []string `json:"server_ids"`
+}
+
+// ModalSubmitData represents a modal submit event
+type ModalSubmitData struct {
+	ID        string `json:"id"`
+	Type      int    `json:"type"`
+	CustomID  string `json:"custom_id"`
+	UserID    string `json:"user_id"`
+	ChannelID string `json:"channel_id"`
+	GuildID   string `json:"guild_id,omitempty"`
+}
+
+// ModalCloseData represents a modal close event
+type ModalCloseData struct {
+	CustomID string `json:"custom_id"`
 }
 

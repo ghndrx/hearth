@@ -220,3 +220,54 @@ func (h *InteractionHandler) DeleteInteractionResponse(c *fiber.Ctx) error {
 
 	return c.SendStatus(fiber.StatusNoContent)
 }
+
+// ModalSubmitRequest represents a modal submit request
+type ModalSubmitRequest struct {
+	CustomID string                      `json:"custom_id"`
+	Values   map[string]string           `json:"values"`
+}
+
+// HandleModalSubmit processes modal form submissions
+// POST /api/v1/interactions/modals/submit
+func (h *InteractionHandler) HandleModalSubmit(c *fiber.Ctx) error {
+	var req ModalSubmitRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.CustomID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "custom_id is required",
+		})
+	}
+
+	if req.Values == nil {
+		req.Values = make(map[string]string)
+	}
+
+	// Get the user ID from the authenticated context
+	userID := c.Locals("userID").(uuid.UUID)
+
+	// Create a modal submit interaction
+	interaction := &models.Interaction{
+		ID:      uuid.New(),
+		Type:    models.InteractionTypeModalSubmit,
+		Token:   req.CustomID,
+		UserID:  userID,
+		Message: nil,
+	}
+
+	// The Values map contains the form field values keyed by custom_id
+	interaction.Data = req.Values
+
+	response, err := h.interactionService.HandleInteraction(c.Context(), interaction)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(response)
+}
