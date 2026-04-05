@@ -1,9 +1,9 @@
 name: 🚀 Ship Pipeline
 
 on:
-  schedule:
+  # schedule DISABLED - no AI code generation from CI
     # Every 4 hours - main development cycle
-    - cron: '0 */4 * * *'
+
   workflow_dispatch:
     inputs:
       priority:
