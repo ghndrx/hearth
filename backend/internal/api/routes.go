@@ -629,6 +629,37 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		api.Post("/automod/test", h.AutoMod.TestContent)
 	}
 
+	// Smart Moderation (AI-powered moderation suite)
+	if h.SmartModeration != nil {
+		// Server moderation settings
+		servers.Get("/:id/moderation/settings", h.SmartModeration.GetSettings)
+		servers.Patch("/:id/moderation/settings", h.SmartModeration.UpdateSettings)
+
+		// Keyword/regex rules
+		servers.Get("/:id/moderation/rules", h.SmartModeration.ListKeywordRules)
+		servers.Post("/:id/moderation/rules", h.SmartModeration.CreateKeywordRule)
+
+		// Global keyword rule operations
+		api.Patch("/moderation/rules/:id", h.SmartModeration.UpdateKeywordRule)
+		api.Delete("/moderation/rules/:id", h.SmartModeration.DeleteKeywordRule)
+
+		// Moderation logs
+		servers.Get("/:id/moderation/logs", h.SmartModeration.ListModerationLogs)
+		servers.Get("/:id/moderation/members/:memberId/history", h.SmartModeration.GetMemberModerationHistory)
+		servers.Get("/:id/moderation/members/:memberId/summary", h.SmartModeration.GetUserViolationSummary)
+		servers.Post("/:id/moderation/members/:memberId/reset", h.SmartModeration.ResetMemberViolations)
+
+		// Moderation actions
+		servers.Post("/:id/moderation/actions", h.SmartModeration.TakeModerationAction)
+
+		// Dashboard
+		servers.Get("/:id/moderation/stats", h.SmartModeration.GetDashboardStats)
+
+		// Global operations
+		api.Post("/moderation/analyze", h.SmartModeration.AnalyzeContent)
+		api.Post("/moderation/logs/:id/resolve", h.SmartModeration.ResolveModerationLog)
+	}
+
 	// Content Safety (NSFW filters, age verification, user preferences)
 	if h.ContentSafety != nil {
 		// Server content filters
