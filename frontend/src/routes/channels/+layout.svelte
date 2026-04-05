@@ -11,7 +11,7 @@
 	import { popoutStore } from '$lib/stores/popout';
 	import { threadStore } from '$lib/stores/thread';
 	import { pinnedMessagesStore, pinnedMessagesOpen } from '$lib/stores/pinnedMessages';
-	import { searchStore, isSearchOpen } from '$lib/stores/search';
+	import { searchStore, isSearchOpen, globalSearchOpen } from '$lib/stores/search';
 	import { splitViewStore, splitViewEnabled, canAddSplitPanel } from '$lib/stores/splitView';
 	import { jumpToMessage } from '$lib/stores/messages';
 	import ServerList from '$lib/components/ServerList.svelte';
@@ -26,6 +26,7 @@
 	import ImagePreviewModal from '$lib/components/ImagePreviewModal.svelte';
 	import QuickSwitcher from '$lib/components/QuickSwitcher.svelte';
 	import SearchResults from '$lib/components/SearchResults.svelte';
+	import GlobalSearch from '$lib/components/GlobalSearch.svelte';
 	import SplitView from '$lib/components/SplitView.svelte';
 
 	let quickSwitcherOpen = false;
@@ -42,15 +43,23 @@
 				} else if ($isSearchOpen) {
 					searchStore.close();
 					e.preventDefault();
+				} else if ($globalSearchOpen) {
+					globalSearchOpen.close();
+					e.preventDefault();
 				}
 			}
 			return;
 		}
 
 		// Ctrl+K or Cmd+K to open quick switcher
-		if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.shiftKey) {
 			e.preventDefault();
 			quickSwitcherOpen = true;
+		}
+		// Ctrl+Shift+K or Cmd+Shift+K to open global cross-server search
+		if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'K') {
+			e.preventDefault();
+			globalSearchOpen.toggle();
 		}
 		// Ctrl+F or Cmd+F to open search (when in a channel)
 		if ((e.ctrlKey || e.metaKey) && e.key === 'f' && $currentChannel) {
@@ -81,6 +90,9 @@
 			} else if ($isSearchOpen) {
 				searchStore.close();
 				e.preventDefault();
+			} else if ($globalSearchOpen) {
+				globalSearchOpen.close();
+				e.preventDefault();
 			}
 		}
 	}
@@ -95,6 +107,17 @@
 		// Navigate to the channel with the message
 		if ($currentServer) {
 			goto(`/channels/${$currentServer.id}/${channelId}?message=${messageId}`);
+		} else {
+			goto(`/channels/@me/${channelId}?message=${messageId}`);
+		}
+	}
+
+	function handleGlobalSearchJumpToMessage(event: CustomEvent<{ channelId: string; messageId: string; serverId?: string }>) {
+		const { channelId, messageId, serverId } = event.detail;
+		globalSearchOpen.close();
+		// Navigate to the channel with the message
+		if (serverId) {
+			goto(`/channels/${serverId}/${channelId}?message=${messageId}`);
 		} else {
 			goto(`/channels/@me/${channelId}?message=${messageId}`);
 		}
@@ -232,6 +255,16 @@
 			<SearchResults
 				on:jumpToMessage={handleSearchJumpToMessage}
 				on:close={() => searchStore.close()}
+			/>
+		</div>
+	{/if}
+
+	<!-- Global Cross-Server Search - Right sidebar panel (Ctrl+Shift+K) -->
+	{#if $globalSearchOpen}
+		<div transition:panelSlide={{ duration: 200, direction: 'right' }}>
+			<GlobalSearch
+				on:jumpToMessage={handleGlobalSearchJumpToMessage}
+				on:close={() => globalSearchOpen.close()}
 			/>
 		</div>
 	{/if}

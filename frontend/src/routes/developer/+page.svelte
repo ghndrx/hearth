@@ -357,8 +357,8 @@
 </div>
 
 {#if showCreateModal || showEditModal}
-	<div class="modal-overlay" on:click={closeModals}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div class="modal-overlay" on:click={closeModals} on:keydown={(e) => e.key === 'Escape' && closeModals()} role="presentation">
+		<div class="modal-content" on:click|stopPropagation role="document">
 			<button class="close-btn" on:click={closeModals}>×</button>
 
 			<h2>{showEditModal ? 'Edit App' : 'Create New App'}</h2>
