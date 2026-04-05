@@ -668,3 +668,15 @@ function escapeHtml(str: string): string {
 	div.textContent = str;
 	return div.innerHTML;
 }
+
+// ==================== Global Cross-Server Search Store ====================
+
+// Simple writable store for global search panel visibility
+const globalSearchOpenWritable = writable(false);
+
+export const globalSearchOpen = {
+	subscribe: globalSearchOpenWritable.subscribe,
+	open: () => globalSearchOpenWritable.set(true),
+	close: () => globalSearchOpenWritable.set(false),
+	toggle: () => globalSearchOpenWritable.update(v => !v),
+};
