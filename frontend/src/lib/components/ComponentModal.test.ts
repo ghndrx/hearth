@@ -115,12 +115,11 @@ describe('ComponentModal', () => {
   });
 
   it('closes on Cancel button click', async () => {
-    const { container, component } = render(ComponentModal, {
-      props: { open: true, title: 'Test', rows: defaultRows }
-    });
-
     const closeHandler = vi.fn();
-    component.addEventListener('close', closeHandler);
+    const { container } = render(ComponentModal, {
+      props: { open: true, title: 'Test', rows: defaultRows },
+      events: { close: closeHandler }
+    } as any);
 
     const cancelBtn = container.querySelector('.cancel-btn');
     await fireEvent.click(cancelBtn!);
@@ -129,12 +128,11 @@ describe('ComponentModal', () => {
   });
 
   it('closes on backdrop click', async () => {
-    const { container, component } = render(ComponentModal, {
-      props: { open: true, title: 'Test', rows: defaultRows }
-    });
-
     const closeHandler = vi.fn();
-    component.addEventListener('close', closeHandler);
+    const { container } = render(ComponentModal, {
+      props: { open: true, title: 'Test', rows: defaultRows },
+      events: { close: closeHandler }
+    } as any);
 
     const backdrop = container.querySelector('.modal-backdrop');
     await fireEvent.click(backdrop!);
@@ -143,12 +141,11 @@ describe('ComponentModal', () => {
   });
 
   it('closes on Escape key', async () => {
-    const { container, component } = render(ComponentModal, {
-      props: { open: true, title: 'Test', rows: defaultRows }
-    });
-
     const closeHandler = vi.fn();
-    component.addEventListener('close', closeHandler);
+    render(ComponentModal, {
+      props: { open: true, title: 'Test', rows: defaultRows },
+      events: { close: closeHandler }
+    } as any);
 
     await fireEvent.keyDown(window, { key: 'Escape' });
 
@@ -156,17 +153,16 @@ describe('ComponentModal', () => {
   });
 
   it('dispatches submit event with customId and values', async () => {
-    const { container, component } = render(ComponentModal, {
+    const submitHandler = vi.fn();
+    const { container } = render(ComponentModal, {
       props: { 
         open: true, 
         title: 'Test', 
         customId: 'modal_1',
         rows: defaultRows 
-      }
-    });
-
-    const submitHandler = vi.fn();
-    component.addEventListener('submit', submitHandler);
+      },
+      events: { submit: submitHandler }
+    } as any);
 
     const textarea = container.querySelector('textarea');
     await fireEvent.input(textarea!, { target: { value: 'Great product!' } });
@@ -211,12 +207,11 @@ describe('ComponentModal', () => {
   });
 
   it('closes on X button click', async () => {
-    const { container, component } = render(ComponentModal, {
-      props: { open: true, title: 'Test', rows: defaultRows }
-    });
-
     const closeHandler = vi.fn();
-    component.addEventListener('close', closeHandler);
+    const { container } = render(ComponentModal, {
+      props: { open: true, title: 'Test', rows: defaultRows },
+      events: { close: closeHandler }
+    } as any);
 
     const closeBtn = container.querySelector('.close-btn');
     await fireEvent.click(closeBtn!);
