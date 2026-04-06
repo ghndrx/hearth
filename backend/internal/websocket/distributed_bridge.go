@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
@@ -752,5 +751,3 @@ func (b *DistributedEventBridge) onServerBoostRemoved(event events.Event) {
 	}
 }
 
-// Ensure all types needed exist or are imported
-var _ = json.Marshal
