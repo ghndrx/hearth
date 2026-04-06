@@ -542,3 +542,72 @@ export const CATEGORY_ICONS: Record<AppCategory, string> = {
 
 // Premium subscription types - re-exported from premium module
 export * from './types/premium';
+
+// Stage channel types
+export const StageStatus = {
+	SCHEDULED: 1,
+	LIVE: 2,
+	PAUSED: 3,
+	ENDED: 4
+} as const;
+
+export type StageStatusType = typeof StageStatus[keyof typeof StageStatus];
+
+export const StageRole = {
+	AUDIENCE: 1,
+	SPEAKER: 2,
+	MODERATOR: 3,
+	HOST: 4
+} as const;
+
+export type StageRoleType = typeof StageRole[keyof typeof StageRole];
+
+export interface Stage {
+	id: string;
+	channel_id: string;
+	topic: string;
+	description: string;
+	status: StageStatusType;
+	host_user_id: string;
+	discovery_disabled: boolean;
+	request_to_speak: boolean;
+	moderator_only: boolean;
+	max_speakers: number;
+	speaker_count: number;
+	audience_count: number;
+	pending_request_count: number;
+	created_at: string;
+	started_at: string | null;
+	ended_at: string | null;
+}
+
+export interface StageParticipant {
+	user_id: string;
+	role: StageRoleType;
+	joined_at: string;
+	is_muted: boolean;
+	is_deafened: boolean;
+	has_pending_request: boolean;
+	requested_at: string | null;
+}
+
+export interface CreateStageRequest {
+	topic: string;
+	description?: string;
+	discovery_disabled?: boolean;
+	request_to_speak?: boolean;
+	moderator_only?: boolean;
+	max_speakers?: number;
+}
+
+export interface UpdateStageRequest {
+	topic?: string;
+	description?: string;
+}
+
+export interface StageConfig {
+	discovery_disabled?: boolean;
+	request_to_speak?: boolean;
+	moderator_only?: boolean;
+	max_speakers?: number;
+}
