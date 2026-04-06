@@ -14,6 +14,8 @@
 	import { searchStore, isSearchOpen, globalSearchOpen } from '$lib/stores/search';
 	import { splitViewStore, splitViewEnabled, canAddSplitPanel } from '$lib/stores/splitView';
 	import { jumpToMessage } from '$lib/stores/messages';
+	import { videoCallActions } from '$lib/stores/videoCall';
+	import { getVideoCallManager } from '$lib/voice/VideoCallManager';
 	import ServerList from '$lib/components/ServerList.svelte';
 	import ChannelList from '$lib/components/ChannelList.svelte';
 	import MemberList from '$lib/components/MemberList.svelte';
@@ -184,11 +186,28 @@
 			const channel = await createDM(event.detail.userId);
 			currentChannel.set(channel);
 			goto(`/channels/@me/${channel.id}`);
-			// Note: DM voice/video calls require server-based voice channel infrastructure.
-			// The call overlay will appear when the user joins a voice channel.
-			// Full DM call support (WebRTC signaling in DM context) is tracked separately.
-			if (event.detail.type === 'voice' || event.detail.type === 'video') {
-				console.info(`[Call] ${event.detail.type} call initiated with user ${event.detail.userId}. DM opened at channel ${channel.id}`);
+			
+			// Initialize VideoCallManager if not already done
+			const videoManager = getVideoCallManager();
+			
+			// Start the video/voice call
+			if (event.detail.type === 'video') {
+				// For video calls, get local media first
+				try {
+					await videoManager.startCall(channel.id, event.detail.userId);
+					console.info(`[Call] Video call initiated with user ${event.detail.userId}. DM opened at channel ${channel.id}`);
+				} catch (mediaError) {
+					console.error('[Call] Failed to start video call:', mediaError);
+					// Even if camera access fails, we still open the DM
+				}
+			} else {
+				// For voice calls, use videoManager but without video
+				try {
+					await videoManager.startCall(channel.id, event.detail.userId);
+					console.info(`[Call] Voice call initiated with user ${event.detail.userId}. DM opened at channel ${channel.id}`);
+				} catch (mediaError) {
+					console.error('[Call] Failed to start voice call:', mediaError);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to initiate call:', error);

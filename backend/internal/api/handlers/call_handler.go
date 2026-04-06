@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
@@ -10,12 +12,21 @@ import (
 
 // CallHandler handles video/audio call HTTP endpoints
 type CallHandler struct {
-	callService *services.CallService
+	callService    *services.CallService
+	channelService CallChannelServiceInterface
+}
+
+// CallChannelServiceInterface defines methods needed for channel access in call handler
+type CallChannelServiceInterface interface {
+	GetOrCreateDM(ctx context.Context, user1ID, user2ID uuid.UUID) (*models.Channel, error)
 }
 
 // NewCallHandler creates a new call handler
-func NewCallHandler(callService *services.CallService) *CallHandler {
-	return &CallHandler{callService: callService}
+func NewCallHandler(callService *services.CallService, channelService CallChannelServiceInterface) *CallHandler {
+	return &CallHandler{
+		callService:    callService,
+		channelService: channelService,
+	}
 }
 
 // Create creates a new call
@@ -30,33 +41,62 @@ func (h *CallHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	if req.ChannelID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "channel_id is required",
-		})
-	}
+	var channelID uuid.UUID
+	var serverID *uuid.UUID
 
-	channelID, err := uuid.Parse(req.ChannelID)
-	if err != nil {
+	// Handle direct calls via target_user_id - get or create DM channel
+	if req.TargetUserID != "" {
+		targetUserID, err := uuid.Parse(req.TargetUserID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid target_user_id format",
+			})
+		}
+
+		if targetUserID == userID {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "cannot start a call with yourself",
+			})
+		}
+
+		// Get or create DM channel for direct call
+		channel, err := h.channelService.GetOrCreateDM(c.Context(), userID, targetUserID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get or create DM channel for call",
+			})
+		}
+		channelID = channel.ID
+		// Direct calls don't have a server
+		serverID = nil
+	} else if req.ChannelID != "" {
+		// Standard call via channel_id (server channel)
+		var err error
+		channelID, err = uuid.Parse(req.ChannelID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel_id format",
+			})
+		}
+
+		if req.ServerID != "" {
+			parsed, err := uuid.Parse(req.ServerID)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid server_id format",
+				})
+			}
+			serverID = &parsed
+		}
+	} else {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid channel_id format",
+			"error": "either channel_id or target_user_id is required",
 		})
 	}
 
 	callType := models.CallType(req.Type)
 	if callType == "" {
 		callType = models.CallTypeDirect
-	}
-
-	var serverID *uuid.UUID
-	if req.ServerID != "" {
-		parsed, err := uuid.Parse(req.ServerID)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid server_id format",
-			})
-		}
-		serverID = &parsed
 	}
 
 	call, err := h.callService.CreateCall(c.Context(), userID, channelID, serverID, callType)

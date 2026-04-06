@@ -399,6 +399,6 @@ func (h *Handlers) SetVoiceActivityHandler(
 }
 
 // SetCallHandler sets the call handler
-func (h *Handlers) SetCallHandler(callService *services.CallService) {
-	h.Calls = NewCallHandler(callService)
+func (h *Handlers) SetCallHandler(callService *services.CallService, channelService CallChannelServiceInterface) {
+	h.Calls = NewCallHandler(callService, channelService)
 }
