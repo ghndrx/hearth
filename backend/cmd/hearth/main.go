@@ -145,7 +145,11 @@ func main() {
 		// Generate unique node ID for this instance
 		nodeID := os.Getenv("HEARTH_NODE_ID")
 		if nodeID == "" {
-			hostname, _ := os.Hostname()
+			hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown-host"
+			log.Printf("⚠️  Failed to get hostname, using fallback: %v", err)
+		}
 			nodeID = fmt.Sprintf("%s-%s", hostname, uuid.New().String()[:8])
 		}
 		log.Printf("📡 Node ID: %s", nodeID)

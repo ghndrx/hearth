@@ -116,7 +116,10 @@
 			});
 
 			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
+				const data = await response.json().catch((parseError) => {
+					console.error('Failed to parse error response:', parseError);
+					return {};
+				});
 				throw new Error(data.message || 'Invalid or expired invite');
 			}
 
