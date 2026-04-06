@@ -4,11 +4,14 @@
 	import { sendTypingIndicator } from '$lib/stores/messages';
 	import { uploadStore } from '$lib/stores/uploads';
 	import { messageInputSuggestion } from '$lib/stores/messageInputSuggestion';
+	import { slashCommandUI, shouldShowAutocomplete } from '$lib/stores/slashCommandsUI';
+	import { slashCommands, getAutocompleteSuggestions, type AutocompleteResult } from '$lib/services/slashCommands';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import GifPicker from './GifPicker.svelte';
 	import FileUploadZone from './FileUploadZone.svelte';
 	import UploadProgress from './UploadProgress.svelte';
 	import MentionAutocomplete from './MentionAutocomplete.svelte';
+	import SlashCommandAutocomplete from './SlashCommandAutocomplete.svelte';
 	import StickerPicker from './stickers/StickerPicker.svelte';
 	import type { UploadItem } from './UploadProgress.svelte';
 
@@ -36,6 +39,11 @@
 	let mentionStartIndex = -1;
 	let mentionAutocompleteRef: MentionAutocomplete;
 	
+	// Slash command autocomplete state
+	let slashCommandPosition = { top: 0, left: 0 };
+	let slashCommandAutocompleteRef: SlashCommandAutocomplete;
+	let allSlashCommands: AutocompleteResult[] = [];
+	
 	// Max file size: 25MB
 	const MAX_FILE_SIZE = 25 * 1024 * 1024;
 	const MAX_FILES = 10;
@@ -48,11 +56,43 @@
 
 	$: actualPlaceholder = placeholder || getPlaceholder($currentChannel);
 
-	// Handle pending mention insertions from other components (e.g. MemberList context menu)
-	$: if ($messageInputSuggestion?.type === 'mention') {
-		insertMention($messageInputSuggestion.value);
-		messageInputSuggestion.clear();
+	function handleSlashCommandSelect(event: CustomEvent<{ command: typeof allSlashCommands[0]['command'] }>) {
+		const { command } = event.detail;
+		
+		// Find the slash in the content to replace
+		const cursorPos = textarea.selectionStart;
+		const textBeforeCursor = content.substring(0, cursorPos);
+		const lastSlashIndex = textBeforeCursor.lastIndexOf('/');
+		
+		if (lastSlashIndex !== -1) {
+			const beforeCommand = content.substring(0, lastSlashIndex);
+			const afterCommand = content.substring(cursorPos);
+			content = beforeCommand + '/' + command.name + ' ' + afterCommand;
+		}
+		
+		slashCommandUI.selectCommand(command);
+		closeSlashCommandAutocomplete();
+		
+		// Focus back on textarea
+		setTimeout(() => {
+			textarea.focus();
+		}, 0);
 	}
+
+	// Load slash commands on mount
+	onMount(async () => {
+		// Load all available slash commands for autocomplete
+		// In a real app, this would come from the current server's registered commands
+		try {
+			// For now, use the client-side filtering - commands would be loaded from API
+			allSlashCommands = slashCommands.map(cmd => ({
+				command: cmd,
+				choices: []
+			}));
+		} catch (err) {
+			console.warn('Failed to load slash commands for autocomplete:', err);
+		}
+	});
 
 	/**
 	 * Inserts a string (e.g. mention) at the current cursor position in the textarea.
@@ -94,6 +134,67 @@
 		autoResize();
 		handleTyping();
 		checkForMention();
+		checkForSlashCommand();
+	}
+
+	function checkForSlashCommand() {
+		const cursorPos = textarea.selectionStart;
+		const textBeforeCursor = content.substring(0, cursorPos);
+		
+		// Find the last / symbol before cursor
+		const lastSlashIndex = textBeforeCursor.lastIndexOf('/');
+		
+		if (lastSlashIndex === -1) {
+			slashCommandUI.hideAutocomplete();
+			return;
+		}
+		
+		// Check if / is at start or preceded by whitespace
+		const charBefore = lastSlashIndex > 0 ? textBeforeCursor[lastSlashIndex - 1] : ' ';
+		if (!/\s/.test(charBefore) && lastSlashIndex !== 0) {
+			slashCommandUI.hideAutocomplete();
+			return;
+		}
+		
+		// Get the query after /
+		const query = textBeforeCursor.substring(lastSlashIndex + 1);
+		
+		// Don't show if query has whitespace (completed command)
+		if (/\s/.test(query)) {
+			slashCommandUI.hideAutocomplete();
+			return;
+		}
+		
+		// Update slash command UI state
+		slashCommandUI.setInput('/' + query);
+		
+		// Filter commands based on input
+		const filteredCommands = getAutocompleteSuggestions('/' + query, allSlashCommands.map(r => r.command));
+		slashCommandUI.setAutocompleteResults(filteredCommands);
+		
+		if (filteredCommands.length > 0) {
+			slashCommandUI.showAutocomplete();
+			updateSlashCommandPosition();
+		} else {
+			slashCommandUI.hideAutocomplete();
+		}
+	}
+
+	function updateSlashCommandPosition() {
+		if (!textarea) return;
+		
+		const rect = textarea.getBoundingClientRect();
+		const inputContainer = textarea.closest('.message-input-container');
+		const containerRect = inputContainer?.getBoundingClientRect() || rect;
+		
+		slashCommandPosition = {
+			top: containerRect.height + 8,
+			left: 16
+		};
+	}
+
+	function closeSlashCommandAutocomplete() {
+		slashCommandUI.hideAutocomplete();
 	}
 
 	function checkForMention() {
@@ -193,6 +294,12 @@
 			if (handled) return;
 		}
 		
+		// Check if slash command autocomplete should handle this
+		if ($shouldShowAutocomplete && slashCommandAutocompleteRef) {
+			const handled = slashCommandAutocompleteRef.handleKeyDown(e);
+			if (handled) return;
+		}
+		
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			send();
@@ -202,6 +309,12 @@
 		if (e.key === 'Escape' && showMentionAutocomplete) {
 			e.preventDefault();
 			closeMentionAutocomplete();
+		}
+		
+		// Close slash command autocomplete on Escape
+		if (e.key === 'Escape' && $shouldShowAutocomplete) {
+			e.preventDefault();
+			closeSlashCommandAutocomplete();
 		}
 	}
 
@@ -401,6 +514,15 @@
 			on:close={closeMentionAutocomplete}
 		/>
 	{/if}
+	
+	<!-- Slash Command Autocomplete -->
+	<SlashCommandAutocomplete
+		bind:this={slashCommandAutocompleteRef}
+		commands={allSlashCommands.map(r => r.command)}
+		position={slashCommandPosition}
+		on:select={handleSlashCommandSelect}
+		on:escape={closeSlashCommandAutocomplete}
+	/>
 	
 	<!-- Upload Errors -->
 	{#if uploadErrors.length > 0}
