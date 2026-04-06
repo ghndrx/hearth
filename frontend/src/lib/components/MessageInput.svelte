@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onMount, tick } from 'svelte';
 	import { currentChannel } from '$lib/stores/channels';
 	import { sendTypingIndicator } from '$lib/stores/messages';
 	import { uploadStore } from '$lib/stores/uploads';
+	import { messageInputSuggestion } from '$lib/stores/messageInputSuggestion';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import GifPicker from './GifPicker.svelte';
 	import FileUploadZone from './FileUploadZone.svelte';
@@ -46,6 +47,37 @@
 	$: showUploadProgress = uploadItems.length > 0;
 
 	$: actualPlaceholder = placeholder || getPlaceholder($currentChannel);
+
+	// Handle pending mention insertions from other components (e.g. MemberList context menu)
+	$: if ($messageInputSuggestion?.type === 'mention') {
+		insertMention($messageInputSuggestion.value);
+		messageInputSuggestion.clear();
+	}
+
+	/**
+	 * Inserts a string (e.g. mention) at the current cursor position in the textarea.
+	 * Falls back to appending at end if textarea is not available.
+	 */
+	function insertMention(mention: string) {
+		if (!textarea) {
+			// Fallback: just append to content if textarea ref not yet set
+			content += mention;
+			return;
+		}
+		const start = textarea.selectionStart ?? content.length;
+		const end = textarea.selectionEnd ?? content.length;
+		const before = content.substring(0, start);
+		const after = content.substring(end);
+		content = before + mention + after;
+		// Move cursor after the inserted mention
+		tick().then(() => {
+			if (textarea) {
+				const newPos = start + mention.length;
+				textarea.setSelectionRange(newPos, newPos);
+				textarea.focus();
+			}
+		});
+	}
 
 	function getPlaceholder(channel: typeof $currentChannel) {
 		if (!channel) return 'Message';
