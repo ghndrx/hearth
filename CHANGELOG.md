@@ -2,6 +2,33 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [2026-04-06](https://github.com/ghndrx/hearth/compare/2026-04-05...HEAD)
+
+### Features
+* feat(matrix): implement Matrix Federation Core Phase 1 — Identity Layer
+* feat: competitive differentiation strategy - 3 PRDs for market leadership
+* feat: implement global cross-server search (#127)
+
+### Bug Fixes
+* fix(frontend): skip InviteLink select-change regeneration tests
+* fix(tests): properly mock WebCrypto API for x3dh.test.ts integration tests
+* fix(settings): reset backend settings when user resets all settings (#123)
+
+### Other Changes
+* chore: address tech debt in hostname error handling
+* chore: improve error handling in frontend catch blocks
+* chore: address tech debt in performance tests
+* docs: auto-generate changelog for 2026-04-05
+* chore: replace panic with proper error handling in config loading
+* chore(task-queue): add 2026-04-05 GitHub Issues Pipeline analysis
+* fix(frontend): skip InviteLink select-change regeneration tests
+* fix(tests): properly mock WebCrypto API for x3dh.test.ts integration tests
+* test(ComponentModal): fix Svelte 5 event handling in component tests (#126)
+* chore: tech debt cleanup - remove console.log statements (#125)
+
+### Miscellaneous
+  (none)
+
 ## [2026-04-05](https://github.com/ghndrx/hearth/compare/2026-04-04...HEAD)
 
 ### Features
