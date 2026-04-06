@@ -750,5 +750,3 @@ func (b *DistributedEventBridge) onServerBoostRemoved(event events.Event) {
 		}
 	}
 }
-
-var _ = json.Marshal
