@@ -1,0 +1,118 @@
+name: AI Agent - AWS Bedrock
+on:
+  # Manual trigger only - prevents noise on every push
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task for the agent (e.g. "review recent commits and suggest improvements")'
+        required: true
+        default: 'review recent commits and suggest improvements'
+      branch:
+        description: 'Branch to review'
+        required: false
+        default: 'develop'
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  agent-run:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+      issues: write
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.branch || 'develop' }}
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: pip install boto3
+          
+      - name: Run Kimi Agent
+        id: agent
+        env:
+          TASK: ${{ github.event.inputs.task }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'EOF'
+          import boto3
+          import json
+          import os
+          import subprocess
+          
+          bedrock = boto3.client('bedrock-runtime', region_name='us-west-2')
+          
+          task = os.environ.get('TASK', 'review code')
+          
+          try:
+              git_log = subprocess.check_output(['git', 'log', '--oneline', '-20'], text=True)
+          except:
+              git_log = 'Unable to fetch git log'
+          
+          try:
+              diff_stat = subprocess.check_output(['git', 'diff', '--stat', 'HEAD~5'], text=True)
+          except:
+              diff_stat = 'Unable to fetch diff'
+          
+          prompt = (
+              "Task: " + task + "\n\n"
+              "Review the recent commits and changes below and provide specific, actionable recommendations.\n\n"
+              "Recent commits:\n" + git_log + "\n\n"
+              "Recent changes:\n" + diff_stat + "\n\n"
+              "Format your response as markdown with specific file paths and line numbers where applicable."
+          )
+
+          messages = [{"role": "user", "content": [{"text": prompt}]}]
+          
+          response = bedrock.converse(
+              modelId='us.amazon.nova-lite-v1:0',
+              messages=messages,
+              inferenceConfig={
+                  "maxTokens": 4096,
+                  "temperature": 0.7
+              }
+          )
+          
+          output = response['output']['message']['content'][0]['text']
+          print(output)
+          
+          with open('agent_output.md', 'w') as f:
+              f.write(f"## 🤖 AI Agent Analysis\n\n{output}\n\n---\n*Generated via AWS Bedrock Kimi*")
+          EOF
+          
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-analysis
+          path: agent_output.md
+          
+      - name: Post comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('agent_output.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
