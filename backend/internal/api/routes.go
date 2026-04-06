@@ -812,6 +812,16 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		activities.Post("/:activityId/moves", h.VoiceActivities.GameMove)
 	}
 
+	// Calls (video/audio)
+	if h.Calls != nil {
+		calls := api.Group("/calls")
+		calls.Post("/", h.Calls.Create)
+		calls.Get("/:id", h.Calls.Get)
+		calls.Post("/:id/join", h.Calls.Join)
+		calls.Post("/:id/leave", h.Calls.Leave)
+		calls.Post("/:id/signal", h.Calls.Signal)
+	}
+
 	// Screen Share / Streams (if handler is configured)
 	if h.ScreenShare != nil {
 		// Channel streams
