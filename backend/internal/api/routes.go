@@ -576,6 +576,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		servers.Get("/:id/soundboard/sounds/:soundId", h.Soundboard.GetSound)
 		servers.Patch("/:id/soundboard/sounds/:soundId", h.Soundboard.ModifySound)
 		servers.Delete("/:id/soundboard/sounds/:soundId", h.Soundboard.DeleteSound)
+		servers.Post("/:id/soundboard/sounds/:soundId/play", h.Soundboard.PlaySound)
 
 		// Soundboard packs
 		servers.Get("/:id/soundboard/packs", h.Soundboard.ListServerPacks)

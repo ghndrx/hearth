@@ -140,6 +140,31 @@
 					<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 11h-8c-.55 0-1-.45-1-1s.45-1 1-1h8c.55 0 1 .45 1 1s-.45 1-1 1z"/>
 				</svg>
 			</button>
+
+			<!-- Soundboard Button -->
+			<div class="soundboard-wrapper">
+				<button
+					class="control-btn"
+					class:active={showSoundboardPicker}
+					on:click={() => showSoundboardPicker = !showSoundboardPicker}
+					aria-label="Soundboard"
+					title="Soundboard"
+				>
+					<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+						<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+					</svg>
+				</button>
+
+				{#if showSoundboardPicker}
+					<div class="soundboard-picker-container">
+						<SoundboardPicker
+							show={true}
+							on:play={handleSoundPlay}
+							on:close={() => showSoundboardPicker = false}
+						/>
+					</div>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}
@@ -242,5 +267,26 @@
 	.control-btn.disconnect:hover {
 		background: #f23f42;
 		color: white;
+	}
+
+	.soundboard-wrapper {
+		position: relative;
+	}
+
+	.soundboard-picker-container {
+		position: absolute;
+		bottom: 100%;
+		right: 0;
+		margin-bottom: 8px;
+		z-index: 100;
+	}
+
+	.control-btn.active:not(.disconnect) {
+		background: var(--brand-primary, #5865f2);
+		color: white;
+	}
+
+	.control-btn.active:not(.disconnect):hover {
+		background: var(--brand-hover, #4752c4);
 	}
 </style>

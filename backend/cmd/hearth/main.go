@@ -550,6 +550,7 @@ func main() {
 	// Initialize Soundboard service and handler
 	soundboardService := services.NewSoundboardService(nil)
 	h.SetSoundboardHandler(soundboardService, serverService, permService)
+	h.Soundboard.SetGateway(wsGateway)
 
 	// Initialize Soundboard signaling service for voice channel playback
 	soundboardSignaling := websocket.NewSoundboardSignalingService(wsHub, soundboardService)

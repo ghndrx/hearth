@@ -254,6 +254,38 @@ func (s *SoundboardService) Delete(ctx context.Context, soundID uuid.UUID) error
 	return nil
 }
 
+// PlaySoundInVoice returns the play event data for a sound
+// The REST handler is responsible for broadcasting this event to clients
+func (s *SoundboardService) PlaySoundInVoice(ctx context.Context, soundID uuid.UUID, channelID uuid.UUID, serverID uuid.UUID, volume float64) (*models.SoundboardPlayEvent, error) {
+	s.mu.RLock()
+	sound, ok := s.sounds[soundID]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, ErrSoundboardSoundNotFound
+	}
+
+	if !sound.Available {
+		return nil, ErrSoundboardSoundInvalid
+	}
+
+	if volume <= 0 {
+		volume = sound.Volume
+	}
+
+	playEvent := &models.SoundboardPlayEvent{
+		SoundID:    sound.ID.String(),
+		SoundName:  sound.Name,
+		EmojiName:  sound.EmojiName,
+		AudioURL:   sound.AudioURL,
+		Volume:     volume,
+		DurationMs: sound.DurationMs,
+		ChannelID:  channelID.String(),
+		ServerID:   serverID.String(),
+	}
+
+	return playEvent, nil
+}
+
 // Search searches sounds by name
 func (s *SoundboardService) Search(ctx context.Context, query string, serverID *uuid.UUID) ([]*models.SoundboardSound, error) {
 	s.mu.RLock()

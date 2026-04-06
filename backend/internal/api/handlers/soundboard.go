@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/url"
 	"path/filepath"
 
@@ -10,6 +11,7 @@ import (
 
 	"hearth/internal/models"
 	"hearth/internal/services"
+	"hearth/internal/websocket"
 )
 
 // validAudioExtensions contains the allowed audio file extensions
@@ -50,6 +52,12 @@ type SoundboardHandler struct {
 	soundboardService *services.SoundboardService
 	serverService     *services.ServerService
 	permService       *services.PermissionService
+	gateway           *websocket.Gateway
+}
+
+// SetGateway sets the WebSocket gateway for broadcasting events
+func (h *SoundboardHandler) SetGateway(gateway *websocket.Gateway) {
+	h.gateway = gateway
 }
 
 // NewSoundboardHandler creates a new soundboard handler
@@ -229,6 +237,73 @@ func (h *SoundboardHandler) DeleteSound(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete sound"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// PlaySound plays a soundboard sound in a voice channel
+func (h *SoundboardHandler) PlaySound(c *fiber.Ctx) error {
+	serverID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid server ID"})
+	}
+
+	soundID, err := uuid.Parse(c.Params("soundId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid sound ID"})
+	}
+
+	var req struct {
+		ChannelID string  `json:"channel_id"`
+		Volume    float64 `json:"volume"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if req.ChannelID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "channel_id is required"})
+	}
+
+	channelID, err := uuid.Parse(req.ChannelID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid channel_id"})
+	}
+
+	volume := req.Volume
+	if volume <= 0 {
+		volume = 1.0
+	}
+
+	playEvent, err := h.soundboardService.PlaySoundInVoice(c.Context(), soundID, channelID, serverID, volume)
+	if err != nil {
+		if errors.Is(err, services.ErrSoundboardSoundNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sound not found"})
+		}
+		if errors.Is(err, services.ErrSoundboardSoundInvalid) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "sound not available"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to play sound"})
+	}
+
+	// Add user info to the event
+	userIDRaw := c.Locals("userID")
+	if userID, ok := userIDRaw.(uuid.UUID); ok {
+		playEvent.UserID = userID.String()
+	}
+
+	// Broadcast to all users in the server via WebSocket
+	if h.gateway != nil {
+		hub := h.gateway.Hub()
+		if hub != nil {
+			hub.SendToServer(serverID, &websocket.Event{
+				Op:   websocket.OpDispatch,
+				Type: websocket.EventSoundboardPlay,
+				Data: playEvent,
+			})
+			log.Printf("[Soundboard] Broadcast play via REST: sound=%s, server=%s", playEvent.SoundName, serverID)
+		}
+	}
+
+	return c.JSON(fiber.Map{"status": "ok"})
 }
 
 // --- Pack endpoints ---
