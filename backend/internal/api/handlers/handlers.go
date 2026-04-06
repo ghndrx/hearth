@@ -62,6 +62,7 @@ type Handlers struct {
 	SmartModeration          *SmartModerationHandler
 	VoiceActivities          *VoiceActivityHandler
 	Calls                    *CallHandler
+	Embed                    *EmbedHandler
 }
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
 func (h *Handlers) SetE2EEHandler(e2eeService *services.E2EEServiceImpl) {
@@ -401,4 +402,9 @@ func (h *Handlers) SetVoiceActivityHandler(
 // SetCallHandler sets the call handler
 func (h *Handlers) SetCallHandler(callService *services.CallService, channelService CallChannelServiceInterface) {
 	h.Calls = NewCallHandler(callService, channelService)
+}
+
+// SetEmbedHandler sets the embed handler
+func (h *Handlers) SetEmbedHandler(embedService *services.EmbedService) {
+	h.Embed = NewEmbedHandler(embedService)
 }
