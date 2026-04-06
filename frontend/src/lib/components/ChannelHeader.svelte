@@ -3,6 +3,7 @@
 	import { splitViewStore, canAddSplitPanel, splitViewEnabled } from '$lib/stores/splitView';
 	import type { Channel } from '$lib/stores/channels';
 	import Tooltip from './Tooltip.svelte';
+	import NotificationStatusIndicator from './NotificationStatusIndicator.svelte';
 
 	export let channelName: string = '';
 	export let channelType: 'text' | 'voice' | 'announcement' | 'stage' | 'forum' = 'text';
@@ -121,9 +122,9 @@
 				>
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H5.17L4 17.17V4H20V16ZM11 12H13V14H11V12ZM11 6H13V10H11V6Z" />
-					</svg>
-					<span class="btn-label">Create Post</span>
-				</button>
+				</svg>
+				<span class="btn-label">Create Post</span>
+			</button>
 			</Tooltip>
 		{/if}
 
@@ -137,7 +138,7 @@
 				>
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M5.43309 21C5.35842 21 5.30189 20.9325 5.31494 20.859L5.99991 17H2.14274C2.06819 17 2.01168 16.9327 2.02453 16.8593L2.33253 15.0993C2.34258 15.0419 2.39244 15 2.45074 15H6.34991L7.40991 9H3.55274C3.47819 9 3.42168 8.93274 3.43453 8.85931L3.74253 7.09931C3.75258 7.04189 3.80244 7 3.86074 7H7.75991L8.45234 3.09903C8.46251 3.04174 8.51231 3 8.57049 3H10.3267C10.4014 3 10.4579 3.06746 10.4449 3.14097L9.75991 7H15.7599L16.4523 3.09903C16.4625 3.04174 16.5123 3 16.5765 3H18.3267C18.4014 3 18.4579 3.06746 18.4449 3.14097L17.7599 7H21.6171C21.6916 7 21.7481 7.06725 21.7353 7.14069L21.4273 8.90069C21.4172 8.95811 21.3674 9 21.3091 9H17.4099L17.0495 11.03C17.8221 11.0757 18.5508 11.3589 19.1558 11.8248C20.0283 12.4992 20.5 13.4941 20.5 14.5C20.5 15.5052 20.0283 16.5008 19.1558 17.1752C18.5508 17.6411 17.8221 17.9243 17.0495 17.97L16.8053 19.3495C16.7807 19.4901 16.6588 19.5939 16.5157 19.5939H14.6343C14.5451 19.5939 14.4797 19.5123 14.4988 19.4254L14.7197 18.3495C14.0943 18.2499 13.5125 18.001 13.0134 17.6271L12.8643 18.859C12.8515 18.9325 12.7948 19 12.7203 19H6.44991L5.75748 22.901C5.74731 22.9583 5.69751 23 5.63933 23H3.88309C3.80842 23 3.75189 22.9325 3.76494 22.859L4.44991 19H4.44991L4.44991 19L4.44991 19H4.44987C4.44993 19 4.44999 19 4.45005 19L5.14234 15.099C5.15251 15.0417 5.20231 15 5.26049 15H5.26049C5.31867 15 5.36847 14.9583 5.37864 14.901L5.43309 21ZM8.34991 15L9.40991 9H15.4099L14.3499 15H8.34991Z" />
-					</svg>
+				</svg>
 				</button>
 			</Tooltip>
 		{/if}
@@ -169,6 +170,13 @@
 			</Tooltip>
 		{/if}
 
+		<!-- Notification status indicator -->
+		{#if channel}
+			<div class="notification-indicator-wrapper">
+				<NotificationStatusIndicator channelId={channel.id} size="sm" />
+			</div>
+		{/if}
+
 		<!-- Notification settings -->
 		<Tooltip text="Notification Settings">
 			<button
@@ -178,8 +186,8 @@
 			>
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M12 22C10.8954 22 10 21.1046 10 20H14C14 21.1046 13.1046 22 12 22ZM20 19H4V17L6 16V10.5C6 7.038 7.421 4.793 10 4.18V2H14V4.18C16.579 4.793 18 7.038 18 10.5V16L20 17V19Z" />
-				</svg>
-			</button>
+			</svg>
+		</button>
 		</Tooltip>
 
 		<!-- Pinned messages -->
@@ -192,7 +200,7 @@
 			>
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M22 12L12.101 2.10101L10.686 3.51401L12.101 4.92901L7.15096 9.87801V9.88001L5.73596 8.46501L4.32196 9.88001L8.56496 14.122L2.90796 19.778L4.32196 21.192L9.97896 15.536L14.222 19.778L15.636 18.364L14.222 16.95L19.171 12H19.172L20.586 13.414L22 12Z" />
-				</svg>
+			</svg>
 				{#if pinnedCount > 0}
 					<span class="pin-badge">{pinnedCount}</span>
 				{/if}
@@ -243,7 +251,7 @@
 			>
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M19 3H5C3.89 3 3 3.89 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.89 20.1 3 19 3ZM19 15H15C15 16.66 13.66 18 12 18C10.34 18 9 16.66 9 15H5V5H19V15Z" />
-				</svg>
+			</svg>
 			</button>
 		</Tooltip>
 
@@ -256,7 +264,7 @@
 			>
 				<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M12 2C6.486 2 2 6.487 2 12C2 17.515 6.486 22 12 22C17.514 22 22 17.515 22 12C22 6.487 17.514 2 12 2ZM12 18.25C11.31 18.25 10.75 17.691 10.75 17C10.75 16.31 11.31 15.75 12 15.75C12.69 15.75 13.25 16.31 13.25 17C13.25 17.691 12.69 18.25 12 18.25ZM13 13.875V15H11V12H12C13.104 12 14 11.103 14 10C14 8.896 13.104 8 12 8C10.896 8 10 8.896 10 10H8C8 7.795 9.795 6 12 6C14.205 6 16 7.795 16 10C16 11.861 14.723 13.429 13 13.875Z" />
-				</svg>
+			</svg>
 			</button>
 		</Tooltip>
 	</div>
@@ -461,6 +469,14 @@
 	.create-post-btn svg {
 		width: 18px;
 		height: 18px;
+	}
+
+	/* Notification indicator wrapper */
+	.notification-indicator-wrapper {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0 2px;
 	}
 
 	/* Responsive: hide some actions on smaller screens */
