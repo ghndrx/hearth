@@ -135,6 +135,17 @@ type WebhookRepository interface {
 	CountByChannelID(ctx context.Context, channelID uuid.UUID) (int, error)
 }
 
+// WebhookDeliveryRepository defines webhook delivery log data access
+type WebhookDeliveryRepository interface {
+	Create(ctx context.Context, delivery *models.WebhookDelivery) error
+	GetByWebhookID(ctx context.Context, webhookID uuid.UUID, limit, offset int) ([]*models.WebhookDelivery, error)
+	GetRecentFailures(ctx context.Context, webhookID uuid.UUID, limit int) ([]*models.WebhookDelivery, error)
+	GetStats(ctx context.Context, webhookID uuid.UUID) (*models.WebhookDeliveryStats, error)
+	GetRecentFailuresDetailed(ctx context.Context, webhookID uuid.UUID, limit int) ([]*models.WebhookDelivery, error)
+	CleanupOldDeliveries(ctx context.Context, olderThan time.Time) (int64, error)
+	GetLastAttemptNumber(ctx context.Context, webhookID uuid.UUID) (int, error)
+}
+
 // MessageSender defines message sending operations (used by WebhookService)
 type MessageSender interface {
 	SendMessage(ctx context.Context, authorID, channelID uuid.UUID, content string, attachments []*models.Attachment, replyTo *uuid.UUID, stickerID *uuid.UUID) (*models.Message, error)

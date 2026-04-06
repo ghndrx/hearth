@@ -350,16 +350,17 @@ func (m *MockMessageServiceForWebhook) SendMessageForWebhook(ctx context.Context
 }
 
 // Helper function to create a WebhookService with mocks
-func newTestWebhookService() (*WebhookService, *MockWebhookRepository, *MockChannelRepositoryForWebhook, *MockServerRepoForWebhook, *MockEventBus, *MockMessageServiceForWebhook) {
+func newTestWebhookService() (*WebhookService, *MockWebhookRepository, *MockChannelRepositoryForWebhook, *MockServerRepoForWebhook, *MockEventBus, *MockMessageServiceForWebhook, *MockWebhookDeliveryRepository) {
 	webhookRepo := new(MockWebhookRepository)
 	channelRepo := new(MockChannelRepositoryForWebhook)
 	serverRepo := new(MockServerRepoForWebhook)
 	eventBus := new(MockEventBus)
 	messageService := new(MockMessageServiceForWebhook)
+	webhookDeliveryRepo := new(MockWebhookDeliveryRepository)
 
-	service := NewWebhookService(webhookRepo, channelRepo, serverRepo, nil, messageService, eventBus)
+	service := NewWebhookService(webhookRepo, webhookDeliveryRepo, channelRepo, serverRepo, nil, messageService, eventBus, nil)
 
-	return service, webhookRepo, channelRepo, serverRepo, eventBus, messageService
+	return service, webhookRepo, channelRepo, serverRepo, eventBus, messageService, webhookDeliveryRepo
 }
 
 // ============================================================================
@@ -367,7 +368,7 @@ func newTestWebhookService() (*WebhookService, *MockWebhookRepository, *MockChan
 // ============================================================================
 
 func TestWebhookService_CreateWebhook_Success(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, eventBus, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, eventBus, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -417,7 +418,7 @@ func TestWebhookService_CreateWebhook_Success(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_ChannelNotFound(t *testing.T) {
-	service, _, channelRepo, _, _, _ := newTestWebhookService()
+	service, _, channelRepo, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	channelID := uuid.New()
@@ -439,7 +440,7 @@ func TestWebhookService_CreateWebhook_ChannelNotFound(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_NotServerMember(t *testing.T) {
-	service, _, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, _, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -469,7 +470,7 @@ func TestWebhookService_CreateWebhook_NotServerMember(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_NameTooLong(t *testing.T) {
-	service, _, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, _, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -505,7 +506,7 @@ func TestWebhookService_CreateWebhook_NameTooLong(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_EmptyName(t *testing.T) {
-	service, _, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, _, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -541,7 +542,7 @@ func TestWebhookService_CreateWebhook_EmptyName(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_TooManyWebhooks(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -578,7 +579,7 @@ func TestWebhookService_CreateWebhook_TooManyWebhooks(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_RepositoryError(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -615,7 +616,7 @@ func TestWebhookService_CreateWebhook_RepositoryError(t *testing.T) {
 }
 
 func TestWebhookService_CreateWebhook_WithAvatar(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, eventBus, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, eventBus, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -661,7 +662,7 @@ func TestWebhookService_CreateWebhook_WithAvatar(t *testing.T) {
 // ============================================================================
 
 func TestWebhookService_GetWebhook_Success(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -701,7 +702,7 @@ func TestWebhookService_GetWebhook_Success(t *testing.T) {
 }
 
 func TestWebhookService_GetWebhook_NotFound(t *testing.T) {
-	service, webhookRepo, _, _, _, _ := newTestWebhookService()
+	service, webhookRepo, _, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	webhookID := uuid.New()
@@ -717,7 +718,7 @@ func TestWebhookService_GetWebhook_NotFound(t *testing.T) {
 }
 
 func TestWebhookService_GetWebhook_NotServerMember(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -754,7 +755,7 @@ func TestWebhookService_GetWebhook_NotServerMember(t *testing.T) {
 // ============================================================================
 
 func TestWebhookService_GetChannelWebhooks_Success(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -789,7 +790,7 @@ func TestWebhookService_GetChannelWebhooks_Success(t *testing.T) {
 }
 
 func TestWebhookService_GetChannelWebhooks_ChannelNotFound(t *testing.T) {
-	service, _, channelRepo, _, _, _ := newTestWebhookService()
+	service, _, channelRepo, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	channelID := uuid.New()
@@ -809,7 +810,7 @@ func TestWebhookService_GetChannelWebhooks_ChannelNotFound(t *testing.T) {
 // ============================================================================
 
 func TestWebhookService_GetServerWebhooks_Success(t *testing.T) {
-	service, webhookRepo, _, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, _, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -836,7 +837,7 @@ func TestWebhookService_GetServerWebhooks_Success(t *testing.T) {
 }
 
 func TestWebhookService_GetServerWebhooks_NotMember(t *testing.T) {
-	service, _, _, serverRepo, _, _ := newTestWebhookService()
+	service, _, _, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -856,7 +857,7 @@ func TestWebhookService_GetServerWebhooks_NotMember(t *testing.T) {
 // ============================================================================
 
 func TestWebhookService_UpdateWebhook_Success(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, eventBus, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, eventBus, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -902,7 +903,7 @@ func TestWebhookService_UpdateWebhook_Success(t *testing.T) {
 }
 
 func TestWebhookService_UpdateWebhook_NotFound(t *testing.T) {
-	service, webhookRepo, _, _, _, _ := newTestWebhookService()
+	service, webhookRepo, _, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	webhookID := uuid.New()
@@ -923,7 +924,7 @@ func TestWebhookService_UpdateWebhook_NotFound(t *testing.T) {
 }
 
 func TestWebhookService_UpdateWebhook_InvalidName(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, _, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -967,7 +968,7 @@ func TestWebhookService_UpdateWebhook_InvalidName(t *testing.T) {
 }
 
 func TestWebhookService_UpdateWebhook_MoveToDifferentChannel(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, eventBus, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, eventBus, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1024,7 +1025,7 @@ func TestWebhookService_UpdateWebhook_MoveToDifferentChannel(t *testing.T) {
 // ============================================================================
 
 func TestWebhookService_DeleteWebhook_Success(t *testing.T) {
-	service, webhookRepo, channelRepo, serverRepo, eventBus, _ := newTestWebhookService()
+	service, webhookRepo, channelRepo, serverRepo, eventBus, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1065,7 +1066,7 @@ func TestWebhookService_DeleteWebhook_Success(t *testing.T) {
 }
 
 func TestWebhookService_DeleteWebhook_NotFound(t *testing.T) {
-	service, webhookRepo, _, _, _, _ := newTestWebhookService()
+	service, webhookRepo, _, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	webhookID := uuid.New()
@@ -1084,7 +1085,7 @@ func TestWebhookService_DeleteWebhook_NotFound(t *testing.T) {
 // ============================================================================
 
 func TestWebhookService_ExecuteWebhook_Success(t *testing.T) {
-	service, webhookRepo, _, _, eventBus, msgSvc := newTestWebhookService()
+	service, webhookRepo, _, _, eventBus, msgSvc, deliveryRepo := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1115,6 +1116,7 @@ func TestWebhookService_ExecuteWebhook_Success(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	msgSvc.On("SendMessageForWebhook", ctx, mock.AnythingOfType("services.SendWebhookMessageRequest")).Return(testMessage, nil)
+	deliveryRepo.On("Create", ctx, mock.AnythingOfType("*models.WebhookDelivery")).Return(nil)
 
 	req := &ExecuteWebhookRequest{
 		Content: "Hello from webhook!",
@@ -1131,7 +1133,7 @@ func TestWebhookService_ExecuteWebhook_Success(t *testing.T) {
 }
 
 func TestWebhookService_ExecuteWebhook_NotFound(t *testing.T) {
-	service, webhookRepo, _, _, _, _ := newTestWebhookService()
+	service, webhookRepo, _, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	webhookID := uuid.New()
@@ -1151,7 +1153,7 @@ func TestWebhookService_ExecuteWebhook_NotFound(t *testing.T) {
 }
 
 func TestWebhookService_ExecuteWebhook_InvalidToken(t *testing.T) {
-	service, webhookRepo, _, _, _, _ := newTestWebhookService()
+	service, webhookRepo, _, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1180,7 +1182,7 @@ func TestWebhookService_ExecuteWebhook_InvalidToken(t *testing.T) {
 }
 
 func TestWebhookService_ExecuteWebhook_EmptyContent(t *testing.T) {
-	service, webhookRepo, _, _, _, _ := newTestWebhookService()
+	service, webhookRepo, _, _, _, _, _ := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1210,7 +1212,7 @@ func TestWebhookService_ExecuteWebhook_EmptyContent(t *testing.T) {
 }
 
 func TestWebhookService_ExecuteWebhook_WithCustomUsername(t *testing.T) {
-	service, webhookRepo, _, _, eventBus, msgSvc := newTestWebhookService()
+	service, webhookRepo, _, _, eventBus, msgSvc, deliveryRepo := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1244,6 +1246,7 @@ func TestWebhookService_ExecuteWebhook_WithCustomUsername(t *testing.T) {
 	msgSvc.On("SendMessageForWebhook", ctx, mock.MatchedBy(func(req SendWebhookMessageRequest) bool {
 		return req.Username != nil && *req.Username == customUsername
 	})).Return(testMessage, nil)
+	deliveryRepo.On("Create", ctx, mock.AnythingOfType("*models.WebhookDelivery")).Return(nil)
 
 	req := &ExecuteWebhookRequest{
 		Content:  "Hello from webhook!",
@@ -1259,7 +1262,7 @@ func TestWebhookService_ExecuteWebhook_WithCustomUsername(t *testing.T) {
 }
 
 func TestExecuteWebhook_CreatesPersistedMessage(t *testing.T) {
-	service, webhookRepo, _, _, eventBus, msgSvc := newTestWebhookService()
+	service, webhookRepo, _, _, eventBus, msgSvc, deliveryRepo := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1299,6 +1302,7 @@ func TestExecuteWebhook_CreatesPersistedMessage(t *testing.T) {
 			req.ChannelID == channelID &&
 			req.Content == "This is a persisted message!"
 	})).Return(testMessage, nil)
+	deliveryRepo.On("Create", ctx, mock.AnythingOfType("*models.WebhookDelivery")).Return(nil)
 
 	req := &ExecuteWebhookRequest{
 		Content: "This is a persisted message!",
@@ -1315,7 +1319,7 @@ func TestExecuteWebhook_CreatesPersistedMessage(t *testing.T) {
 }
 
 func TestExecuteWebhook_UsernameOverride(t *testing.T) {
-	service, webhookRepo, _, _, eventBus, msgSvc := newTestWebhookService()
+	service, webhookRepo, _, _, eventBus, msgSvc, deliveryRepo := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1352,6 +1356,7 @@ func TestExecuteWebhook_UsernameOverride(t *testing.T) {
 	msgSvc.On("SendMessageForWebhook", ctx, mock.MatchedBy(func(req SendWebhookMessageRequest) bool {
 		return req.Username != nil && *req.Username == customUsername
 	})).Return(testMessage, nil)
+	deliveryRepo.On("Create", ctx, mock.AnythingOfType("*models.WebhookDelivery")).Return(nil)
 
 	req := &ExecuteWebhookRequest{
 		Content:  "Hello!",
@@ -1366,7 +1371,7 @@ func TestExecuteWebhook_UsernameOverride(t *testing.T) {
 }
 
 func TestExecuteWebhook_AvatarOverride(t *testing.T) {
-	service, webhookRepo, _, _, eventBus, msgSvc := newTestWebhookService()
+	service, webhookRepo, _, _, eventBus, msgSvc, deliveryRepo := newTestWebhookService()
 	ctx := context.Background()
 
 	serverID := uuid.New()
@@ -1404,6 +1409,7 @@ func TestExecuteWebhook_AvatarOverride(t *testing.T) {
 	msgSvc.On("SendMessageForWebhook", ctx, mock.MatchedBy(func(req SendWebhookMessageRequest) bool {
 		return req.AvatarURL != nil && *req.AvatarURL == customAvatar
 	})).Return(testMessage, nil)
+	deliveryRepo.On("Create", ctx, mock.AnythingOfType("*models.WebhookDelivery")).Return(nil)
 
 	req := &ExecuteWebhookRequest{
 		Content:   "Hello with custom avatar!",
@@ -1436,4 +1442,59 @@ func TestGenerateWebhookToken(t *testing.T) {
 		assert.False(t, tokens[token], "Generated duplicate token")
 		tokens[token] = true
 	}
+}
+
+// ============================================================================
+// Mock WebhookDeliveryRepository
+// ============================================================================
+
+type MockWebhookDeliveryRepository struct {
+	mock.Mock
+}
+
+func (m *MockWebhookDeliveryRepository) Create(ctx context.Context, delivery *models.WebhookDelivery) error {
+	args := m.Called(ctx, delivery)
+	return args.Error(0)
+}
+
+func (m *MockWebhookDeliveryRepository) GetByWebhookID(ctx context.Context, webhookID uuid.UUID, limit, offset int) ([]*models.WebhookDelivery, error) {
+	args := m.Called(ctx, webhookID, limit, offset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.WebhookDelivery), args.Error(1)
+}
+
+func (m *MockWebhookDeliveryRepository) GetRecentFailures(ctx context.Context, webhookID uuid.UUID, limit int) ([]*models.WebhookDelivery, error) {
+	args := m.Called(ctx, webhookID, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.WebhookDelivery), args.Error(1)
+}
+
+func (m *MockWebhookDeliveryRepository) GetStats(ctx context.Context, webhookID uuid.UUID) (*models.WebhookDeliveryStats, error) {
+	args := m.Called(ctx, webhookID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.WebhookDeliveryStats), args.Error(1)
+}
+
+func (m *MockWebhookDeliveryRepository) GetRecentFailuresDetailed(ctx context.Context, webhookID uuid.UUID, limit int) ([]*models.WebhookDelivery, error) {
+	args := m.Called(ctx, webhookID, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.WebhookDelivery), args.Error(1)
+}
+
+func (m *MockWebhookDeliveryRepository) CleanupOldDeliveries(ctx context.Context, olderThan time.Time) (int64, error) {
+	args := m.Called(ctx, olderThan)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockWebhookDeliveryRepository) GetLastAttemptNumber(ctx context.Context, webhookID uuid.UUID) (int, error) {
+	args := m.Called(ctx, webhookID)
+	return args.Int(0), args.Error(1)
 }

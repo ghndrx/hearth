@@ -339,13 +339,15 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 
 // SendWebhookMessageRequest represents a request to send a message via webhook
 type SendWebhookMessageRequest struct {
-	WebhookID uuid.UUID
-	ChannelID uuid.UUID
-	Content   string
-	Username  *string // Optional webhook name override
-	AvatarURL *string // Optional avatar override
-	TTS       bool
-	Embeds    []models.Embed
+	WebhookID       uuid.UUID
+	ChannelID       uuid.UUID
+	Content         string
+	Username        *string // Optional webhook name override
+	AvatarURL       *string // Optional avatar override
+	TTS             bool
+	Embeds          []models.Embed
+	AllowedMentions *models.WebhookMessage `json:"allowed_mentions,omitempty"`
+	ThreadName      string
 }
 
 // SendMessageForWebhook sends a message on behalf of a webhook.
