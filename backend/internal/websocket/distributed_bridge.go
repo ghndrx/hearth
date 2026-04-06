@@ -750,4 +750,3 @@ func (b *DistributedEventBridge) onServerBoostRemoved(event events.Event) {
 		}
 	}
 }
-
