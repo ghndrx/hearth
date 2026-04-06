@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,34 +18,57 @@ type MessageServiceForWebhook interface {
 	SendMessageForWebhook(ctx context.Context, req SendWebhookMessageRequest) (*models.Message, error)
 }
 
+// CacheServiceForWebhook defines the cache operations needed for webhook rate limiting
+type CacheServiceForWebhook interface {
+	Get(ctx context.Context, key string) ([]byte, error)
+	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
+	IncrementWithExpiry(ctx context.Context, key string, ttl time.Duration) (int64, error)
+}
+
 // WebhookService handles webhook-related business logic
 type WebhookService struct {
-	webhookRepo    WebhookRepository
-	channelRepo    ChannelRepository
-	serverRepo     ServerRepository
-	permService    *PermissionService
-	messageService MessageServiceForWebhook
-	eventBus       EventBus
+	webhookRepo         WebhookRepository
+	webhookDeliveryRepo WebhookDeliveryRepository
+	channelRepo         ChannelRepository
+	serverRepo          ServerRepository
+	permService         *PermissionService
+	messageService      MessageServiceForWebhook
+	eventBus            EventBus
+	cache               CacheServiceForWebhook
 }
 
 // NewWebhookService creates a new webhook service
 func NewWebhookService(
 	webhookRepo WebhookRepository,
+	webhookDeliveryRepo WebhookDeliveryRepository,
 	channelRepo ChannelRepository,
 	serverRepo ServerRepository,
 	permService *PermissionService,
 	messageService MessageServiceForWebhook,
 	eventBus EventBus,
+	cache CacheServiceForWebhook,
 ) *WebhookService {
 	return &WebhookService{
-		webhookRepo:    webhookRepo,
-		channelRepo:    channelRepo,
-		serverRepo:     serverRepo,
-		permService:    permService,
-		messageService: messageService,
-		eventBus:       eventBus,
+		webhookRepo:         webhookRepo,
+		webhookDeliveryRepo: webhookDeliveryRepo,
+		channelRepo:         channelRepo,
+		serverRepo:          serverRepo,
+		permService:         permService,
+		messageService:      messageService,
+		eventBus:            eventBus,
+		cache:               cache,
 	}
 }
+
+// Rate limit constants for webhooks
+const (
+	// MaxRequestsPerMinute is the maximum webhook execution requests per minute per webhook
+	MaxRequestsPerMinute = 30
+	// RateLimitWindow is the rate limit window duration
+	RateLimitWindow = time.Minute
+	// MaxRetries is the maximum number of retry attempts for failed webhook deliveries
+	MaxRetries = 3
+)
 
 // CreateWebhookRequest represents a webhook creation request
 type CreateWebhookRequest struct {
@@ -299,10 +324,33 @@ func (s *WebhookService) DeleteWebhook(ctx context.Context, webhookID uuid.UUID,
 
 // ExecuteWebhookRequest represents a request to execute a webhook
 type ExecuteWebhookRequest struct {
-	Content   string
-	Username  *string
-	AvatarURL *string
-	TTS       bool
+	Content         string
+	Username        *string
+	AvatarURL       *string
+	TTS             bool
+	Embeds          []models.Embed
+	AllowedMentions *models.WebhookMessage `json:"allowed_mentions,omitempty"`
+	ThreadName      string
+}
+
+// CheckRateLimit checks if the webhook is rate limited
+func (s *WebhookService) CheckRateLimit(ctx context.Context, webhookID uuid.UUID) error {
+	if s.cache == nil {
+		return nil // No cache configured, skip rate limiting
+	}
+
+	key := fmt.Sprintf("webhook:ratelimit:%s", webhookID.String())
+	count, err := s.cache.IncrementWithExpiry(ctx, key, RateLimitWindow)
+	if err != nil {
+		// Log error but don't block the request on cache failure
+		return nil
+	}
+
+	if count > int64(MaxRequestsPerMinute) {
+		return ErrWebhookRateLimited
+	}
+
+	return nil
 }
 
 // ExecuteWebhook executes a webhook by sending a message
@@ -317,23 +365,77 @@ func (s *WebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.UUID
 		return nil, ErrInvalidWebhookToken
 	}
 
-	// Validate message
-	if req.Content == "" {
+	// Check rate limit
+	if err := s.CheckRateLimit(ctx, webhookID); err != nil {
+		return nil, err
+	}
+
+	// Validate message (must have content, embeds, or files)
+	if req.Content == "" && len(req.Embeds) == 0 {
 		return nil, ErrEmptyMessage
 	}
+
+	// Validate embeds limit
+	if len(req.Embeds) > 10 {
+		return nil, ErrTooManyEmbeds
+	}
+
+	// Log delivery attempt
+	delivery := &models.WebhookDelivery{
+		ID:            uuid.New(),
+		WebhookID:     webhookID,
+		AttemptNumber: 1,
+		CreatedAt:     time.Now(),
+	}
+
+	// Store request payload for auditing
+	requestPayload := map[string]interface{}{
+		"content":     req.Content,
+		"tts":         req.TTS,
+		"embeds_count": len(req.Embeds),
+		"thread_name": req.ThreadName,
+	}
+	delivery.RequestPayload = &requestPayload
 
 	// Create actual message via MessageService using webhook-specific method
 	// This skips permission checks and uses webhook ID as AuthorID
 	message, err := s.messageService.SendMessageForWebhook(ctx, SendWebhookMessageRequest{
-		WebhookID: webhook.ID,
-		ChannelID: webhook.ChannelID,
-		Content:   req.Content,
-		Username:  req.Username,
-		AvatarURL: req.AvatarURL,
-		TTS:       req.TTS,
+		WebhookID:       webhook.ID,
+		ChannelID:       webhook.ChannelID,
+		Content:         req.Content,
+		Username:        req.Username,
+		AvatarURL:       req.AvatarURL,
+		TTS:             req.TTS,
+		Embeds:          req.Embeds,
+		AllowedMentions: req.AllowedMentions,
+		ThreadName:      req.ThreadName,
 	})
+
+	now := time.Now()
+	delivery.DeliveredAt = &now
+
 	if err != nil {
+		// Log failed delivery
+		errorMsg := err.Error()
+		delivery.ErrorMessage = &errorMsg
+		zero := 0
+		delivery.StatusCode = &zero
+		if s.webhookDeliveryRepo != nil {
+			s.webhookDeliveryRepo.Create(ctx, delivery)
+		}
 		return nil, err
+	}
+
+	// Log successful delivery
+	statusCode := http.StatusOK
+	delivery.StatusCode = &statusCode
+	responseBody := "Message created successfully"
+	delivery.ResponseBody = &responseBody
+	zeroDuration := 0
+	delivery.DurationMs = &zeroDuration // Could track actual duration if needed
+
+	if s.webhookDeliveryRepo != nil {
+		s.webhookDeliveryRepo.Create(ctx, delivery)
 	}
 
 	s.eventBus.Publish("webhook.executed", &WebhookExecutedEvent{
@@ -343,6 +445,137 @@ func (s *WebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.UUID
 	})
 
 	return message, nil
+}
+
+// ExecuteWebhookWithRetry executes a webhook with retry logic for failed deliveries
+func (s *WebhookService) ExecuteWebhookWithRetry(ctx context.Context, webhookID uuid.UUID, token string, req *ExecuteWebhookRequest) (*models.Message, error) {
+	var lastErr error
+	var message *models.Message
+
+	for attempt := 1; attempt <= MaxRetries; attempt++ {
+		message, lastErr = s.ExecuteWebhook(ctx, webhookID, token, req)
+		if lastErr == nil {
+			return message, nil
+		}
+
+		// Don't retry on certain errors
+		if lastErr == ErrWebhookNotFound || lastErr == ErrInvalidWebhookToken || lastErr == ErrEmptyMessage || lastErr == ErrTooManyEmbeds {
+			return nil, lastErr
+		}
+
+		// Don't retry on rate limit
+		if lastErr == ErrWebhookRateLimited {
+			return nil, lastErr
+		}
+
+		// Exponential backoff before retry
+		if attempt < MaxRetries {
+			backoff := time.Duration(attempt*attempt) * time.Second
+			time.Sleep(backoff)
+		}
+	}
+
+	return nil, lastErr
+}
+
+// GetWebhookStats retrieves delivery statistics for a webhook
+func (s *WebhookService) GetWebhookStats(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.WebhookDeliveryStats, error) {
+	// Verify webhook exists and requester has access
+	webhook, err := s.webhookRepo.GetByID(ctx, webhookID)
+	if err != nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	channel, err := s.channelRepo.GetByID(ctx, webhook.ChannelID)
+	if err != nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+		// Require MANAGE_WEBHOOKS permission
+		if s.permService != nil {
+			if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageWebhooks); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if s.webhookDeliveryRepo == nil {
+		return &models.WebhookDeliveryStats{}, nil
+	}
+
+	return s.webhookDeliveryRepo.GetStats(ctx, webhookID)
+}
+
+// GetWebhookDeliveries retrieves delivery history for a webhook
+func (s *WebhookService) GetWebhookDeliveries(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, limit, offset int) ([]*models.WebhookDelivery, error) {
+	// Verify webhook exists and requester has access
+	webhook, err := s.webhookRepo.GetByID(ctx, webhookID)
+	if err != nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	channel, err := s.channelRepo.GetByID(ctx, webhook.ChannelID)
+	if err != nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+		// Require MANAGE_WEBHOOKS permission
+		if s.permService != nil {
+			if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageWebhooks); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if s.webhookDeliveryRepo == nil {
+		return []*models.WebhookDelivery{}, nil
+	}
+
+	return s.webhookDeliveryRepo.GetByWebhookID(ctx, webhookID, limit, offset)
+}
+
+// TestWebhook tests a webhook by sending a test message
+func (s *WebhookService) TestWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Message, error) {
+	webhook, err := s.webhookRepo.GetByID(ctx, webhookID)
+	if err != nil {
+		return nil, ErrWebhookNotFound
+	}
+
+	// Verify requester has permission
+	channel, err := s.channelRepo.GetByID(ctx, webhook.ChannelID)
+	if err != nil {
+		return nil, ErrChannelNotFound
+	}
+
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, requesterID)
+		if err != nil || member == nil {
+			return nil, ErrNotServerMember
+		}
+		// Require MANAGE_WEBHOOKS permission
+		if s.permService != nil {
+			if err := s.permService.RequirePermission(ctx, *channel.ServerID, requesterID, models.PermManageWebhooks); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Send a test message
+	testContent := "🔔 **Webhook Test**\n\nThis is a test message from your webhook **" + webhook.Name + "**.\n\nYour webhook is working correctly! ✅"
+	
+	return s.ExecuteWebhook(ctx, webhookID, webhook.Token, &ExecuteWebhookRequest{
+		Content: testContent,
+	})
 }
 
 // Helper functions

@@ -8,15 +8,36 @@
 
 	interface Webhook {
 		id: string;
+		token: string;
 		name: string;
 		channel_id: string;
 		guild_id: string;
-		token?: string;
 		avatar?: string | null;
 		type: number;
 	}
 
+	interface WebhookDeliveryStats {
+		total_deliveries: number;
+		successful_count: number;
+		failed_count: number;
+		success_rate: number;
+		avg_duration_ms: number;
+		last_delivery_at?: string;
+		last_failure_at?: string;
+	}
+
+	interface WebhookDelivery {
+		id: string;
+		webhook_id: string;
+		status_code?: number;
+		error?: string;
+		attempt_number: number;
+		created_at: string;
+	}
+
 	let webhooks: Webhook[] = [];
+	let webhookStats: Record<string, WebhookDeliveryStats> = {};
+	let recentFailures: Record<string, WebhookDelivery[]> = {};
 	let loading = true;
 	let error = '';
 	let creating = false;
@@ -27,6 +48,8 @@
 	let editChannel = '';
 	let deleteConfirmId: string | null = null;
 	let copiedId: string | null = null;
+	let testingId: string | null = null;
+	let expandedStatsId: string | null = null;
 
 	$: textChannels = ($serverChannels || []).filter(
 		(c: Channel) => c.type === 0 && c.server_id === serverId
@@ -51,11 +74,45 @@
 				}
 			}
 			webhooks = allWebhooks;
+			
+			// Load stats for each webhook
+			for (const webhook of allWebhooks) {
+				loadWebhookStats(webhook.id);
+			}
 		} catch (err) {
 			error = 'Failed to load webhooks';
 			console.error('Failed to load webhooks:', err);
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadWebhookStats(webhookId: string) {
+		try {
+			const stats = await api.get<WebhookDeliveryStats>(`/webhooks/${webhookId}/stats`);
+			webhookStats[webhookId] = stats;
+			webhookStats = webhookStats; // Trigger reactivity
+		} catch (err) {
+			console.error('Failed to load webhook stats:', err);
+		}
+	}
+
+	async function loadRecentFailures(webhookId: string) {
+		try {
+			const deliveries = await api.get<WebhookDelivery[]>(`/webhooks/${webhookId}/deliveries?limit=5`);
+			recentFailures[webhookId] = deliveries.filter(d => d.status_code && (d.status_code < 200 || d.status_code >= 300));
+			recentFailures = recentFailures; // Trigger reactivity
+		} catch (err) {
+			console.error('Failed to load recent failures:', err);
+		}
+	}
+
+	function toggleStats(webhookId: string) {
+		if (expandedStatsId === webhookId) {
+			expandedStatsId = null;
+		} else {
+			expandedStatsId = webhookId;
+			loadRecentFailures(webhookId);
 		}
 	}
 
@@ -70,6 +127,8 @@
 			webhooks = [...webhooks, webhook];
 			newWebhookName = '';
 			newWebhookChannel = '';
+			// Load stats for new webhook
+			loadWebhookStats(webhook.id);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create webhook';
 		} finally {
@@ -115,6 +174,8 @@
 		try {
 			await api.delete(`/webhooks/${webhookId}`);
 			webhooks = webhooks.filter(w => w.id !== webhookId);
+			delete webhookStats[webhookId];
+			delete recentFailures[webhookId];
 			deleteConfirmId = null;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to delete webhook';
@@ -132,9 +193,43 @@
 		}, 2000);
 	}
 
+	async function testWebhook(webhook: Webhook) {
+		testingId = webhook.id;
+		error = '';
+		try {
+			await api.post(`/webhooks/${webhook.id}/test`);
+			// Reload stats after test
+			await loadWebhookStats(webhook.id);
+			// Show success message briefly
+			setTimeout(() => {
+				if (testingId === webhook.id) testingId = null;
+			}, 2000);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to test webhook';
+			testingId = null;
+		}
+	}
+
 	function getChannelName(channelId: string): string {
 		const channel = textChannels.find((c: Channel) => c.id === channelId);
 		return channel ? `#${channel.name}` : 'Unknown';
+	}
+
+	function formatSuccessRate(rate: number): string {
+		return `${rate.toFixed(1)}%`;
+	}
+
+	function formatDate(dateStr: string | undefined): string {
+		if (!dateStr) return 'Never';
+		const date = new Date(dateStr);
+		return date.toLocaleString();
+	}
+
+	function getStatusColor(stats: WebhookDeliveryStats | undefined): string {
+		if (!stats || stats.total_deliveries === 0) return 'var(--text-muted, #72767d)';
+		if (stats.success_rate >= 95) return '#3ba55d';
+		if (stats.success_rate >= 80) return '#faa61a';
+		return '#ed4245';
 	}
 </script>
 
@@ -206,54 +301,135 @@
 								</div>
 							</div>
 						{:else}
-							<div class="webhook-info">
-								<div class="webhook-avatar">
-									{webhook.name.charAt(0).toUpperCase()}
+							<div class="webhook-main">
+								<div class="webhook-info">
+									<div class="webhook-avatar">
+										{webhook.name.charAt(0).toUpperCase()}
+									</div>
+									<div class="webhook-details">
+										<div class="webhook-name">{webhook.name}</div>
+										<div class="webhook-channel">{getChannelName(webhook.channel_id)}</div>
+									</div>
 								</div>
-								<div class="webhook-details">
-									<div class="webhook-name">{webhook.name}</div>
-									<div class="webhook-channel">{getChannelName(webhook.channel_id)}</div>
-								</div>
+								
+								{#if webhookStats[webhook.id]}
+									{@const stats = webhookStats[webhook.id]}
+									<div class="webhook-stats-summary">
+										<span class="stat-badge" style="color: {getStatusColor(stats)}">
+											{formatSuccessRate(stats.success_rate)} success
+										</span>
+										{#if stats.failed_count > 0}
+											<span class="stat-badge error">{stats.failed_count} failed</span>
+										{/if}
+									</div>
+								{/if}
+								
+								{#if canManageWebhooks}
+									<div class="webhook-actions">
+										{#if webhook.token}
+											<button
+												class="action-btn copy"
+												on:click={() => copyWebhookUrl(webhook)}
+												title="Copy webhook URL"
+											>
+												{copiedId === webhook.id ? 'Copied!' : 'Copy URL'}
+											</button>
+										{/if}
+										<button
+											class="action-btn test"
+											on:click={() => testWebhook(webhook)}
+											disabled={testingId === webhook.id}
+											title="Test webhook"
+										>
+											{testingId === webhook.id ? 'Testing...' : 'Test'}
+										</button>
+										<button
+											class="action-btn stats"
+											on:click={() => toggleStats(webhook.id)}
+											title="View stats"
+										>
+											{expandedStatsId === webhook.id ? 'Hide Stats' : 'Stats'}
+										</button>
+										<button
+											class="action-btn edit"
+											on:click={() => startEdit(webhook)}
+											title="Edit webhook"
+										>
+											Edit
+										</button>
+										{#if deleteConfirmId === webhook.id}
+											<button
+												class="action-btn delete confirm"
+												on:click={() => confirmDelete(webhook.id)}
+											>
+												Confirm
+											</button>
+											<button
+												class="action-btn cancel"
+												on:click={() => deleteConfirmId = null}
+											>
+												Cancel
+											</button>
+										{:else}
+											<button
+												class="action-btn delete"
+												on:click={() => deleteConfirmId = webhook.id}
+												title="Delete webhook"
+											>
+												Delete
+											</button>
+										{/if}
+									</div>
+								{/if}
 							</div>
-							{#if canManageWebhooks}
-								<div class="webhook-actions">
-									{#if webhook.token}
-										<button
-											class="action-btn copy"
-											on:click={() => copyWebhookUrl(webhook)}
-											title="Copy webhook URL"
-										>
-											{copiedId === webhook.id ? 'Copied!' : 'Copy URL'}
-										</button>
-									{/if}
-									<button
-										class="action-btn edit"
-										on:click={() => startEdit(webhook)}
-										title="Edit webhook"
-									>
-										Edit
-									</button>
-									{#if deleteConfirmId === webhook.id}
-										<button
-											class="action-btn delete confirm"
-											on:click={() => confirmDelete(webhook.id)}
-										>
-											Confirm
-										</button>
-										<button
-											class="action-btn cancel"
-											on:click={() => deleteConfirmId = null}
-										>
-											Cancel
-										</button>
-									{:else}
-										<button
-											class="action-btn delete"
-											on:click={() => deleteConfirmId = webhook.id}
-											title="Delete webhook"
-										>
-											Delete
-										</button>
+							
+							{#if expandedStatsId === webhook.id && webhookStats[webhook.id]}
+								{@const stats = webhookStats[webhook.id]}
+								<div class="webhook-stats-expanded">
+									<div class="stats-grid">
+										<div class="stat-item">
+											<span class="stat-label">Total Deliveries</span>
+											<span class="stat-value">{stats.total_deliveries}</span>
+										</div>
+										<div class="stat-item">
+											<span class="stat-label">Successful</span>
+											<span class="stat-value success">{stats.successful_count}</span>
+										</div>
+										<div class="stat-item">
+											<span class="stat-label">Failed</span>
+											<span class="stat-value error">{stats.failed_count}</span>
+										</div>
+										<div class="stat-item">
+											<span class="stat-label">Success Rate</span>
+											<span class="stat-value" style="color: {getStatusColor(stats)}">
+												{formatSuccessRate(stats.success_rate)}
+											</span>
+										</div>
+										<div class="stat-item">
+											<span class="stat-label">Avg Duration</span>
+											<span class="stat-value">{stats.avg_duration_ms.toFixed(0)}ms</span>
+										</div>
+										<div class="stat-item">
+											<span class="stat-label">Last Delivery</span>
+											<span class="stat-value">{formatDate(stats.last_delivery_at)}</span>
+										</div>
+									</div>
+									
+									{#if recentFailures[webhook.id]?.length > 0}
+										<div class="recent-failures">
+											<h4>Recent Failures</h4>
+											{#each recentFailures[webhook.id] as failure}
+												<div class="failure-item">
+													<span class="failure-status">HTTP {failure.status_code}</span>
+													<span class="failure-error" title={failure.error}>
+														{failure.error || 'Unknown error'}
+													</span>
+													<span class="failure-time">
+														{new Date(failure.created_at).toLocaleString()}
+													</span>
+												</div>
+											{/each}
+										</div>
 									{/if}
 								</div>
 							{/if}
@@ -379,11 +555,18 @@
 
 	.webhook-card {
 		display: flex;
+		flex-direction: column;
+		background: var(--bg-secondary, #2f3136);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.webhook-main {
+		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1rem;
-		background: var(--bg-secondary, #2f3136);
-		border-radius: 8px;
+		gap: 0.5rem;
 	}
 
 	.webhook-info {
@@ -391,6 +574,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		min-width: 0;
+		flex: 1;
 	}
 
 	.webhook-avatar {
@@ -424,6 +608,26 @@
 		color: var(--text-muted, #72767d);
 	}
 
+	.webhook-stats-summary {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		flex-shrink: 0;
+	}
+
+	.stat-badge {
+		font-size: 0.75rem;
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		background: var(--bg-tertiary, #202225);
+		white-space: nowrap;
+	}
+
+	.stat-badge.error {
+		background: rgba(237, 66, 69, 0.2);
+		color: #ed4245;
+	}
+
 	.webhook-actions {
 		display: flex;
 		gap: 0.375rem;
@@ -440,13 +644,26 @@
 		color: var(--text-secondary, #b9bbbe);
 	}
 
-	.action-btn:hover {
+	.action-btn:hover:not(:disabled) {
 		background: var(--bg-modifier-hover, #36393f);
 		color: var(--text-primary, #dcddde);
 	}
 
+	.action-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.action-btn.copy {
 		color: var(--brand-color, #5865f2);
+	}
+
+	.action-btn.test {
+		color: #3ba55d;
+	}
+
+	.action-btn.stats {
+		color: #faa61a;
 	}
 
 	.action-btn.delete {
@@ -462,11 +679,93 @@
 		color: white;
 	}
 
+	.webhook-stats-expanded {
+		padding: 1rem;
+		border-top: 1px solid var(--border-color, #40444b);
+		background: var(--bg-tertiary, #202225);
+	}
+
+	.stats-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 1rem;
+	}
+
+	.stat-item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.stat-label {
+		font-size: 0.75rem;
+		color: var(--text-muted, #72767d);
+		text-transform: uppercase;
+	}
+
+	.stat-value {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-primary, #dcddde);
+	}
+
+	.stat-value.success {
+		color: #3ba55d;
+	}
+
+	.stat-value.error {
+		color: #ed4245;
+	}
+
+	.recent-failures {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-color, #40444b);
+	}
+
+	.recent-failures h4 {
+		margin: 0 0 0.5rem 0;
+		font-size: 0.875rem;
+		color: #ed4245;
+	}
+
+	.failure-item {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		gap: 0.75rem;
+		align-items: center;
+		padding: 0.5rem;
+		background: rgba(237, 66, 69, 0.1);
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+		font-size: 0.8rem;
+	}
+
+	.failure-status {
+		color: #ed4245;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.failure-error {
+		color: var(--text-secondary, #b9bbbe);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.failure-time {
+		color: var(--text-muted, #72767d);
+		white-space: nowrap;
+		font-size: 0.75rem;
+	}
+
 	.edit-form {
 		display: flex;
 		gap: 0.5rem;
 		align-items: center;
 		width: 100%;
+		padding: 0.75rem 1rem;
 	}
 
 	.edit-form input,
@@ -503,5 +802,32 @@
 		border-radius: 4px;
 		font-size: 0.8rem;
 		cursor: pointer;
+	}
+
+	@media (max-width: 768px) {
+		.create-form {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.webhook-main {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.75rem;
+		}
+
+		.webhook-actions {
+			width: 100%;
+			flex-wrap: wrap;
+		}
+
+		.stats-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		.failure-item {
+			grid-template-columns: 1fr;
+			gap: 0.25rem;
+		}
 	}
 </style>

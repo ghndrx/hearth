@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -20,6 +21,11 @@ type WebhookServiceInterface interface {
 	UpdateWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, req *services.UpdateWebhookRequest) (*models.Webhook, error)
 	DeleteWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) error
 	ExecuteWebhook(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error)
+	ExecuteWebhookWithRetry(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error)
+	GetWebhookStats(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.WebhookDeliveryStats, error)
+	GetWebhookDeliveries(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, limit, offset int) ([]*models.WebhookDelivery, error)
+	TestWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Message, error)
+	CheckRateLimit(ctx context.Context, webhookID uuid.UUID) error
 }
 
 // WebhookHandlers handles webhook-related HTTP requests
@@ -72,6 +78,7 @@ func webhookToResponse(webhook *models.Webhook) WebhookResponse {
 // @Failure 400 {object} fiber.Map "Invalid channel ID or request body"
 // @Failure 403 {object} fiber.Map "Not a server member or missing MANAGE_WEBHOOKS permission"
 // @Failure 404 {object} fiber.Map "Channel not found"
+// @Failure 429 {object} fiber.Map "Rate limited"
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channelID}/webhooks [post]
 func (h *WebhookHandlers) CreateWebhook(c *fiber.Ctx) error {
@@ -416,6 +423,17 @@ func (h *WebhookHandlers) DeleteWebhook(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// ExecuteWebhookRequest represents the request body for executing a webhook
+type ExecuteWebhookRequest struct {
+	Content         string          `json:"content,omitempty"`
+	Username        *string         `json:"username,omitempty"`
+	AvatarURL       *string         `json:"avatar_url,omitempty"`
+	TTS             bool            `json:"tts,omitempty"`
+	Embeds          []models.Embed  `json:"embeds,omitempty"`
+	AllowedMentions *models.WebhookMessage `json:"allowed_mentions,omitempty"`
+	ThreadName      string          `json:"thread_name,omitempty"`
+}
+
 // ExecuteWebhook executes a webhook (send a message)
 // @Summary Execute a webhook
 // @Description Sends a message through a webhook using its token
@@ -425,12 +443,13 @@ func (h *WebhookHandlers) DeleteWebhook(c *fiber.Ctx) error {
 // @Param webhookID path string true "Webhook ID"
 // @Param token path string true "Webhook token"
 // @Param wait query boolean false "Wait for message to be created and return it"
-// @Param body body struct{Content string `json:"content,omitempty"`; Username *string `json:"username,omitempty"`; AvatarURL *string `json:"avatar_url,omitempty"`; TTS bool `json:"tts"`} true "Message data"
+// @Param body body ExecuteWebhookRequest true "Message data"
 // @Success 200 {object} fiber.Map "Message created (when wait=true)"
 // @Success 204 "Message sent (when wait=false)"
 // @Failure 400 {object} fiber.Map "Invalid webhook ID, token, or empty message"
 // @Failure 401 {object} fiber.Map "Invalid webhook token"
 // @Failure 404 {object} fiber.Map "Webhook not found"
+// @Failure 429 {object} fiber.Map "Rate limited"
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /webhooks/{webhookID}/{token} [post]
 func (h *WebhookHandlers) ExecuteWebhook(c *fiber.Ctx) error {
@@ -447,24 +466,38 @@ func (h *WebhookHandlers) ExecuteWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	var req struct {
-		Content   string  `json:"content,omitempty"`
-		Username  *string `json:"username,omitempty"`
-		AvatarURL *string `json:"avatar_url,omitempty"`
-		TTS       bool    `json:"tts"`
-	}
+	var req ExecuteWebhookRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	message, err := h.webhookService.ExecuteWebhook(c.Context(), webhookID, token, &services.ExecuteWebhookRequest{
-		Content:   req.Content,
-		Username:  req.Username,
-		AvatarURL: req.AvatarURL,
-		TTS:       req.TTS,
-	})
+	useRetry := c.Query("retry", "true") == "true"
+	
+	var message *models.Message
+	if useRetry {
+		message, err = h.webhookService.ExecuteWebhookWithRetry(c.Context(), webhookID, token, &services.ExecuteWebhookRequest{
+			Content:         req.Content,
+			Username:        req.Username,
+			AvatarURL:       req.AvatarURL,
+			TTS:             req.TTS,
+			Embeds:          req.Embeds,
+			AllowedMentions: req.AllowedMentions,
+			ThreadName:      req.ThreadName,
+		})
+	} else {
+		message, err = h.webhookService.ExecuteWebhook(c.Context(), webhookID, token, &services.ExecuteWebhookRequest{
+			Content:         req.Content,
+			Username:        req.Username,
+			AvatarURL:       req.AvatarURL,
+			TTS:             req.TTS,
+			Embeds:          req.Embeds,
+			AllowedMentions: req.AllowedMentions,
+			ThreadName:      req.ThreadName,
+		})
+	}
+	
 	if err != nil {
 		if err == services.ErrWebhookNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -479,6 +512,17 @@ func (h *WebhookHandlers) ExecuteWebhook(c *fiber.Ctx) error {
 		if err == services.ErrEmptyMessage {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Content is required",
+			})
+		}
+		if err == services.ErrWebhookRateLimited {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Webhook is rate limited, please try again later",
+				"retry_after": 60,
+			})
+		}
+		if err == services.ErrTooManyEmbeds {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Maximum 10 embeds allowed",
 			})
 		}
 		log.Printf("Error executing webhook: %v", err)
@@ -496,4 +540,168 @@ func (h *WebhookHandlers) ExecuteWebhook(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// GetWebhookStats returns delivery statistics for a webhook
+// @Summary Get webhook delivery statistics
+// @Description Returns delivery statistics for the specified webhook
+// @Tags Webhooks
+// @Produce json
+// @Param webhookID path string true "Webhook ID"
+// @Success 200 {object} models.WebhookDeliveryStats "Webhook delivery statistics"
+// @Failure 400 {object} fiber.Map "Invalid webhook ID"
+// @Failure 403 {object} fiber.Map "Not a server member or missing MANAGE_WEBHOOKS permission"
+// @Failure 404 {object} fiber.Map "Webhook not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /webhooks/{webhookID}/stats [get]
+func (h *WebhookHandlers) GetWebhookStats(c *fiber.Ctx) error {
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
+	}
+
+	userID := c.Locals("userID").(uuid.UUID)
+
+	stats, err := h.webhookService.GetWebhookStats(c.Context(), webhookID, userID)
+	if err != nil {
+		if err == services.ErrWebhookNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Webhook not found",
+			})
+		}
+		if err == services.ErrNotServerMember {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "You must be a member of the server to view webhook stats",
+			})
+		}
+		if err == services.ErrMissingManageWebhooks {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Missing MANAGE_WEBHOOKS permission",
+			})
+		}
+		log.Printf("Error getting webhook stats: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get webhook stats",
+		})
+	}
+
+	return c.JSON(stats)
+}
+
+// GetWebhookDeliveries returns delivery history for a webhook
+// @Summary Get webhook delivery history
+// @Description Returns the delivery history for the specified webhook
+// @Tags Webhooks
+// @Produce json
+// @Param webhookID path string true "Webhook ID"
+// @Param limit query int false "Number of results to return (default 50, max 100)"
+// @Param offset query int false "Offset for pagination"
+// @Success 200 {array} models.WebhookDelivery "List of webhook deliveries"
+// @Failure 400 {object} fiber.Map "Invalid webhook ID"
+// @Failure 403 {object} fiber.Map "Not a server member or missing MANAGE_WEBHOOKS permission"
+// @Failure 404 {object} fiber.Map "Webhook not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /webhooks/{webhookID}/deliveries [get]
+func (h *WebhookHandlers) GetWebhookDeliveries(c *fiber.Ctx) error {
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
+	}
+
+	userID := c.Locals("userID").(uuid.UUID)
+
+	limit := 50
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	offset := 0
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	deliveries, err := h.webhookService.GetWebhookDeliveries(c.Context(), webhookID, userID, limit, offset)
+	if err != nil {
+		if err == services.ErrWebhookNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Webhook not found",
+			})
+		}
+		if err == services.ErrNotServerMember {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "You must be a member of the server to view webhook deliveries",
+			})
+		}
+		if err == services.ErrMissingManageWebhooks {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Missing MANAGE_WEBHOOKS permission",
+			})
+		}
+		log.Printf("Error getting webhook deliveries: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get webhook deliveries",
+		})
+	}
+
+	return c.JSON(deliveries)
+}
+
+// TestWebhook tests a webhook by sending a test message
+// @Summary Test a webhook
+// @Description Sends a test message through the webhook
+// @Tags Webhooks
+// @Produce json
+// @Param webhookID path string true "Webhook ID"
+// @Success 200 {object} fiber.Map "Test message sent"
+// @Failure 400 {object} fiber.Map "Invalid webhook ID"
+// @Failure 403 {object} fiber.Map "Not a server member or missing MANAGE_WEBHOOKS permission"
+// @Failure 404 {object} fiber.Map "Webhook not found"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /webhooks/{webhookID}/test [post]
+func (h *WebhookHandlers) TestWebhook(c *fiber.Ctx) error {
+	webhookID, err := uuid.Parse(c.Params("webhookID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid webhook ID",
+		})
+	}
+
+	userID := c.Locals("userID").(uuid.UUID)
+
+	message, err := h.webhookService.TestWebhook(c.Context(), webhookID, userID)
+	if err != nil {
+		if err == services.ErrWebhookNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Webhook not found",
+			})
+		}
+		if err == services.ErrNotServerMember {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "You must be a member of the server to test webhooks",
+			})
+		}
+		if err == services.ErrMissingManageWebhooks {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Missing MANAGE_WEBHOOKS permission",
+			})
+		}
+		log.Printf("Error testing webhook: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to test webhook",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success":    true,
+		"message":    "Test message sent successfully",
+		"message_id": message.ID.String(),
+	})
 }

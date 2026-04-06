@@ -307,13 +307,18 @@ func main() {
 		redisCache, // cache
 	)
 	typingService := services.NewTypingService(serviceBus)
+	// Initialize webhook delivery repository
+	webhookDeliveryRepo := postgres.NewWebhookDeliveryRepository(db)
+	
 	webhookService := services.NewWebhookService(
 		repos.Webhooks,
+		webhookDeliveryRepo,
 		repos.Channels,
 		repos.Servers,
 		permService,
 		messageService,
 		serviceBus,
+		redisCache, // cache for rate limiting
 	)
 	pollService := services.NewPollService(repos.Polls)
 
