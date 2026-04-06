@@ -128,7 +128,10 @@ export class E2EEApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
+      const error = await response.json().catch((parseError) => {
+        console.error('Failed to parse error response:', parseError);
+        return {};
+      });
       throw new E2EEApiError(
         error.message || 'Failed to upload keys',
         error.error || 'upload_failed',
@@ -180,7 +183,10 @@ export class E2EEApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
+      const error = await response.json().catch((parseError) => {
+        console.error('Failed to parse error response:', parseError);
+        return {};
+      });
       throw new E2EEApiError(
         error.message || 'Failed to get prekey bundle',
         error.error || 'get_bundle_failed',
@@ -325,7 +331,10 @@ export class E2EEApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
+      const error = await response.json().catch((parseError) => {
+        console.error('Failed to parse error response:', parseError);
+        return {};
+      });
       throw new E2EEApiError(
         error.message || 'Failed to claim keys',
         error.error || 'claim_failed',
