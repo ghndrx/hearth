@@ -61,6 +61,7 @@ type Handlers struct {
 	ServerFolders            *ServerFolderHandler
 	SmartModeration          *SmartModerationHandler
 	VoiceActivities          *VoiceActivityHandler
+	Calls                    *CallHandler
 }
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
 func (h *Handlers) SetE2EEHandler(e2eeService *services.E2EEServiceImpl) {
@@ -395,4 +396,9 @@ func (h *Handlers) SetVoiceActivityHandler(
 	permService services.PermissionServiceInterface,
 ) {
 	h.VoiceActivities = NewVoiceActivityHandler(activityService, channelService, permService)
+}
+
+// SetCallHandler sets the call handler
+func (h *Handlers) SetCallHandler(callService *services.CallService) {
+	h.Calls = NewCallHandler(callService)
 }
