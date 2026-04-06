@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { createEventDispatcher, onMount, tick } from 'svelte';
+	import { get } from 'svelte/store';
 	import { currentChannel } from '$lib/stores/channels';
 	import { sendTypingIndicator } from '$lib/stores/messages';
 	import { uploadStore } from '$lib/stores/uploads';
 	import { messageInputSuggestion } from '$lib/stores/messageInputSuggestion';
 	import { slashCommandUI, shouldShowAutocomplete } from '$lib/stores/slashCommandsUI';
-	import { slashCommands, getAutocompleteSuggestions, type AutocompleteResult } from '$lib/services/slashCommands';
+	import { slashCommands, getAutocompleteSuggestions, type AutocompleteResult, type SlashCommand } from '$lib/services/slashCommands';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import GifPicker from './GifPicker.svelte';
 	import FileUploadZone from './FileUploadZone.svelte';
@@ -17,7 +18,7 @@
 	import type { UploadItem } from './UploadProgress.svelte';
 
 	const dispatch = createEventDispatcher<{
-		send: { content: string; attachments: File[]; replyTo?: string; stickerId?: string };
+		send: { content: string; attachments: File[]; replyTo?: string; stickerId?: string; embed?: any };
 		typing: void;
 	}>();
 
@@ -87,7 +88,7 @@
 		// In a real app, this would come from the current server's registered commands
 		try {
 			// For now, use the client-side filtering - commands would be loaded from API
-			allSlashCommands = slashCommands.map(cmd => ({
+			allSlashCommands = get(slashCommands).map((cmd: SlashCommand) => ({
 				command: cmd,
 				choices: []
 			}));
