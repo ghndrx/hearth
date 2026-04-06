@@ -234,7 +234,7 @@
 						<input
 							id="embed-author-name"
 							type="text"
-							bind:value={embed.author.name}
+							bind:value={embed.author!.name}
 							placeholder="Author name"
 							maxlength="256"
 						/>
@@ -245,7 +245,7 @@
 						<input
 							id="embed-author-url"
 							type="url"
-							bind:value={embed.author.url}
+							bind:value={embed.author!.url}
 							placeholder="https://example.com"
 						/>
 					</div>
@@ -255,7 +255,7 @@
 						<input
 							id="embed-author-icon"
 							type="url"
-							bind:value={embed.author.icon}
+							bind:value={embed.author!.icon}
 							placeholder="https://example.com/icon.png"
 						/>
 					</div>
@@ -267,7 +267,7 @@
 						<input
 							id="embed-footer-text"
 							type="text"
-							bind:value={embed.footer.text}
+							bind:value={embed.footer!.text}
 							placeholder="Footer text"
 							maxlength="2048"
 						/>
@@ -278,7 +278,7 @@
 						<input
 							id="embed-footer-icon"
 							type="url"
-							bind:value={embed.footer.icon}
+							bind:value={embed.footer!.icon}
 							placeholder="https://example.com/icon.png"
 						/>
 					</div>

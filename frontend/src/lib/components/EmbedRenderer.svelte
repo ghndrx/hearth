@@ -1,4 +1,4 @@
-<script lang="ts">
+<script context="module" lang="ts">
 	export interface EmbedData {
 		id?: string;
 		title?: string;
@@ -24,7 +24,9 @@
 			inline?: boolean;
 		}>;
 	}
+</script>
 
+<script lang="ts">
 	export let embed: EmbedData;
 	export let showBorder = true;
 
