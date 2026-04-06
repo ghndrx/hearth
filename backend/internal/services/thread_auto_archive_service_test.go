@@ -350,6 +350,7 @@ func (m *simpleMockServerRepo) GetServerInviteUseLogs(ctx context.Context, serve
 	return nil, nil
 }
 
+
 // simpleMockEventBus is a simple mock for EventBus
 type simpleMockEventBus struct{}
 
