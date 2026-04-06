@@ -31,12 +31,13 @@ type BanRepository interface {
 
 // InviteService handles invite-related business logic
 type InviteService struct {
-	inviteRepo  InviteRepository
-	banRepo     BanRepository
-	serverRepo  ServerRepository
-	permService *PermissionService
-	cache       CacheService
-	eventBus    EventBus
+	inviteRepo    InviteRepository
+	banRepo       BanRepository
+	serverRepo    ServerRepository
+	permService   *PermissionService
+	cache         CacheService
+	eventBus      EventBus
+	rateLimiter   InviteRateLimiter
 }
 
 // NewInviteService creates a new invite service
@@ -56,6 +57,11 @@ func NewInviteService(
 		cache:       cache,
 		eventBus:    eventBus,
 	}
+}
+
+// SetInviteRateLimiter sets the rate limiter for invite creation
+func (s *InviteService) SetInviteRateLimiter(rateLimiter InviteRateLimiter) {
+	s.rateLimiter = rateLimiter
 }
 
 // CreateInviteRequest represents an invite creation request
@@ -79,6 +85,13 @@ func (s *InviteService) CreateInvite(ctx context.Context, req *CreateInviteReque
 	// Check CREATE_INVITE permission
 	if s.permService != nil {
 		if err := s.permService.RequirePermission(ctx, req.ServerID, req.CreatorID, models.PermCreateInvite); err != nil {
+			return nil, err
+		}
+	}
+
+	// Check invite creation rate limit
+	if s.rateLimiter != nil {
+		if err := s.rateLimiter.CheckInviteCreation(ctx, req.CreatorID); err != nil {
 			return nil, err
 		}
 	}

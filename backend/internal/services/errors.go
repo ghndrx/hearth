@@ -64,6 +64,7 @@ var (
 	ErrInviteNotFound    = errors.New("invite not found")
 	ErrInviteExpired     = errors.New("invite has expired")
 	ErrInviteMaxUses     = errors.New("invite has reached maximum uses")
+	ErrInviteRateLimited = errors.New("too many invites created recently")
 	ErrVanityCodeTaken   = errors.New("vanity code is already taken")
 	ErrVanityCodeInvalid = errors.New("vanity code must be 3-32 characters and contain only letters, numbers, hyphens, and underscores")
 

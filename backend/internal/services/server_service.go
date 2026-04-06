@@ -58,14 +58,15 @@ type ServerRepository interface {
 
 // ServerService handles server-related business logic
 type ServerService struct {
-	repo         ServerRepository
-	channelRepo  ChannelRepository
-	roleRepo     RoleRepository
-	messageRepo  MessageRepository
-	quotaService *QuotaService
-	permService  *PermissionService
-	cache        CacheService
-	eventBus     EventBus
+	repo             ServerRepository
+	channelRepo      ChannelRepository
+	roleRepo         RoleRepository
+	messageRepo      MessageRepository
+	quotaService     *QuotaService
+	permService      *PermissionService
+	cache            CacheService
+	eventBus         EventBus
+	inviteRateLimiter InviteRateLimiter
 }
 
 // NewServerService creates a new server service
@@ -89,6 +90,11 @@ func NewServerService(
 		cache:        cache,
 		eventBus:     eventBus,
 	}
+}
+
+// SetInviteRateLimiter sets the rate limiter for invite creation
+func (s *ServerService) SetInviteRateLimiter(rateLimiter InviteRateLimiter) {
+	s.inviteRateLimiter = rateLimiter
 }
 
 // CreateServer creates a new server
@@ -587,6 +593,13 @@ func (s *ServerService) CreateInvite(ctx context.Context, serverID, channelID, c
 	// Require CREATE_INVITE permission
 	if s.permService != nil {
 		if err := s.permService.RequirePermission(ctx, serverID, creatorID, models.PermCreateInvite); err != nil {
+			return nil, err
+		}
+	}
+
+	// Check invite creation rate limit
+	if s.inviteRateLimiter != nil {
+		if err := s.inviteRateLimiter.CheckInviteCreation(ctx, creatorID); err != nil {
 			return nil, err
 		}
 	}
