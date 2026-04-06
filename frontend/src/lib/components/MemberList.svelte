@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { currentServer } from '$lib/stores/servers';
+	import { currentChannel } from '$lib/stores/channels';
 	import { members, roles, loadServerMembers, loadServerRoles } from '$lib/stores/members';
 	import { presenceStore, type PresenceStatus, type Activity, getActivityLabel } from '$lib/stores/presence';
 	import { popoutStore } from '$lib/stores/popout';
 	import { handleListKeyboard } from '$lib/utils/keyboard';
 	import { createDM } from '$lib/stores/channels';
+	import { messageInputSuggestion } from '$lib/stores/messageInputSuggestion';
 	import Avatar from './Avatar.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import ContextMenuItem from './ContextMenuItem.svelte';
@@ -284,12 +286,31 @@
 		}
 	}
 
-	function handleMentionUser() {
+	async function handleMentionUser() {
 		if (!contextMenuMember) return;
 		showContextMenu = false;
-		// Copy @mention to clipboard for easy pasting into message input
+
 		const mention = `<@${contextMenuMember.user.id}>`;
-		navigator.clipboard.writeText(mention);
+		const channel = $currentChannel;
+
+		// If we're already in a DM with this user, insert mention directly
+		if (channel?.type === 1 && channel.recipients?.some(r => r.id === contextMenuMember!.user.id)) {
+			messageInputSuggestion.insertMention(mention);
+			return;
+		}
+
+		// Otherwise navigate to DM then insert mention
+		try {
+			const dmChannel = await createDM(contextMenuMember.user.id);
+			// Navigate to DM, then insert mention after mount
+			goto(`/channels/@me/${dmChannel.id}`);
+			// The MessageInput on the new page will pick up the pending mention
+			messageInputSuggestion.insertMention(mention);
+		} catch (err) {
+			// Fallback to clipboard if DM creation fails
+			console.error('[MemberList] Failed to open DM for mention:', err);
+			navigator.clipboard.writeText(mention);
+		}
 	}
 
 	function handleCopyUserId() {
