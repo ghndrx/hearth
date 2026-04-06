@@ -584,6 +584,19 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		api.Delete("/templates/:templateId", h.Templates.DeleteTemplate)
 	}
 
+	// Embeds (if handler is configured)
+	if h.Embed != nil {
+		// URL metadata fetching for link previews
+		api.Get("/embeds/fetch", h.Embed.FetchURLMetadata)
+
+		// Embed Templates
+		api.Get("/embeds/templates", h.Embed.ListTemplates)
+		api.Post("/embeds/templates", h.Embed.CreateTemplate)
+		api.Get("/embeds/templates/:id", h.Embed.GetTemplate)
+		api.Put("/embeds/templates/:id", h.Embed.UpdateTemplate)
+		api.Delete("/embeds/templates/:id", h.Embed.DeleteTemplate)
+	}
+
 	// Scheduled Events (if handler is configured)
 	if h.Events != nil {
 		// Server events

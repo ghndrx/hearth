@@ -13,6 +13,7 @@
 	import MentionAutocomplete from './MentionAutocomplete.svelte';
 	import SlashCommandAutocomplete from './SlashCommandAutocomplete.svelte';
 	import StickerPicker from './stickers/StickerPicker.svelte';
+	import EmbedBuilder from './EmbedBuilder.svelte';
 	import type { UploadItem } from './UploadProgress.svelte';
 
 	const dispatch = createEventDispatcher<{
@@ -30,6 +31,7 @@
 	let showEmojiPicker = false;
 	let showGifPicker = false;
 	let showStickerPicker = false;
+	let showEmbedBuilder = false;
 	let uploadErrors: string[] = [];
 	
 	// Mention autocomplete state
@@ -479,6 +481,27 @@
 		}
 	}
 
+	function toggleEmbedBuilder() {
+		showEmbedBuilder = !showEmbedBuilder;
+		if (showEmbedBuilder) {
+			showEmojiPicker = false;
+			showGifPicker = false;
+			showStickerPicker = false;
+		}
+	}
+
+	function handleEmbedSend(event: CustomEvent<{ embed: any }>) {
+		// Dispatch the embed data - the parent component should handle sending it
+		dispatch('send', {
+			content: '',
+			attachments: [],
+			replyTo: replyTo?.id,
+			embed: event.detail.embed
+		});
+		showEmbedBuilder = false;
+		replyTo = null;
+	}
+
 	function handleStickerSelect(event: CustomEvent<{ id: string; name: string; url: string }>) {
 		const sticker = event.detail;
 		// Send the sticker as a special message with sticker_id
@@ -793,8 +816,45 @@
 					on:close={() => (showStickerPicker = false)}
 				/>
 			</div>
+
+			<!-- Embed Builder Button -->
+			<div class="embed-button-container">
+				<button
+					class="icon-button embed-button"
+					title="Embed Builder"
+					aria-label="Open embed builder"
+					aria-expanded={showEmbedBuilder}
+					aria-haspopup="dialog"
+					on:click={toggleEmbedBuilder}
+					disabled={!$currentChannel}
+					type="button"
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						aria-hidden="true"
+					>
+						<rect x="3" y="3" width="18" height="18" rx="2"/>
+						<path d="M7 7h4v4H7z"/>
+						<path d="M13 7h4"/>
+						<path d="M13 11h4"/>
+						<path d="M7 13h4"/>
+					</svg>
+				</button>
+			</div>
 		</div>
 	</div>
+
+	<!-- Embed Builder Modal -->
+	<EmbedBuilder
+		show={showEmbedBuilder}
+		on:send={handleEmbedSend}
+		on:close={() => (showEmbedBuilder = false)}
+	/>
 </div>
 
 <style>
@@ -1028,6 +1088,15 @@
 
 	.sticker-button:hover:not(:disabled) {
 		color: #7ec8e3;
+	}
+
+	/* Embed Button */
+	.embed-button-container {
+		position: relative;
+	}
+
+	.embed-button:hover:not(:disabled) {
+		color: #5865f2;
 	}
 
 	/* Screen reader only - visually hidden but accessible */
