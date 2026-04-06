@@ -161,3 +161,51 @@ const (
 	QueueItemStatusFailed    QueueItemStatus = "failed"
 	QueueItemStatusExpired   QueueItemStatus = "expired"
 )
+
+// ChannelNotificationLevel represents the notification level for a channel
+type ChannelNotificationLevel string
+
+const (
+	ChannelNotificationLevelAllMessages   ChannelNotificationLevel = "all_messages"
+	ChannelNotificationLevelMentionsOnly  ChannelNotificationLevel = "mentions_only"
+	ChannelNotificationLevelNothing       ChannelNotificationLevel = "nothing"
+)
+
+// ChannelNotificationOverride represents a simplified per-channel notification override
+// This provides a simpler alternative to ChannelNotificationPreference with just 3 levels
+type ChannelNotificationOverride struct {
+	ID                 uuid.UUID                `json:"id" db:"id"`
+	UserID             uuid.UUID                `json:"user_id" db:"user_id"`
+	ChannelID          uuid.UUID                `json:"channel_id" db:"channel_id"`
+	NotificationLevel  ChannelNotificationLevel `json:"notification_level" db:"notification_level"` // all_messages, mentions_only, nothing
+	CreatedAt          time.Time                `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time                `json:"updated_at" db:"updated_at"`
+}
+
+// DefaultChannelNotificationOverride returns default override (all_messages = no override)
+func DefaultChannelNotificationOverride(userID, channelID uuid.UUID) *ChannelNotificationOverride {
+	return &ChannelNotificationOverride{
+		UserID:            userID,
+		ChannelID:         channelID,
+		NotificationLevel: ChannelNotificationLevelAllMessages,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+	}
+}
+
+// SetChannelOverrideRequest is the request to set a channel notification override
+type SetChannelOverrideRequest struct {
+	NotificationLevel ChannelNotificationLevel `json:"notification_level" validate:"required,oneof=all_messages mentions_only nothing"`
+}
+
+// ChannelNotificationOverrideResponse is the response for channel override operations
+type ChannelNotificationOverrideResponse struct {
+	ChannelID         string                   `json:"channel_id"`
+	NotificationLevel ChannelNotificationLevel `json:"notification_level"`
+	UpdatedAt         time.Time                `json:"updated_at"`
+}
+
+// ListChannelOverridesResponse is the response for listing all overrides
+type ListChannelOverridesResponse struct {
+	Overrides []ChannelNotificationOverride `json:"overrides"`
+}
