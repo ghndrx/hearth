@@ -53,6 +53,13 @@ type ComponentRateLimiter interface {
 	CheckModalSubmit(ctx context.Context, userID uuid.UUID) error
 }
 
+// InviteRateLimiter defines rate limiting for invite creation
+type InviteRateLimiter interface {
+	// CheckInviteCreation checks rate limit for invite creation
+	// Returns nil if allowed, ErrInviteRateLimited if rate limited
+	CheckInviteCreation(ctx context.Context, userID uuid.UUID) error
+}
+
 // E2EEService defines E2EE operations
 type E2EEService interface {
 	// Validate that a payload is properly formatted encrypted content

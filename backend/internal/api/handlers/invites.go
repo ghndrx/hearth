@@ -101,6 +101,12 @@ func (h *InviteHandlers) CreateInvite(c *fiber.Ctx) error {
 		Temporary: req.Temporary,
 	})
 	if err != nil {
+		if err == services.ErrInviteRateLimited {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error":   "rate_limited",
+				"message":  "Too many invites created. Please wait before creating more.",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})

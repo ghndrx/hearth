@@ -260,6 +260,18 @@ func main() {
 		redisCache, // cache
 		serviceBus,
 	)
+
+	// Initialize invite rate limiter
+	// Note: redisLimiter is created later in the middleware section, so we use
+	// a memory-based rate limiter for now. The invite rate limiter can be updated
+	// to use Redis when it's available.
+	var inviteRateLimiter services.InviteRateLimiter
+	if cfg.RateLimitEnabled {
+		inviteRateLimiter = services.NewMemoryInviteRateLimiter(services.DefaultInviteRateLimiterConfig())
+		serverService.SetInviteRateLimiter(inviteRateLimiter)
+		log.Printf("✅ Invite rate limiter wired (memory-based, 5 invites/hour)")
+	}
+
 	channelService := services.NewChannelService(
 		repos.Channels,
 		repos.Servers,
