@@ -157,21 +157,6 @@ func (m *MockDiscoverableServerRepo) GetServerDailyStats(ctx context.Context, se
 	return args.Get(0).([]*models.ServerDiscoveryDailyStats), args.Error(1)
 }
 
-func (m *mockDiscoverableServerRepo) Create(ctx context.Context, server *models.DiscoverableServer) error {
-	args := m.Called(ctx, server)
-	return args.Error(0)
-}
-
-func (m *mockDiscoverableServerRepo) Update(ctx context.Context, server *models.DiscoverableServer) error {
-	args := m.Called(ctx, server)
-	return args.Error(0)
-}
-
-func (m *mockDiscoverableServerRepo) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
 type MockServerRepoForDiscovery struct {
 	mock.Mock
 }
