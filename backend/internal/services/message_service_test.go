@@ -122,6 +122,14 @@ func (m *MockMessageRepository) CountRepliesTo(ctx context.Context, messageID uu
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockMessageRepository) GetTopReactions(ctx context.Context, limit int) ([]*models.Reaction, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Reaction), args.Error(1)
+}
+
 // MockQuotaService is a mock implementation
 type MockQuotaService struct {
 	mock.Mock

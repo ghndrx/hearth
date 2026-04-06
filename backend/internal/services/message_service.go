@@ -29,6 +29,7 @@ type MessageRepository interface {
 	GetUserReactions(ctx context.Context, messageID, userID uuid.UUID) ([]string, error)
 
 	RemoveAllReactions(ctx context.Context, messageID uuid.UUID) error
+	GetTopReactions(ctx context.Context, limit int) ([]*models.Reaction, error)
 
 	// Bulk operations
 	DeleteByChannel(ctx context.Context, channelID uuid.UUID) error
@@ -1121,6 +1122,14 @@ func (s *MessageService) GetReactionUsers(ctx context.Context, messageID uuid.UU
 	}
 
 	return s.repo.GetReactionUsers(ctx, messageID, emoji, limit)
+}
+
+// GetTopReactions returns the most frequently used reactions across all messages
+func (s *MessageService) GetTopReactions(ctx context.Context, limit int) ([]*models.Reaction, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+	return s.repo.GetTopReactions(ctx, limit)
 }
 
 // maybeAutoCreateThread creates a thread when a message receives enough replies

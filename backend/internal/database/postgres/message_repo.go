@@ -314,6 +314,24 @@ func (r *MessageRepository) RemoveAllReactions(ctx context.Context, messageID uu
 	return err
 }
 
+// GetTopReactions returns the most frequently used reactions across all messages
+// limited to the specified count (default 10)
+func (r *MessageRepository) GetTopReactions(ctx context.Context, limit int) ([]*models.Reaction, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	var reactions []*models.Reaction
+	query := `
+		SELECT emoji, COUNT(*) as count
+		FROM reactions
+		GROUP BY emoji
+		ORDER BY count DESC, emoji ASC
+		LIMIT $1
+	`
+	err := r.db.SelectContext(ctx, &reactions, query, limit)
+	return reactions, err
+}
+
 // Bulk operations
 
 func (r *MessageRepository) DeleteByChannel(ctx context.Context, channelID uuid.UUID) error {
