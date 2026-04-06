@@ -836,6 +836,500 @@ func TestGetSharedConversation(t *testing.T) {
 	})
 }
 
+// Full handler tests for Templates and Shares using MockChatService
+
+func TestCreateTemplate_Full(t *testing.T) {
+	userID := uuid.New()
+
+	t.Run("unauthorized without user ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		body := models.AIChatTemplate{
+			Name:         "Test Template",
+			SystemPrompt: "You are a test assistant",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/templates", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("invalid request body", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/templates", bytes.NewReader([]byte("not json")))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("create template successfully", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("CreateTemplate", mock.Anything, userID, mock.MatchedBy(func(tmpl *models.AIChatTemplate) bool {
+			return tmpl.Name == "Test Template" && tmpl.SystemPrompt == "You are a test assistant"
+		})).Return(nil)
+
+		app := setupAIChatTestApp(t, handler)
+		body := models.AIChatTemplate{
+			Name:         "Test Template",
+			SystemPrompt: "You are a test assistant",
+			Category:     stringPtr("testing"),
+			IsPublic:     false,
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/templates", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusCreated, resp.StatusCode)
+
+		respBody, _ := io.ReadAll(resp.Body)
+		var result models.AIChatTemplate
+		err = json.Unmarshal(respBody, &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Test Template", result.Name)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("service error on create", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("CreateTemplate", mock.Anything, userID, mock.AnythingOfType("*models.AIChatTemplate")).Return(errors.New("database error"))
+
+		app := setupAIChatTestApp(t, handler)
+		body := models.AIChatTemplate{
+			Name:         "Test Template",
+			SystemPrompt: "You are a test assistant",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/templates", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestUpdateTemplate_Full(t *testing.T) {
+	userID := uuid.New()
+	templateID := uuid.New()
+
+	t.Run("unauthorized without user ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		body := models.AIChatTemplate{Name: "Updated Template"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/templates/"+templateID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("invalid template ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		body := models.AIChatTemplate{Name: "Updated Template"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/templates/not-a-uuid", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("template not found", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("UpdateTemplate", mock.Anything, userID, mock.AnythingOfType("*models.AIChatTemplate")).Return(ai.ErrTemplateNotFound)
+
+		app := setupAIChatTestApp(t, handler)
+		body := models.AIChatTemplate{Name: "Updated Template"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/templates/"+templateID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("not authorized to update", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("UpdateTemplate", mock.Anything, userID, mock.AnythingOfType("*models.AIChatTemplate")).Return(ai.ErrNotAuthorized)
+
+		app := setupAIChatTestApp(t, handler)
+		body := models.AIChatTemplate{Name: "Updated Template"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/templates/"+templateID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("update template successfully", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("UpdateTemplate", mock.Anything, userID, mock.AnythingOfType("*models.AIChatTemplate")).Return(nil)
+
+		app := setupAIChatTestApp(t, handler)
+		body := models.AIChatTemplate{Name: "Updated Template", SystemPrompt: "New prompt"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/templates/"+templateID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("service error on update", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("UpdateTemplate", mock.Anything, userID, mock.AnythingOfType("*models.AIChatTemplate")).Return(errors.New("database error"))
+
+		app := setupAIChatTestApp(t, handler)
+		body := models.AIChatTemplate{Name: "Updated Template"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("PATCH", "/api/v1/ai/templates/"+templateID.String(), bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestDeleteTemplate_Full(t *testing.T) {
+	userID := uuid.New()
+	templateID := uuid.New()
+
+	t.Run("unauthorized without user ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		req := httptest.NewRequest("DELETE", "/api/v1/ai/templates/"+templateID.String(), nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("invalid template ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		req := httptest.NewRequest("DELETE", "/api/v1/ai/templates/not-a-uuid", nil)
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("template not found", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("DeleteTemplate", mock.Anything, userID, templateID).Return(ai.ErrTemplateNotFound)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("DELETE", "/api/v1/ai/templates/"+templateID.String(), nil)
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("not authorized to delete", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("DeleteTemplate", mock.Anything, userID, templateID).Return(ai.ErrNotAuthorized)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("DELETE", "/api/v1/ai/templates/"+templateID.String(), nil)
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("delete template successfully", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("DeleteTemplate", mock.Anything, userID, templateID).Return(nil)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("DELETE", "/api/v1/ai/templates/"+templateID.String(), nil)
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusNoContent, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("service error on delete", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("DeleteTemplate", mock.Anything, userID, templateID).Return(errors.New("database error"))
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("DELETE", "/api/v1/ai/templates/"+templateID.String(), nil)
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestShareConversation_Full(t *testing.T) {
+	userID := uuid.New()
+	conversationID := uuid.New()
+
+	t.Run("unauthorized without user ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		body := map[string]interface{}{"is_public": true}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations/"+conversationID.String()+"/share", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("invalid conversation ID", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+		app := setupAIChatTestApp(t, handler)
+
+		body := map[string]interface{}{"is_public": true}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations/not-a-uuid/share", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("conversation not found", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("ShareConversation", mock.Anything, userID, conversationID, true, false, mock.Anything).Return(nil, ai.ErrConversationNotFound)
+
+		app := setupAIChatTestApp(t, handler)
+		body := map[string]interface{}{"is_public": true}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations/"+conversationID.String()+"/share", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("share conversation successfully", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		share := &models.AIConversationShare{
+			ID:             uuid.New(),
+			ShareCode:      "abc123xyz",
+			ConversationID: conversationID,
+			IsPublic:       true,
+		}
+		mockSvc.On("ShareConversation", mock.Anything, userID, conversationID, true, false, mock.Anything).Return(share, nil)
+
+		app := setupAIChatTestApp(t, handler)
+		body := map[string]interface{}{"is_public": true, "can_continue": false, "expires_in": "24h"}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations/"+conversationID.String()+"/share", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusCreated, resp.StatusCode)
+
+		respBody, _ := io.ReadAll(resp.Body)
+		var result models.AIConversationShare
+		err = json.Unmarshal(respBody, &result)
+		require.NoError(t, err)
+		assert.Equal(t, "abc123xyz", result.ShareCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("service error on share", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("ShareConversation", mock.Anything, userID, conversationID, true, false, mock.Anything).Return(nil, errors.New("database error"))
+
+		app := setupAIChatTestApp(t, handler)
+		body := map[string]interface{}{"is_public": true}
+		jsonBody, _ := json.Marshal(body)
+
+		req := httptest.NewRequest("POST", "/api/v1/ai/conversations/"+conversationID.String()+"/share", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-User-ID", userID.String())
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
+func TestGetSharedConversation_Full(t *testing.T) {
+	shareCode := "abc123xyz"
+
+	t.Run("share not found", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("GetSharedConversation", mock.Anything, shareCode).Return(nil, ai.ErrShareNotFound)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/shared/"+shareCode, nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusNotFound, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("share expired", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("GetSharedConversation", mock.Anything, shareCode).Return(nil, ai.ErrShareExpired)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/shared/"+shareCode, nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusGone, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("get shared conversation successfully", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		conv := &models.AIConversationWithMessages{
+			AIConversation: models.AIConversation{
+				ID:    uuid.New(),
+				Title: "Shared Conversation",
+			},
+			Messages: []models.ConversationMessage{},
+		}
+		mockSvc.On("GetSharedConversation", mock.Anything, shareCode).Return(conv, nil)
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/shared/"+shareCode, nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+
+		respBody, _ := io.ReadAll(resp.Body)
+		var result models.AIConversation
+		err = json.Unmarshal(respBody, &result)
+		require.NoError(t, err)
+		assert.Equal(t, "Shared Conversation", result.Title)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("service error on get shared conversation", func(t *testing.T) {
+		mockSvc := new(MockChatService)
+		handler := NewAIChatHandler(mockSvc)
+
+		mockSvc.On("GetSharedConversation", mock.Anything, shareCode).Return(nil, errors.New("database error"))
+
+		app := setupAIChatTestApp(t, handler)
+		req := httptest.NewRequest("GET", "/api/v1/ai/shared/"+shareCode, nil)
+
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
+		mockSvc.AssertExpectations(t)
+	})
+}
+
 // Model validation tests
 
 func TestConversationMessageRole(t *testing.T) {
