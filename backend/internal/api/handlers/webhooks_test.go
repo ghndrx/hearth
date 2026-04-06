@@ -943,8 +943,8 @@ func TestExecuteWebhook_Success_WithWait(t *testing.T) {
 	token := "test-token"
 	msgID := uuid.New()
 
-	// wait=true still uses retry=true by default (uses ExecuteWebhookWithRetry)
-	mockService.On("ExecuteWebhookWithRetry", mock.Anything, webhookID, token, mock.Anything).Return(&models.Message{
+	// wait=true with retry=false uses ExecuteWebhook directly
+	mockService.On("ExecuteWebhook", mock.Anything, webhookID, token, mock.Anything).Return(&models.Message{
 		ID:        msgID,
 		Content:   "hello with wait",
 		ChannelID: uuid.New(),
