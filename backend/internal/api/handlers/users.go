@@ -84,11 +84,17 @@ type StorageServiceInterface interface {
 	DeleteFile(ctx context.Context, path string) error
 }
 
+// PremiumServiceForUsersInterface defines methods needed for premium tier checks
+type PremiumServiceForUsersInterface interface {
+	GetUserPremiumStatus(ctx context.Context, userID uuid.UUID) (*models.PremiumStatus, error)
+}
+
 type UserHandler struct {
 	userService    UserServiceInterface
 	serverService  ServerServiceForUsersInterface
 	channelService ChannelServiceForUsersInterface
 	storageService StorageServiceInterface
+	premiumService PremiumServiceForUsersInterface
 }
 
 func NewUserHandler(
@@ -115,6 +121,23 @@ func NewUserHandlerWithStorage(
 		serverService:  serverService,
 		channelService: channelService,
 		storageService: storageService,
+	}
+}
+
+// NewUserHandlerWithPremium creates a user handler with premium service for tier-based features
+func NewUserHandlerWithPremium(
+	userService UserServiceInterface,
+	serverService ServerServiceForUsersInterface,
+	channelService ChannelServiceForUsersInterface,
+	storageService StorageServiceInterface,
+	premiumService PremiumServiceForUsersInterface,
+) *UserHandler {
+	return &UserHandler{
+		userService:    userService,
+		serverService:  serverService,
+		channelService: channelService,
+		storageService: storageService,
+		premiumService: premiumService,
 	}
 }
 
@@ -250,8 +273,12 @@ var allowedAvatarTypes = map[string]bool{
 	"image/webp": true,
 }
 
-// maxAvatarSize is the maximum avatar file size (8MB)
-const maxAvatarSize = 8 * 1024 * 1024
+// staticAvatarTypes are image types that are never animated
+var staticAvatarTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+}
 
 // UpdateAvatar handles avatar file upload for the current user
 // @Summary Update user avatar
@@ -259,10 +286,11 @@ const maxAvatarSize = 8 * 1024 * 1024
 // @Tags Users
 // @Accept multipart/form-data
 // @Produce json
-// @Param avatar formData file true "Avatar image file (JPEG, PNG, GIF, WebP, max 8MB)"
+// @Param avatar formData file true "Avatar image file (JPEG, PNG, GIF, WebP)"
 // @Success 200 {object} UserResponse "Updated user profile with new avatar"
 // @Failure 400 {object} fiber.Map "Invalid file or file too large"
 // @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 403 {object} fiber.Map "Animated avatars require Nitro"
 // @Failure 501 {object} fiber.Map "File storage not configured"
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/avatar [patch]
@@ -278,13 +306,37 @@ func (h *UserHandler) UpdateAvatar(c *fiber.Ctx) error {
 		return BadRequest(c, "avatar file required")
 	}
 
-	if file.Size > maxAvatarSize {
-		return BadRequest(c, fmt.Sprintf("avatar must be smaller than %dMB", maxAvatarSize/1024/1024))
-	}
-
 	contentType := file.Header.Get("Content-Type")
 	if !allowedAvatarTypes[strings.ToLower(contentType)] {
 		return BadRequest(c, "avatar must be a JPEG, PNG, GIF, or WebP image")
+	}
+
+	// Determine effective limits based on user's premium tier
+	maxAvatarSize := int64(8 * 1024 * 1024) // Default 8MB for free users
+	isAnimated := false
+
+	// Check if this is a GIF (animated)
+	if strings.ToLower(contentType) == "image/gif" {
+		isAnimated = true
+	}
+
+	// Get user's premium tier to check animated avatar permission and tier-based size limit
+	if h.premiumService != nil {
+		status, err := h.premiumService.GetUserPremiumStatus(c.Context(), userID)
+		if err == nil && status != nil {
+			features := status.Features
+			maxAvatarSize = features.MaxAvatarSizeMB * 1024 * 1024
+
+			// Check animated avatar permission
+			if isAnimated && !features.AnimatedAvatar {
+				return Forbidden(c, "Animated avatars are a Nitro feature")
+			}
+		}
+	}
+
+	// Check file size against tier-based limit
+	if file.Size > maxAvatarSize {
+		return BadRequest(c, fmt.Sprintf("avatar must be smaller than %dMB", maxAvatarSize/1024/1024))
 	}
 
 	fileInfo, err := h.storageService.UploadFile(c.Context(), file, userID, "avatars")
