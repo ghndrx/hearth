@@ -131,3 +131,9 @@ export { default as ServerBoostManager } from './premium/ServerBoostManager.svel
 export { default as FeatureComparison } from './premium/FeatureComparison.svelte';
 export { default as PaymentMethodManager } from './premium/PaymentMethodManager.svelte';
 export { default as ServerBoostPanel } from './premium/ServerBoostPanel.svelte';
+
+// Stage channel components
+export { default as StageChannelView } from './stage/StageChannelView.svelte';
+export { default as StageJoinButton } from './stage/StageJoinButton.svelte';
+export { default as HandRaiseButton } from './stage/HandRaiseButton.svelte';
+export { default as SpeakerList } from './stage/SpeakerList.svelte';
