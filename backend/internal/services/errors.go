@@ -85,6 +85,8 @@ var (
 	ErrInvalidWebhookToken = errors.New("invalid webhook token")
 	ErrWebhookNameTooLong  = errors.New("webhook name cannot exceed 80 characters")
 	ErrTooManyWebhooks     = errors.New("maximum number of webhooks reached for this channel")
+	ErrWebhookRateLimited  = errors.New("webhook is rate limited, please try again later")
+	ErrTooManyEmbeds       = errors.New("maximum 10 embeds allowed")
 
 	// DM errors
 	ErrNotDMChannel              = errors.New("channel is not a DM or group DM")

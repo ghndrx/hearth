@@ -92,3 +92,30 @@ func NewValidationError(message string) *ValidationError {
 func (e *ValidationError) Error() string {
 	return e.message
 }
+
+// WebhookDelivery represents a webhook delivery attempt log
+type WebhookDelivery struct {
+	ID              uuid.UUID       `json:"id" db:"id"`
+	WebhookID       uuid.UUID       `json:"webhook_id" db:"webhook_id"`
+	StatusCode      *int            `json:"status_code,omitempty" db:"status_code"`
+	ResponseBody    *string         `json:"response_body,omitempty" db:"response_body"`
+	ErrorMessage    *string         `json:"error,omitempty" db:"error_message"`
+	AttemptNumber   int             `json:"attempt_number" db:"attempt_number"`
+	DeliveredAt     *time.Time      `json:"delivered_at,omitempty" db:"delivered_at"`
+	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
+	RequestPayload  *map[string]interface{} `json:"request_payload,omitempty" db:"request_payload"`
+	ResponseHeaders *map[string]interface{} `json:"response_headers,omitempty" db:"response_headers"`
+	DurationMs      *int            `json:"duration_ms,omitempty" db:"duration_ms"`
+}
+
+// WebhookDeliveryStats represents delivery statistics for a webhook
+type WebhookDeliveryStats struct {
+	TotalDeliveries   int64   `json:"total_deliveries"`
+	SuccessfulCount   int64   `json:"successful_count"`
+	FailedCount       int64   `json:"failed_count"`
+	SuccessRate       float64 `json:"success_rate"`
+	AvgDurationMs     float64 `json:"avg_duration_ms"`
+	LastDeliveryAt    *time.Time `json:"last_delivery_at,omitempty"`
+	LastFailureAt     *time.Time `json:"last_failure_at,omitempty"`
+	RecentFailures    []*WebhookDelivery `json:"recent_failures,omitempty"`
+}

@@ -68,6 +68,11 @@ func (m *mockWebhookService) DeleteWebhook(ctx context.Context, webhookID uuid.U
 	return args.Error(0)
 }
 
+func (m *mockWebhookService) CheckRateLimit(ctx context.Context, webhookID uuid.UUID) error {
+	args := m.Called(ctx, webhookID)
+	return args.Error(0)
+}
+
 func (m *mockWebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error) {
 	args := m.Called(ctx, webhookID, token, req)
 	if args.Get(0) == nil {

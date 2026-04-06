@@ -719,6 +719,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		webhooks.Get("/:webhookID", h.Webhooks.GetWebhook)
 		webhooks.Patch("/:webhookID", h.Webhooks.UpdateWebhook)
 		webhooks.Delete("/:webhookID", h.Webhooks.DeleteWebhook)
+		webhooks.Get("/:webhookID/stats", h.Webhooks.GetWebhookStats)
+		webhooks.Get("/:webhookID/deliveries", h.Webhooks.GetWebhookDeliveries)
+		webhooks.Post("/:webhookID/test", h.Webhooks.TestWebhook)
 
 		// Server webhooks
 		servers.Get("/:id/webhooks", h.Webhooks.GetServerWebhooks)
