@@ -216,6 +216,15 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		channelNotifPrefs.Patch("/", h.ChannelNotificationPrefs.UpdateChannelNotificationPreference)
 	}
 
+	// Channel Notification Overrides (simplified level-based system)
+	if h.ChannelNotificationOverrides != nil {
+		channelOverrides := users.Group("/@me/notification-overrides")
+		channelOverrides.Get("/", h.ChannelNotificationOverrides.ListChannelOverrides)
+		channelOverrides.Get("/:channel_id", h.ChannelNotificationOverrides.GetChannelOverride)
+		channelOverrides.Put("/:channel_id", h.ChannelNotificationOverrides.SetChannelOverride)
+		channelOverrides.Delete("/:channel_id", h.ChannelNotificationOverrides.ClearChannelOverride)
+	}
+
 	// Server Notification Preferences
 	if h.ServerNotificationPrefs != nil {
 		serverNotifPrefs := users.Group("/@me/servers/:serverId/notifications")

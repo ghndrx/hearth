@@ -15,14 +15,15 @@ import (
 // NotificationCoordinator orchestrates the entire notification pipeline
 // from scoring to routing to delivery across all channels (push, email, in-app)
 type NotificationCoordinator struct {
-	smartService     *SmartNotificationService
-	pushService      *PushDeliveryService
-	notifService     *NotificationService
-	eventBus         EventBus
-	cache            SmartNotificationCache
-	queueRepo        NotificationQueueRepository
-	channelPrefsRepo ChannelNotificationPrefsRepo
-	serverPrefsRepo  ServerNotificationPrefsRepo
+	smartService        *SmartNotificationService
+	pushService         *PushDeliveryService
+	notifService        *NotificationService
+	eventBus            EventBus
+	cache               SmartNotificationCache
+	queueRepo           NotificationQueueRepository
+	channelPrefsRepo    ChannelNotificationPrefsRepo
+	channelOverrideRepo ChannelNotificationOverrideRepository
+	serverPrefsRepo     ServerNotificationPrefsRepo
 }
 
 // NotificationQueueRepository defines notification queue data access
@@ -105,7 +106,33 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 		return nil, fmt.Errorf("failed to score notification: %w", err)
 	}
 
-	// 2. Check per-channel preferences (highest specificity)
+	// 2. Check per-channel overrides (highest specificity - simplified level-based system)
+	if input.ChannelID != nil {
+		if override, err := c.getChannelOverride(ctx, input.RecipientID, *input.ChannelID); err == nil && override != nil {
+			switch override.NotificationLevel {
+			case models.ChannelNotificationLevelNothing:
+				return &models.NotificationRoutingDecision{
+					Channel:    models.NotificationChannelSuppressed,
+					ShouldSend: false,
+					Reason:     "channel notification override: nothing",
+				}, nil
+			case models.ChannelNotificationLevelMentionsOnly:
+				if !input.HasMention {
+					return &models.NotificationRoutingDecision{
+						Channel:    models.NotificationChannelSuppressed,
+						ShouldSend: false,
+						Reason:     "channel notification override: mentions only",
+					}, nil
+				}
+				// Has mention - proceed with immediate delivery
+				smartNotif.DeliveryMode = models.DeliveryImmediate
+			case models.ChannelNotificationLevelAllMessages:
+				// All messages allowed - proceed with normal flow
+			}
+		}
+	}
+
+	// 3. Check detailed per-channel preferences (granular toggle-based system)
 	if input.ChannelID != nil {
 		if channelPref, err := c.getChannelPreference(ctx, input.RecipientID, *input.ChannelID); err == nil && channelPref != nil {
 			// Apply channel-specific delivery mode override
@@ -129,7 +156,7 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 		}
 	}
 
-	// 3. Check per-server preferences
+	// 4. Check per-server preferences
 	if input.ServerID != nil {
 		if serverPref, err := c.getServerPreference(ctx, input.RecipientID, *input.ServerID); err == nil && serverPref != nil {
 			if serverPref.Muted {
@@ -143,7 +170,7 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 		}
 	}
 
-	// 4. Route notification based on priority and preferences
+	// 5. Route notification based on priority and preferences
 	routed, err := c.smartService.RouteNotification(ctx, input.RecipientID, smartNotif)
 	if err != nil {
 		return nil, fmt.Errorf("failed to route notification: %w", err)
@@ -157,7 +184,7 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 		Reason:     fmt.Sprintf("priority=%s, delivery=%s", routed.Priority, routed.DeliveryMode),
 	}
 
-	// 5. Create the notification record
+	// 6. Create the notification record
 	notif, err := c.notifService.CreateNotification(ctx, &models.CreateNotificationRequest{
 		UserID:    input.RecipientID,
 		Type:      input.Type,
@@ -178,7 +205,7 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 	smartNotif.Priority = routed.Priority
 	smartNotif.DeliveryMode = routed.DeliveryMode
 
-	// 6. Route to appropriate channel(s)
+	// 7. Route to appropriate channel(s)
 	switch decision.Channel {
 	case models.NotificationChannelPush:
 		if err := c.deliverPush(ctx, input.RecipientID, smartNotif); err != nil {
@@ -194,7 +221,7 @@ func (c *NotificationCoordinator) ProcessNotification(ctx context.Context, input
 		return decision, nil
 	}
 
-	// 7. If batched, add to digest queue
+	// 8. If batched, add to digest queue
 	if routed.DeliveryMode == models.DeliveryBatched {
 		if err := c.smartService.AddToDigestQueue(ctx, input.RecipientID, smartNotif); err != nil {
 			log.Printf("coordinator: failed to add to digest queue: %v", err)
@@ -274,6 +301,14 @@ func (c *NotificationCoordinator) getChannelPreference(ctx context.Context, user
 	return c.channelPrefsRepo.Get(ctx, userID, channelID)
 }
 
+// getChannelOverride retrieves simplified channel notification override
+func (c *NotificationCoordinator) getChannelOverride(ctx context.Context, userID, channelID uuid.UUID) (*models.ChannelNotificationOverride, error) {
+	if c.channelOverrideRepo == nil {
+		return nil, nil // No override repo configured, use defaults
+	}
+	return c.channelOverrideRepo.Get(ctx, userID, channelID)
+}
+
 // getServerPreference retrieves server notification preferences
 func (c *NotificationCoordinator) getServerPreference(ctx context.Context, userID, serverID uuid.UUID) (*models.ServerNotificationPreference, error) {
 	if c.serverPrefsRepo == nil {
@@ -348,6 +383,79 @@ func (c *NotificationCoordinator) UpdateChannelPreference(ctx context.Context, u
 	}
 
 	return pref, nil
+}
+
+// --- Channel Notification Overrides (Simplified) ---
+
+// GetChannelOverride returns the simplified channel notification override for a user
+func (c *NotificationCoordinator) GetChannelOverride(ctx context.Context, userID, channelID uuid.UUID) (*models.ChannelNotificationOverride, error) {
+	if c.channelOverrideRepo == nil {
+		// Return default if no repo configured
+		return models.DefaultChannelNotificationOverride(userID, channelID), nil
+	}
+
+	override, err := c.channelOverrideRepo.Get(ctx, userID, channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	if override == nil {
+		return models.DefaultChannelNotificationOverride(userID, channelID), nil
+	}
+
+	return override, nil
+}
+
+// SetChannelOverride sets or updates a channel notification override
+func (c *NotificationCoordinator) SetChannelOverride(ctx context.Context, userID, channelID uuid.UUID, level models.ChannelNotificationLevel) (*models.ChannelNotificationOverride, error) {
+	if c.channelOverrideRepo == nil {
+		return nil, fmt.Errorf("channel override repository not configured")
+	}
+
+	override := &models.ChannelNotificationOverride{
+		UserID:            userID,
+		ChannelID:         channelID,
+		NotificationLevel: level,
+	}
+
+	if err := c.channelOverrideRepo.Set(ctx, override); err != nil {
+		return nil, fmt.Errorf("failed to set channel override: %w", err)
+	}
+
+	c.eventBus.Publish("notification.channel_override_set", map[string]interface{}{
+		"user_id":            userID,
+		"channel_id":         channelID,
+		"notification_level": level,
+	})
+
+	return override, nil
+}
+
+// ClearChannelOverride removes a channel notification override
+func (c *NotificationCoordinator) ClearChannelOverride(ctx context.Context, userID, channelID uuid.UUID) error {
+	if c.channelOverrideRepo == nil {
+		return fmt.Errorf("channel override repository not configured")
+	}
+
+	if err := c.channelOverrideRepo.Delete(ctx, userID, channelID); err != nil {
+		return fmt.Errorf("failed to clear channel override: %w", err)
+	}
+
+	c.eventBus.Publish("notification.channel_override_cleared", map[string]interface{}{
+		"user_id":    userID,
+		"channel_id": channelID,
+	})
+
+	return nil
+}
+
+// ListChannelOverrides returns all channel notification overrides for a user
+func (c *NotificationCoordinator) ListChannelOverrides(ctx context.Context, userID uuid.UUID) ([]models.ChannelNotificationOverride, error) {
+	if c.channelOverrideRepo == nil {
+		return []models.ChannelNotificationOverride{}, nil
+	}
+
+	return c.channelOverrideRepo.GetByUser(ctx, userID)
 }
 
 // --- Server Notification Preferences ---

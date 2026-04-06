@@ -27,10 +27,20 @@ type NotificationRepository interface {
 	DeleteOlderThan(ctx context.Context, userID uuid.UUID, before time.Time) (int64, error)
 }
 
+// ChannelNotificationOverrideRepository defines the interface for channel override data access
+type ChannelNotificationOverrideRepository interface {
+	Set(ctx context.Context, override *models.ChannelNotificationOverride) error
+	Get(ctx context.Context, userID, channelID uuid.UUID) (*models.ChannelNotificationOverride, error)
+	GetByUser(ctx context.Context, userID uuid.UUID) ([]models.ChannelNotificationOverride, error)
+	Delete(ctx context.Context, userID, channelID uuid.UUID) error
+	GetForChannels(ctx context.Context, userID uuid.UUID, channelIDs []uuid.UUID) (map[uuid.UUID]models.ChannelNotificationLevel, error)
+}
+
 // NotificationService handles notification business logic
 type NotificationService struct {
-	repo     NotificationRepository
-	eventBus EventBus
+	repo             NotificationRepository
+	channelOverrideRepo ChannelNotificationOverrideRepository
+	eventBus         EventBus
 }
 
 // NewNotificationService creates a new notification service
@@ -38,6 +48,15 @@ func NewNotificationService(repo NotificationRepository, eventBus EventBus) *Not
 	return &NotificationService{
 		repo:     repo,
 		eventBus: eventBus,
+	}
+}
+
+// NewNotificationServiceWithOverrides creates a new notification service with channel override support
+func NewNotificationServiceWithOverrides(repo NotificationRepository, channelOverrideRepo ChannelNotificationOverrideRepository, eventBus EventBus) *NotificationService {
+	return &NotificationService{
+		repo:             repo,
+		channelOverrideRepo: channelOverrideRepo,
+		eventBus:         eventBus,
 	}
 }
 
@@ -162,6 +181,111 @@ func (s *NotificationService) DeleteAllReadNotifications(ctx context.Context, us
 	return count, nil
 }
 
+// SetChannelOverride sets a notification override for a specific channel
+func (s *NotificationService) SetChannelOverride(ctx context.Context, userID, channelID uuid.UUID, level models.ChannelNotificationLevel) (*models.ChannelNotificationOverride, error) {
+	if s.channelOverrideRepo == nil {
+		return nil, errors.New("channel override repository not configured")
+	}
+
+	override := &models.ChannelNotificationOverride{
+		UserID:            userID,
+		ChannelID:         channelID,
+		NotificationLevel: level,
+	}
+
+	if err := s.channelOverrideRepo.Set(ctx, override); err != nil {
+		return nil, err
+	}
+
+	// Emit event
+	s.eventBus.Publish("notification.channel_override_set", &ChannelOverrideSetEvent{
+		UserID:            userID,
+		ChannelID:         channelID,
+		NotificationLevel: level,
+	})
+
+	return override, nil
+}
+
+// GetChannelOverride retrieves the notification override for a specific channel
+func (s *NotificationService) GetChannelOverride(ctx context.Context, userID, channelID uuid.UUID) (*models.ChannelNotificationOverride, error) {
+	if s.channelOverrideRepo == nil {
+		return nil, errors.New("channel override repository not configured")
+	}
+
+	override, err := s.channelOverrideRepo.Get(ctx, userID, channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no override exists, return default
+	if override == nil {
+		return models.DefaultChannelNotificationOverride(userID, channelID), nil
+	}
+
+	return override, nil
+}
+
+// ClearChannelOverride removes the notification override for a specific channel
+func (s *NotificationService) ClearChannelOverride(ctx context.Context, userID, channelID uuid.UUID) error {
+	if s.channelOverrideRepo == nil {
+		return errors.New("channel override repository not configured")
+	}
+
+	if err := s.channelOverrideRepo.Delete(ctx, userID, channelID); err != nil {
+		return err
+	}
+
+	// Emit event
+	s.eventBus.Publish("notification.channel_override_cleared", &ChannelOverrideClearedEvent{
+		UserID:    userID,
+		ChannelID: channelID,
+	})
+
+	return nil
+}
+
+// ListChannelOverrides retrieves all channel notification overrides for a user
+func (s *NotificationService) ListChannelOverrides(ctx context.Context, userID uuid.UUID) ([]models.ChannelNotificationOverride, error) {
+	if s.channelOverrideRepo == nil {
+		return []models.ChannelNotificationOverride{}, nil
+	}
+
+	return s.channelOverrideRepo.GetByUser(ctx, userID)
+}
+
+// GetChannelOverrideForNotification retrieves the effective notification level for a channel
+// Returns the override level or "all_messages" if no override exists
+func (s *NotificationService) GetChannelOverrideForNotification(ctx context.Context, userID, channelID uuid.UUID) models.ChannelNotificationLevel {
+	if s.channelOverrideRepo == nil {
+		return models.ChannelNotificationLevelAllMessages
+	}
+
+	override, err := s.channelOverrideRepo.Get(ctx, userID, channelID)
+	if err != nil || override == nil {
+		return models.ChannelNotificationLevelAllMessages
+	}
+
+	return override.NotificationLevel
+}
+
+// ShouldNotify determines if a notification should be sent based on channel override
+// Returns true if the notification should proceed, false if it should be suppressed
+func (s *NotificationService) ShouldNotify(ctx context.Context, userID, channelID uuid.UUID, isMention bool) bool {
+	level := s.GetChannelOverrideForNotification(ctx, userID, channelID)
+
+	switch level {
+	case models.ChannelNotificationLevelNothing:
+		return false
+	case models.ChannelNotificationLevelMentionsOnly:
+		return isMention
+	case models.ChannelNotificationLevelAllMessages:
+		return true
+	default:
+		return true
+	}
+}
+
 // Events
 
 // NotificationCreatedEvent is emitted when a notification is created
@@ -191,4 +315,17 @@ type NotificationDeletedEvent struct {
 type NotificationReadDeletedEvent struct {
 	UserID uuid.UUID
 	Count  int64
+}
+
+// ChannelOverrideSetEvent is emitted when a channel notification override is set
+type ChannelOverrideSetEvent struct {
+	UserID            uuid.UUID
+	ChannelID         uuid.UUID
+	NotificationLevel models.ChannelNotificationLevel
+}
+
+// ChannelOverrideClearedEvent is emitted when a channel notification override is cleared
+type ChannelOverrideClearedEvent struct {
+	UserID    uuid.UUID
+	ChannelID uuid.UUID
 }

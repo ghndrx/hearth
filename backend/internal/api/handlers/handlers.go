@@ -55,9 +55,10 @@ type Handlers struct {
 	SmartNotifications       *SmartNotificationHandler
 	Push                     *PushHandler
 	Digest                   *DigestHandler
-	ChannelNotificationPrefs *ChannelNotificationPreferenceHandler
-	ServerNotificationPrefs  *ServerNotificationPreferenceHandler
-	ContentSafety            *ContentSafetyHandler
+	ChannelNotificationPrefs    *ChannelNotificationPreferenceHandler
+	ServerNotificationPrefs     *ServerNotificationPreferenceHandler
+	ChannelNotificationOverrides *ChannelNotificationOverrideHandler
+	ContentSafety               *ContentSafetyHandler
 	ServerFolders            *ServerFolderHandler
 	SmartModeration          *SmartModerationHandler
 	VoiceActivities          *VoiceActivityHandler
@@ -365,6 +366,13 @@ func (h *Handlers) SetNotificationCoordinatorHandler(
 ) {
 	h.ChannelNotificationPrefs = NewChannelNotificationPreferenceHandler(coordinator)
 	h.ServerNotificationPrefs = NewServerNotificationPreferenceHandler(coordinator)
+}
+
+// SetChannelNotificationOverrideHandler sets the channel notification override handler
+func (h *Handlers) SetChannelNotificationOverrideHandler(
+	service ChannelNotificationOverrideService,
+) {
+	h.ChannelNotificationOverrides = NewChannelNotificationOverrideHandler(service)
 }
 
 // SetContentSafetyHandler sets the content safety handler

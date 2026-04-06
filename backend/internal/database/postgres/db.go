@@ -165,9 +165,10 @@ type Repositories struct {
 	Search              *SearchRepository
 	Polls               *PollRepository
 	ServerFolders       *ServerFolderRepository
-	SmartModeration     SmartModerationRepository
-	VoiceActivities     *VoiceActivityRepository
-	Calls               *CallRepository
+	SmartModeration              SmartModerationRepository
+	VoiceActivities              *VoiceActivityRepository
+	Calls                        *CallRepository
+	ChannelNotificationOverrides *ChannelNotificationOverrideRepository
 }
 
 // NewRepositories creates all repositories
@@ -197,8 +198,9 @@ func NewRepositories(db *sqlx.DB) *Repositories {
 		Search:              NewSearchRepository(db),
 		Polls:               NewPollRepository(db),
 		ServerFolders:       NewServerFolderRepository(db),
-		SmartModeration:     NewSmartModerationRepository(db.DB),
-		VoiceActivities:     NewVoiceActivityRepository(db),
-		Calls:               NewCallRepository(db.DB),
+		SmartModeration:              NewSmartModerationRepository(db.DB),
+		VoiceActivities:              NewVoiceActivityRepository(db),
+		Calls:                        NewCallRepository(db.DB),
+		ChannelNotificationOverrides: NewChannelNotificationOverrideRepository(db),
 	}
 }

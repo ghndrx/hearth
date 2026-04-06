@@ -629,6 +629,16 @@ func main() {
 	h.SetServerFolderHandler(serverFolderService)
 	log.Printf("✅ Server Folder service initialized")
 
+	// Initialize Notification services and handlers
+	// Channel notification override service (simplified level-based system)
+	notificationService := services.NewNotificationServiceWithOverrides(
+		postgres.NewNotificationRepository(db),
+		repos.ChannelNotificationOverrides,
+		serviceBus,
+	)
+	h.SetChannelNotificationOverrideHandler(notificationService)
+	log.Printf("✅ Channel notification override service initialized")
+
 	m := middleware.NewMiddleware(cfg.SecretKey)
 
 	// Wire up API rate limiter for per-endpoint rate limiting
