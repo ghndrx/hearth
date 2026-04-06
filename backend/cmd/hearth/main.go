@@ -324,6 +324,10 @@ func main() {
 		wsGateway.SetVoiceService(voiceService)
 	}
 
+	// Initialize call service for video/audio calls
+	callService := services.NewCallService(repos.Calls)
+	log.Printf("✅ Call service initialized")
+
 	// Initialize AI service
 	var aiService *ai.AIService
 	if cfg.AIEncryptionKey != "" {
@@ -450,6 +454,10 @@ func main() {
 	// Wire up DM handler for group DMs
 	h.SetDMHandler(dmService, channelService, userService, messageService)
 	log.Printf("✅ DM service initialized")
+
+	// Wire up Call handler for video/audio calls
+	h.SetCallHandler(callService, channelService)
+	log.Printf("✅ Call handler initialized")
 
 	// Wire up OAuth service if available
 	if oauthService != nil {

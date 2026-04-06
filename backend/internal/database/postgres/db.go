@@ -167,6 +167,7 @@ type Repositories struct {
 	ServerFolders       *ServerFolderRepository
 	SmartModeration     SmartModerationRepository
 	VoiceActivities     *VoiceActivityRepository
+	Calls               *CallRepository
 }
 
 // NewRepositories creates all repositories
@@ -198,5 +199,6 @@ func NewRepositories(db *sqlx.DB) *Repositories {
 		ServerFolders:       NewServerFolderRepository(db),
 		SmartModeration:     NewSmartModerationRepository(db.DB),
 		VoiceActivities:     NewVoiceActivityRepository(db),
+		Calls:               NewCallRepository(db.DB),
 	}
 }
