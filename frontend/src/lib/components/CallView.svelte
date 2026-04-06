@@ -1,9 +1,5 @@
 <script lang="ts">
-<<<<<<< HEAD
 	import { onMount, onDestroy } from 'svelte';
-=======
-	import { onDestroy } from 'svelte';
->>>>>>> 67bf1a2 (check/hearth build status (#147))
 	import {
 		videoCallStore,
 		isInVideoCall,
@@ -16,10 +12,7 @@
 		incomingVideoRing,
 		type VideoCallState
 	} from '$lib/stores/videoCall';
-<<<<<<< HEAD
 	import { getVideoCallManager } from '$lib/voice/VideoCallManager';
-=======
->>>>>>> 67bf1a2 (check/hearth build status (#147))
 	import Avatar from './Avatar.svelte';
 
 	// Call duration tracking
@@ -66,7 +59,6 @@
 		return p.display_name || p.username || 'Unknown';
 	}
 
-<<<<<<< HEAD
 	// Attach remote video streams to video elements
 	function attachVideoStreams() {
 		const manager = getVideoCallManager();
@@ -93,18 +85,13 @@
 		videoPollInterval = null;
 	}
 
-=======
->>>>>>> 67bf1a2 (check/hearth build status (#147))
 	onDestroy(() => {
 		if (durationInterval) {
 			clearInterval(durationInterval);
 		}
-<<<<<<< HEAD
 		if (videoPollInterval) {
 			clearInterval(videoPollInterval);
 		}
-=======
->>>>>>> 67bf1a2 (check/hearth build status (#147))
 	});
 </script>
 
@@ -157,7 +144,6 @@
 					class:grid-2={$videoCallParticipants.length === 2}
 					class:grid-many={$videoCallParticipants.length > 2}>
 					{#each $videoCallParticipants as participant (participant.id)}
-<<<<<<< HEAD
 						{@const videoElId = `video-${participant.id}`}
 						{@const hasVideoEl = typeof document !== 'undefined' && !!document.getElementById(videoElId)}
 						<div class="participant-tile">
@@ -169,14 +155,6 @@
 									playsinline
 									muted={false}
 								></video>
-=======
-						<div class="participant-tile">
-							{#if participant.isCameraOn}
-								<!-- TODO: Attach actual video track from WebRTC peer connection -->
-								<video class="participant-video" autoplay playsinline muted={false}>
-									<track kind="captions" />
-								</video>
->>>>>>> 67bf1a2 (check/hearth build status (#147))
 							{:else}
 								<div class="participant-avatar">
 									<Avatar username={participant.username} size="lg" />
