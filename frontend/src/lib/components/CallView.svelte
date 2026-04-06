@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import {
 		videoCallStore,
 		isInVideoCall,
@@ -12,6 +12,7 @@
 		incomingVideoRing,
 		type VideoCallState
 	} from '$lib/stores/videoCall';
+	import { getVideoCallManager } from '$lib/voice/VideoCallManager';
 	import Avatar from './Avatar.svelte';
 
 	// Call duration tracking
@@ -58,9 +59,38 @@
 		return p.display_name || p.username || 'Unknown';
 	}
 
+	// Attach remote video streams to video elements
+	function attachVideoStreams() {
+		const manager = getVideoCallManager();
+		for (const participant of $videoCallParticipants) {
+			const videoEl = document.getElementById(`video-${participant.id}`) as HTMLVideoElement;
+			if (videoEl) {
+				const remoteStream = manager.getRemoteStream(participant.id);
+				if (remoteStream && videoEl.srcObject !== remoteStream) {
+					videoEl.srcObject = remoteStream;
+				}
+			}
+		}
+	}
+
+	// Poll for video stream updates when call is active
+	let videoPollInterval: ReturnType<typeof setInterval> | null = null;
+
+	$: if ($videoCallState === 'connected' && !videoPollInterval) {
+		videoPollInterval = setInterval(attachVideoStreams, 500);
+	}
+
+	$: if (($videoCallState === 'ended' || $videoCallState === 'idle') && videoPollInterval) {
+		clearInterval(videoPollInterval);
+		videoPollInterval = null;
+	}
+
 	onDestroy(() => {
 		if (durationInterval) {
 			clearInterval(durationInterval);
+		}
+		if (videoPollInterval) {
+			clearInterval(videoPollInterval);
 		}
 	});
 </script>
@@ -114,12 +144,17 @@
 					class:grid-2={$videoCallParticipants.length === 2}
 					class:grid-many={$videoCallParticipants.length > 2}>
 					{#each $videoCallParticipants as participant (participant.id)}
+						{@const videoElId = `video-${participant.id}`}
+						{@const hasVideoEl = typeof document !== 'undefined' && !!document.getElementById(videoElId)}
 						<div class="participant-tile">
-							{#if participant.isCameraOn}
-								<!-- TODO: Attach actual video track from WebRTC peer connection -->
-								<video class="participant-video" autoplay playsinline muted={false}>
-									<track kind="captions" />
-								</video>
+							{#if participant.isCameraOn && hasVideoEl}
+								<video
+									id={videoElId}
+									class="participant-video"
+									autoplay
+									playsinline
+									muted={false}
+								></video>
 							{:else}
 								<div class="participant-avatar">
 									<Avatar username={participant.username} size="lg" />
