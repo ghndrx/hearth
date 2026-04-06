@@ -13,6 +13,7 @@ const (
 	TierFree    PremiumTier = "free"
 	TierBasic   PremiumTier = "basic"   // $2.99/month - 2 server boosts
 	TierPremium PremiumTier = "premium" // $9.99/month - 2 boosts + premium features
+	TierNitro   PremiumTier = "nitro"   // $99.99/year - full Nitro experience
 )
 
 // SubStatus represents the subscription status
@@ -96,7 +97,9 @@ type PremiumFeatures struct {
 
 	// Basic Tier ($2.99/month) and Premium ($9.99/month)
 	ServerBoosts        int   `json:"server_boosts"`        // 2 boosts
-	FileUploadSize      int64 `json:"file_upload_size"`     // 50MB basic, 100MB premium vs 8MB free
+	FileUploadSize      int64 `json:"file_upload_size"`     // 50MB basic, 100MB premium, 500MB nitro vs 8MB free
+	MaxAvatarSizeMB     int64 `json:"max_avatar_size_mb"`   // 8MB free/basic, 16MB premium, 32MB nitro
+	AnimatedAvatar      bool  `json:"animated_avatar"`      // GIF avatars (Nitro only)
 	CrossServerEmojis   bool  `json:"cross_server_emojis"`  // Use emojis across servers
 	HighQualityVideo    bool  `json:"high_quality_video"`   // 1080p60 vs 720p30
 	CustomDiscriminator bool  `json:"custom_discriminator"` // Choose your #1234
@@ -181,6 +184,7 @@ var PremiumTierPricing = map[PremiumTier]float64{
 	TierFree:    0,
 	TierBasic:   2.99,
 	TierPremium: 9.99,
+	TierNitro:   99.99, // annual
 }
 
 // TierBoostsTotal defines how many boosts each tier provides
@@ -188,6 +192,7 @@ var TierBoostsTotal = map[PremiumTier]int{
 	TierFree:    0,
 	TierBasic:   2,
 	TierPremium: 2,
+	TierNitro:   2,
 }
 
 // LevelBoostsRequired defines how many boosts are needed for each level
@@ -208,7 +213,9 @@ func GetPremiumFeatures(tier PremiumTier) PremiumFeatures {
 	switch tier {
 	case TierBasic:
 		features.ServerBoosts = 2
-		features.FileUploadSize = 50 * 1024 * 1024 // 50MB
+		features.FileUploadSize = 50 * 1024 * 1024  // 50MB
+		features.MaxAvatarSizeMB = 8                // 8MB avatar limit
+		features.AnimatedAvatar = false             // GIF avatars require Nitro
 		features.CrossServerEmojis = true
 		features.HighQualityVideo = true
 		features.CustomDiscriminator = true
@@ -217,6 +224,24 @@ func GetPremiumFeatures(tier PremiumTier) PremiumFeatures {
 	case TierPremium:
 		features.ServerBoosts = 2
 		features.FileUploadSize = 100 * 1024 * 1024 // 100MB
+		features.MaxAvatarSizeMB = 16              // 16MB avatar limit
+		features.AnimatedAvatar = false            // GIF avatars require Nitro
+		features.CrossServerEmojis = true
+		features.HighQualityVideo = true
+		features.CustomDiscriminator = true
+		features.EarlyAccess = true
+		features.PremiumBadge = true
+		features.PrioritySupport = true
+		features.NoAds = true
+		features.MessageEditHistory = true
+		features.PremiumStickers = true
+		features.CustomStatusEmoji = true
+		features.HDScreenShare = true
+	case TierNitro:
+		features.ServerBoosts = 2
+		features.FileUploadSize = 500 * 1024 * 1024 // 500MB
+		features.MaxAvatarSizeMB = 32               // 32MB avatar limit (supports large GIFs)
+		features.AnimatedAvatar = true              // GIF avatars allowed
 		features.CrossServerEmojis = true
 		features.HighQualityVideo = true
 		features.CustomDiscriminator = true
@@ -231,6 +256,8 @@ func GetPremiumFeatures(tier PremiumTier) PremiumFeatures {
 	default: // Free
 		features.ServerBoosts = 0
 		features.FileUploadSize = 8 * 1024 * 1024 // 8MB
+		features.MaxAvatarSizeMB = 8              // 8MB avatar limit
+		features.AnimatedAvatar = false            // GIF avatars require Nitro
 	}
 
 	return features
@@ -274,6 +301,8 @@ func SubscriptionTierFromString(s string) PremiumTier {
 		return TierBasic
 	case "premium":
 		return TierPremium
+	case "nitro":
+		return TierNitro
 	default:
 		return TierFree
 	}

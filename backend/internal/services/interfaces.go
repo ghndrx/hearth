@@ -209,11 +209,12 @@ type StickerRepository interface {
 }
 
 type QuotaService struct {
-	config      *models.QuotaConfig
-	serverRepo  ServerRepository
-	userRepo    UserRepository
-	roleRepo    RoleRepository
-	storageRepo StorageRepository
+	config        *models.QuotaConfig
+	serverRepo    ServerRepository
+	userRepo      UserRepository
+	roleRepo      RoleRepository
+	storageRepo   StorageRepository
+	premiumRepo   PremiumRepository
 }
 
 // NewQuotaService creates a new quota service
@@ -225,6 +226,11 @@ func NewQuotaService(config *models.QuotaConfig, serverRepo ServerRepository, us
 		roleRepo:    roleRepo,
 		storageRepo: storageRepo,
 	}
+}
+
+// SetPremiumRepository sets the premium repository for tier-based quota checks
+func (s *QuotaService) SetPremiumRepository(premiumRepo PremiumRepository) {
+	s.premiumRepo = premiumRepo
 }
 
 // EffectiveLimits for quota checks
@@ -245,6 +251,15 @@ func (s *QuotaService) GetEffectiveLimits(ctx context.Context, userID uuid.UUID,
 		MaxServersJoined: s.config.Servers.MaxServersJoined,
 		StorageMB:        s.config.Storage.UserStorageMB,
 		MaxFileSizeMB:    s.config.Storage.MaxFileSizeMB,
+	}
+
+	// Get user's premium tier for file upload limits (only if premiumRepo is available)
+	if s.premiumRepo != nil {
+		if userTier, err := s.premiumRepo.GetUserPremiumTier(ctx, userID); err == nil {
+			// Apply tier-based file upload limits (free=8MB, basic=50MB, premium=100MB, nitro=500MB)
+			features := models.GetPremiumFeatures(userTier)
+			limits.MaxFileSizeMB = features.FileUploadSize / (1024 * 1024)
+		}
 	}
 
 	// Apply server overrides if serverID is provided and serverRepo is available
@@ -278,6 +293,39 @@ func (s *QuotaService) GetEffectiveLimits(ctx context.Context, userID uuid.UUID,
 	return limits, nil
 }
 
+// GetFileUploadLimitMB returns the file upload size limit in MB for a user based on their tier
+func (s *QuotaService) GetFileUploadLimitMB(ctx context.Context, userID uuid.UUID) (int64, error) {
+	// Default limit for free users
+	defaultLimit := int64(8)
+	
+	if s.premiumRepo != nil {
+		tier, err := s.premiumRepo.GetUserPremiumTier(ctx, userID)
+		if err == nil {
+			features := models.GetPremiumFeatures(tier)
+			return features.FileUploadSize / (1024 * 1024), nil
+		}
+	}
+	
+	return defaultLimit, nil
+}
+
+// CheckFileUploadQuota checks if a file upload is allowed based on user's premium tier
+// Returns the effective file size limit in bytes and nil error if allowed
+func (s *QuotaService) CheckFileUploadQuota(ctx context.Context, userID uuid.UUID, fileSizeBytes int64) (int64, error) {
+	limitMB, err := s.GetFileUploadLimitMB(ctx, userID)
+	if err != nil {
+		// Fall back to config default on error
+		limitMB = s.config.Storage.MaxFileSizeMB
+	}
+	
+	maxBytes := limitMB * 1024 * 1024
+	if fileSizeBytes > maxBytes {
+		return limitMB, models.NewFileTooLargeError(fileSizeBytes/(1024*1024), limitMB)
+	}
+	
+	return limitMB, nil
+}
+
 // CheckStorageQuota checks if a file upload is allowed
 func (s *QuotaService) CheckStorageQuota(ctx context.Context, userID uuid.UUID, serverID *uuid.UUID, fileSizeBytes int64) error {
 	limits, err := s.GetEffectiveLimits(ctx, userID, serverID)
@@ -285,11 +333,20 @@ func (s *QuotaService) CheckStorageQuota(ctx context.Context, userID uuid.UUID, 
 		return err
 	}
 
-	// Check file size limit
-	if limits.MaxFileSizeMB > 0 {
-		maxBytes := limits.MaxFileSizeMB * 1024 * 1024
-		if fileSizeBytes > maxBytes {
-			return models.NewFileTooLargeError(fileSizeBytes/(1024*1024), limits.MaxFileSizeMB)
+	// Check file size limit using tier-based limits
+	if s.premiumRepo != nil {
+		// Use tier-based file upload quota check
+		_, err := s.CheckFileUploadQuota(ctx, userID, fileSizeBytes)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Fall back to config-based check if premium repo not available
+		if limits.MaxFileSizeMB > 0 {
+			maxBytes := limits.MaxFileSizeMB * 1024 * 1024
+			if fileSizeBytes > maxBytes {
+				return models.NewFileTooLargeError(fileSizeBytes/(1024*1024), limits.MaxFileSizeMB)
+			}
 		}
 	}
 
