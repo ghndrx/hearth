@@ -81,6 +81,38 @@ func (m *mockWebhookService) ExecuteWebhook(ctx context.Context, webhookID uuid.
 	return args.Get(0).(*models.Message), args.Error(1)
 }
 
+func (m *mockWebhookService) ExecuteWebhookWithRetry(ctx context.Context, webhookID uuid.UUID, token string, req *services.ExecuteWebhookRequest) (*models.Message, error) {
+	args := m.Called(ctx, webhookID, token, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Message), args.Error(1)
+}
+
+func (m *mockWebhookService) GetWebhookStats(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.WebhookDeliveryStats, error) {
+	args := m.Called(ctx, webhookID, requesterID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.WebhookDeliveryStats), args.Error(1)
+}
+
+func (m *mockWebhookService) GetWebhookDeliveries(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID, limit, offset int) ([]*models.WebhookDelivery, error) {
+	args := m.Called(ctx, webhookID, requesterID, limit, offset)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.WebhookDelivery), args.Error(1)
+}
+
+func (m *mockWebhookService) TestWebhook(ctx context.Context, webhookID uuid.UUID, requesterID uuid.UUID) (*models.Message, error) {
+	args := m.Called(ctx, webhookID, requesterID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Message), args.Error(1)
+}
+
 // --- test app setup ---
 
 func setupWebhookTestApp(t *testing.T, mockService *mockWebhookService) (*fiber.App, uuid.UUID) {
