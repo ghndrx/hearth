@@ -177,13 +177,16 @@ func (s *CallService) GetActiveCallsForChannel(ctx context.Context, channelID uu
 	return s.callRepo.GetActiveByChannel(ctx, channelID)
 }
 
-// getICEServers returns the configured ICE servers
+// getICEServers returns the configured ICE servers.
+// TURN server can be configured via environment variables:
+// - TURN_SERVER_URL: The TURN server URL (e.g., "turn:turn.example.com:3478")
+// - TURN_USERNAME: Optional username for TURN authentication
+// - TURN_CREDENTIAL: Optional credential for TURN authentication
 func (s *CallService) getICEServers() []models.ICEServer {
 	servers := []models.ICEServer{
 		{URLs: []string{"stun:stun.l.google.com:19302"}},
 	}
 
-	// TODO: Add configurable TURN server support
 	turnURL := os.Getenv("TURN_SERVER_URL")
 	if turnURL != "" {
 		servers = append(servers, models.ICEServer{
