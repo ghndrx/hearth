@@ -42,6 +42,9 @@ type Gateway struct {
 	// Voice signaling
 	voiceService *VoiceSignalingService
 
+	// Video signaling
+	videoService *VideoSignalingService
+
 	// Soundboard signaling
 	soundboardService *SoundboardSignalingService
 
@@ -428,6 +431,9 @@ func (g *Gateway) handleClientDispatch(conn *websocket.Conn, client *Client, ses
 	// Activity events
 	case ActivitySignalStart, ActivitySignalJoin, ActivitySignalLeave, ActivitySignalEnd, ActivitySignalGameMove, ActivitySignalSync:
 		g.handleActivityDispatch(conn, client, session, dispatchData.T, dispatchData.D)
+	// Video signaling events
+	case VideoSignalRing, VideoSignalRingResponse, VideoSignalLeave, VideoSignalOffer, VideoSignalAnswer, VideoSignalICECandidate, VideoSignalStateUpdate, VideoSignalScreenStart, VideoSignalScreenStop:
+		g.handleVideoDispatch(conn, client, session, dispatchData.T, dispatchData.D)
 	default:
 		log.Printf("[Gateway] Unknown client dispatch type: %s", dispatchData.T)
 	}
@@ -469,6 +475,19 @@ func (g *Gateway) handleActivityDispatch(conn *websocket.Conn, client *Client, s
 	if err := g.activityService.HandleActivityMessage(ctx, client, session.ID, eventType, data); err != nil {
 		log.Printf("[Gateway] Activity dispatch error: %v", err)
 		g.sendError(conn, "activity operation failed")
+	}
+}
+
+func (g *Gateway) handleVideoDispatch(conn *websocket.Conn, client *Client, session *Session, eventType string, data json.RawMessage) {
+	if g.videoService == nil {
+		g.sendError(conn, "video calls not available")
+		return
+	}
+
+	ctx := context.Background()
+	if err := g.videoService.HandleVideoMessage(ctx, client, session.ID, eventType, data); err != nil {
+		log.Printf("[Gateway] Video dispatch error: %v", err)
+		g.sendError(conn, "video operation failed")
 	}
 }
 
@@ -921,6 +940,11 @@ func (g *Gateway) SetSoundboardService(ss *SoundboardSignalingService) {
 // SetActivityService sets the activity signaling service
 func (g *Gateway) SetActivityService(as *ActivitySignalingService) {
 	g.activityService = as
+}
+
+// SetVideoService sets the video signaling service
+func (g *Gateway) SetVideoService(vs *VideoSignalingService) {
+	g.videoService = vs
 }
 
 // CleanupSession cleans up voice state when a session disconnects

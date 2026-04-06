@@ -25,6 +25,7 @@
 	import ServerSettings from '$lib/components/ServerSettings.svelte';
 	import UserPopout from '$lib/components/UserPopout.svelte';
 	import VoiceCallOverlay from '$lib/components/VoiceCallOverlay.svelte';
+	import CallView from '$lib/components/CallView.svelte';
 	import ImagePreviewModal from '$lib/components/ImagePreviewModal.svelte';
 	import QuickSwitcher from '$lib/components/QuickSwitcher.svelte';
 	import SearchResults from '$lib/components/SearchResults.svelte';
@@ -329,6 +330,9 @@
 
 <!-- Voice Call Overlay - Floating mini-view during active calls -->
 <VoiceCallOverlay />
+
+	<!-- Video Call View - Full-screen P2P video call UI -->
+	<CallView />
 
 <!-- Image Preview Modal - Full screen image viewer -->
 <ImagePreviewModal />

@@ -324,6 +324,14 @@ func main() {
 		wsGateway.SetVoiceService(voiceService)
 	}
 
+	// Initialize video signaling service for P2P video/audio calls
+	var videoService *websocket.VideoSignalingService
+	if wsHub != nil {
+		videoService = websocket.NewVideoSignalingService(wsHub)
+		wsGateway.SetVideoService(videoService)
+		log.Printf("✅ Video signaling service initialized")
+	}
+
 	// Initialize call service for video/audio calls
 	callService := services.NewCallService(repos.Calls)
 	log.Printf("✅ Call service initialized")
