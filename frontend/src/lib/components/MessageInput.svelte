@@ -15,6 +15,7 @@
 	import SlashCommandAutocomplete from './SlashCommandAutocomplete.svelte';
 	import StickerPicker from './stickers/StickerPicker.svelte';
 	import EmbedBuilder from './EmbedBuilder.svelte';
+	import VoiceRecorderPanel from './VoiceRecorderPanel.svelte';
 	import type { UploadItem } from './UploadProgress.svelte';
 
 	const dispatch = createEventDispatcher<{
@@ -33,6 +34,7 @@
 	let showGifPicker = false;
 	let showStickerPicker = false;
 	let showEmbedBuilder = false;
+	let showVoiceRecorder = false;
 	let uploadErrors: string[] = [];
 	
 	// Mention autocomplete state
@@ -515,6 +517,28 @@
 		showStickerPicker = false;
 		replyTo = null;
 	}
+
+	function toggleVoiceRecorder() {
+		showVoiceRecorder = !showVoiceRecorder;
+	}
+
+	function handleVoiceRecorderSend(event: CustomEvent<{ blob: Blob; duration: number; waveform: number[] }>) {
+		const { blob, duration, waveform } = event.detail;
+		// Create a file from the blob
+		const file = new File([blob], 'voice_message.webm', { type: 'audio/webm' });
+		// Dispatch with a special voice_message type - the parent will handle upload
+		dispatch('send', {
+			content: JSON.stringify({ voice_message: true, duration_ms: duration, waveform_data: waveform }),
+			attachments: [file],
+			replyTo: replyTo?.id
+		});
+		showVoiceRecorder = false;
+		replyTo = null;
+	}
+
+	function handleVoiceRecorderCancel() {
+		showVoiceRecorder = false;
+	}
 </script>
 
 <!-- File Upload Drop Zone -->
@@ -818,6 +842,34 @@
 				/>
 			</div>
 
+			<!-- Voice Recorder Button -->
+			<div class="voice-recorder-container">
+				<button
+					class="icon-button voice-button"
+					title="Record voice message"
+					aria-label="Record voice message"
+					aria-expanded={showVoiceRecorder}
+					on:click={toggleVoiceRecorder}
+					disabled={!$currentChannel}
+					type="button"
+				>
+					<svg
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						aria-hidden="true"
+					>
+						<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+						<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+						<line x1="12" y1="19" x2="12" y2="23"/>
+						<line x1="8" y1="23" x2="16" y2="23"/>
+					</svg>
+				</button>
+			</div>
+
 			<!-- Embed Builder Button -->
 			<div class="embed-button-container">
 				<button
@@ -849,6 +901,14 @@
 			</div>
 		</div>
 	</div>
+
+	<!-- Voice Recorder Panel -->
+	{#if showVoiceRecorder}
+		<VoiceRecorderPanel
+			on:send={handleVoiceRecorderSend}
+			on:cancel={handleVoiceRecorderCancel}
+		/>
+	{/if}
 
 	<!-- Embed Builder Modal -->
 	<EmbedBuilder
@@ -1089,6 +1149,15 @@
 
 	.sticker-button:hover:not(:disabled) {
 		color: #7ec8e3;
+	}
+
+	/* Voice Recorder Container */
+	.voice-recorder-container {
+		position: relative;
+	}
+
+	.voice-button:hover:not(:disabled) {
+		color: #23a559;
 	}
 
 	/* Embed Button */

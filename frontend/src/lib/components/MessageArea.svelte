@@ -347,8 +347,22 @@
 											 • enter to <button class="text-hearth-400 hover:underline" on:click={saveEdit}>save</button>
 										</div>
 									</div>
+								{:else if isVoiceMessage(message)}
+									{@const voiceData = parseVoiceMessageData(message)}
+									{#if voiceData && message.attachments && message.attachments.length > 0}
+										<VoiceMessageBubble
+											voiceMessageId={message.id}
+												fileUrl={message.attachments[0].url}
+												durationMs={voiceData.duration_ms}
+												waveformData={voiceData.waveform_data || []}
+												username={message.author?.username || 'Unknown'}
+												timestamp={formatTime(message.created_at)}
+												avatarUrl={message.author?.avatar_url || ''}
+												isOwnMessage={isOwnMessage(message)}
+										/>
+										{/if}
 								{:else}
-									<p class="text-gray-200 break-words whitespace-pre-wrap">{message.content}</p>
+										<p class="text-gray-200 break-words whitespace-pre-wrap">{message.content}</p>
 								{/if}
 							</div>
 						</div>
@@ -370,6 +384,20 @@
 										 • enter to <button class="text-hearth-400 hover:underline" on:click={saveEdit}>save</button>
 									</div>
 								</div>
+							{:else if isVoiceMessage(message)}
+								{@const voiceData = parseVoiceMessageData(message)}
+								{#if voiceData && message.attachments && message.attachments.length > 0}
+									<VoiceMessageBubble
+										voiceMessageId={message.id}
+										fileUrl={message.attachments[0].url}
+										durationMs={voiceData.duration_ms}
+										waveformData={voiceData.waveform_data || []}
+										username={message.author?.username || 'Unknown'}
+										timestamp={formatTime(message.created_at)}
+										avatarUrl={message.author?.avatar_url || ''}
+										isOwnMessage={isOwnMessage(message)}
+									/>
+								{/if}
 							{:else}
 								<p class="text-gray-200 break-words whitespace-pre-wrap">{message.content}</p>
 								{#if message.edited_at}
