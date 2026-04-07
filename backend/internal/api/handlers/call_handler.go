@@ -2,18 +2,27 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"hearth/internal/models"
 	"hearth/internal/services"
+	"hearth/internal/websocket"
 )
 
 // CallHandler handles video/audio call HTTP endpoints
 type CallHandler struct {
 	callService    *services.CallService
 	channelService CallChannelServiceInterface
+	videoService   VideoSignalingServiceInterface
+}
+
+// VideoSignalingServiceInterface defines the video signaling methods needed by CallHandler
+type VideoSignalingServiceInterface interface {
+	SignalVideo(ctx context.Context, senderID uuid.UUID, signalType string, data json.RawMessage) error
 }
 
 // CallChannelServiceInterface defines methods needed for channel access in call handler
@@ -22,10 +31,20 @@ type CallChannelServiceInterface interface {
 }
 
 // NewCallHandler creates a new call handler
-func NewCallHandler(callService *services.CallService, channelService CallChannelServiceInterface) *CallHandler {
+func NewCallHandler(callService *services.CallService, channelService CallChannelServiceInterface, videoService *websocket.VideoSignalingService) *CallHandler {
 	return &CallHandler{
 		callService:    callService,
 		channelService: channelService,
+		videoService:   videoService,
+	}
+}
+
+// NewCallHandlerWithInterface creates a new call handler with a custom signaling service interface
+func NewCallHandlerWithInterface(callService *services.CallService, channelService CallChannelServiceInterface, videoService VideoSignalingServiceInterface) *CallHandler {
+	return &CallHandler{
+		callService:    callService,
+		channelService: channelService,
+		videoService:   videoService,
 	}
 }
 
@@ -198,11 +217,24 @@ func (h *CallHandler) Leave(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusNoContent).Send(nil)
 }
 
-// Signal relays signaling data for WebRTC negotiation
+// SignalRequest represents the body of a signaling request
+type SignalRequest struct {
+	Type string          `json:"type"`
+	Data  json.RawMessage `json:"data"`
+}
+
+// Signal relays signaling data for WebRTC negotiation via HTTP
 // POST /api/v1/calls/:id/signal
-// TODO: This is a stub - actual signaling happens via WebSocket in websocket/video.go.
 // This endpoint exists as a fallback for environments where WebSocket is unavailable.
+// Primary signaling is handled via WebSocket in websocket/video.go.
 func (h *CallHandler) Signal(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
 	callID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -211,7 +243,7 @@ func (h *CallHandler) Signal(c *fiber.Ctx) error {
 	}
 
 	// Verify the call exists
-	_, err = h.callService.GetCall(c.Context(), callID)
+	call, err := h.callService.GetCall(c.Context(), callID)
 	if err != nil {
 		if err == services.ErrCallNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -223,12 +255,67 @@ func (h *CallHandler) Signal(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement HTTP-based signaling fallback
-	// Primary signaling is handled via WebSocket in websocket/video.go
-	// This endpoint would parse the signal type (offer/answer/ice) and
-	// relay it through the VideoSignalingService
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "use WebSocket signaling via the gateway connection",
-		"hint":  "connect to /gateway and use VIDEO_OFFER, VIDEO_ANSWER, VIDEO_ICE_CANDIDATE message types",
-	})
+	// Verify user is a participant in the call
+	isParticipant := false
+	for _, participant := range call.Participants {
+		if participant.UserID == userID {
+			isParticipant = true
+			break
+		}
+	}
+	if !isParticipant {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "you are not a participant in this call",
+		})
+	}
+
+	// Parse signaling request
+	var req SignalRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.Type == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "signal type is required",
+		})
+	}
+
+	if req.Data == nil || len(req.Data) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "signal data is required",
+		})
+	}
+
+	// Validate signal type
+	validTypes := map[string]bool{
+		"VIDEO_OFFER":         true,
+		"VIDEO_ANSWER":        true,
+		"VIDEO_ICE_CANDIDATE": true,
+	}
+	if !validTypes[req.Type] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid signal type, must be VIDEO_OFFER, VIDEO_ANSWER, or VIDEO_ICE_CANDIDATE",
+		})
+	}
+
+	// If videoService is not available, return an error with guidance
+	if h.videoService == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "video signaling service not available",
+			"hint":  "use WebSocket signaling via the gateway connection",
+		})
+	}
+
+	// Relay signaling data via the video signaling service
+	if err := h.videoService.SignalVideo(c.Context(), userID, req.Type, req.Data); err != nil {
+		log.Printf("[CallHandler] Failed to relay signaling: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to relay signaling data",
+		})
+	}
+
+	return c.Status(fiber.StatusNoContent).Send(nil)
 }

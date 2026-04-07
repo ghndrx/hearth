@@ -408,8 +408,8 @@ func (h *Handlers) SetVoiceActivityHandler(
 }
 
 // SetCallHandler sets the call handler
-func (h *Handlers) SetCallHandler(callService *services.CallService, channelService CallChannelServiceInterface) {
-	h.Calls = NewCallHandler(callService, channelService)
+func (h *Handlers) SetCallHandler(callService *services.CallService, channelService CallChannelServiceInterface, videoService *websocket.VideoSignalingService) {
+	h.Calls = NewCallHandler(callService, channelService, videoService)
 }
 
 // SetEmbedHandler sets the embed handler
