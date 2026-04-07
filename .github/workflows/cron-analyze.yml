@@ -74,80 +74,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update TASK_QUEUE
+        env:
+          P0_COUNT: ${{ needs.discord-watch.outputs.p0_count }}
+          P1_COUNT: ${{ needs.discord-watch.outputs.p1_count }}
+          P2_COUNT: ${{ needs.discord-watch.outputs.p2_count }}
+          OPEN_ISSUES: ${{ needs.github-issues-scan.outputs.open_issues }}
         run: |
-          TODAY=$(date '+%Y-%m-%d')
-          
           echo "=== Updating TASK_QUEUE.md ==="
-          
-          # Build updated queue
-          {
-            cat << HEADER
-# TASK_QUEUE.md - Hearth Development Queue
-
-> Auto-updated by 🔬 Competitive Analysis Pipeline
-> Last update: $TODAY
-
-## 📊 Queue Statistics
-- **P0 Features**: ${{ needs.discord-watch.outputs.p0_count }}
-- **P1 Features**: ${{ needs.discord-watch.outputs.p1_count }}  
-- **P2 Features**: ${{ needs.discord-watch.outputs.p2_count }}
-- **Open GitHub Issues**: ${{ needs.github-issues-scan.outputs.open_issues }}
-
-## 🚢 Shipping Queue (Priority Order)
-
-### P0 - Critical (Must Ship)
-
-HEADER
-          } > TASK_QUEUE_UPDATE.md
-          
-          # Extract P0s from PRDs
-          for prd in $(grep -l '\[P0\]' PRDs/*.md 2>/dev/null); do
-            title=$(head -3 "$prd" | grep -oE '# [^ ]+' | head -1 | sed 's/# //')
-            basename=$(basename "$prd" .md)
-            echo "- [ ] **P0** Feature: $title — $basename" >> TASK_QUEUE_UPDATE.md
-          done 2>/dev/null || true
-          
-          {
-            cat << FOOTER
-
-### P1 - High Value (Next Sprint)
-
-FOOTER
-          } >> TASK_QUEUE_UPDATE.md
-          
-          for prd in $(grep -l '\[P1\]' PRDs/*.md 2>/dev/null); do
-            title=$(head -3 "$prd" | grep -oE '# [^ ]+' | head -1 | sed 's/# //')
-            basename=$(basename "$prd" .md)
-            echo "- [ ] **P1** Feature: $title — $basename" >> TASK_QUEUE_UPDATE.md
-          done 2>/dev/null || true
-          
-          {
-            cat << FOOTER
-
-### P2 - Medium (Backlog)
-
-FOOTER
-          } >> TASK_QUEUE_UPDATE.md
-          
-          for prd in $(grep -l '\[P2\]' PRDs/*.md 2>/dev/null); do
-            title=$(head -3 "$prd" | grep -oE '# [^ ]+' | head -1 | sed 's/# //')
-            basename=$(basename "$prd" .md)
-            echo "- [ ] **P2** Feature: $title — $basename" >> TASK_QUEUE_UPDATE.md
-          done 2>/dev/null || true
-          
-          # Check diff
-          if diff -q TASK_QUEUE.md TASK_QUEUE_UPDATE.md > /dev/null 2>&1; then
-            echo "✅ TASK_QUEUE unchanged"
-            rm TASK_QUEUE_UPDATE.md
-          else
-            mv TASK_QUEUE_UPDATE.md TASK_QUEUE.md
-            git add TASK_QUEUE.md
-            git config user.email "greg@gregh.dev"
-            git config user.name "Greg Hendrickson"
-            git commit -m "chore: refresh TASK_QUEUE from competitive analysis ($TODAY)"
-            git push origin develop
-            echo "✅ TASK_QUEUE updated"
-          fi
+          python3 ${{ github.workspace }}/.github/workflows/scripts/update_task_queue.py
 
   report:
     name: 📊 Analysis Report
