@@ -469,7 +469,7 @@ func main() {
 	log.Printf("✅ DM service initialized")
 
 	// Wire up Call handler for video/audio calls
-	h.SetCallHandler(callService, channelService)
+	h.SetCallHandler(callService, channelService, videoService)
 	log.Printf("✅ Call handler initialized")
 
 	// Wire up OAuth service if available

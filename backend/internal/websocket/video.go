@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -204,6 +205,93 @@ func (s *VideoSignalingService) HandleVideoMessage(ctx context.Context, client *
 		log.Printf("[Video] Unknown message type: %s", msgType)
 		return nil
 	}
+}
+
+// SignalVideo relays signaling data for WebRTC negotiation via HTTP.
+// This is the HTTP equivalent of HandleVideoMessage, but accepts senderID
+// from the auth context instead of extracting it from a WebSocket client.
+// It handles VIDEO_OFFER, VIDEO_ANSWER, and VIDEO_ICE_CANDIDATE by relaying
+// to the target user via the hub.
+func (s *VideoSignalingService) SignalVideo(ctx context.Context, senderID uuid.UUID, signalType string, data json.RawMessage) error {
+	switch signalType {
+	case "VIDEO_OFFER":
+		return s.signalOfferHTTP(ctx, senderID, data)
+	case "VIDEO_ANSWER":
+		return s.signalAnswerHTTP(ctx, senderID, data)
+	case "VIDEO_ICE_CANDIDATE":
+		return s.signalICECandidateHTTP(ctx, senderID, data)
+	default:
+		log.Printf("[Video] SignalVideo: unknown signal type: %s", signalType)
+		return fmt.Errorf("unknown signal type: %s", signalType)
+	}
+}
+
+// signalOfferHTTP relays an SDP offer to a specific peer (HTTP variant)
+func (s *VideoSignalingService) signalOfferHTTP(ctx context.Context, senderID uuid.UUID, data json.RawMessage) error {
+	var offerData VideoOfferData
+	if err := json.Unmarshal(data, &offerData); err != nil {
+		return fmt.Errorf("invalid offer data: %w", err)
+	}
+
+	log.Printf("[Video] SignalVideo: relaying offer from %s to %s", senderID, offerData.ToUserID)
+
+	s.hub.SendToUser(offerData.ToUserID, &Event{
+		Op:   OpDispatch,
+		Type: EventTypeVideoOffer,
+		Data: map[string]interface{}{
+			"call_id":     offerData.CallID,
+			"from_user_id": senderID,
+			"sdp":         offerData.SDP,
+		},
+	})
+
+	return nil
+}
+
+// signalAnswerHTTP relays an SDP answer to a specific peer (HTTP variant)
+func (s *VideoSignalingService) signalAnswerHTTP(ctx context.Context, senderID uuid.UUID, data json.RawMessage) error {
+	var answerData VideoAnswerData
+	if err := json.Unmarshal(data, &answerData); err != nil {
+		return fmt.Errorf("invalid answer data: %w", err)
+	}
+
+	log.Printf("[Video] SignalVideo: relaying answer from %s to %s", senderID, answerData.ToUserID)
+
+	s.hub.SendToUser(answerData.ToUserID, &Event{
+		Op:   OpDispatch,
+		Type: EventTypeVideoAnswer,
+		Data: map[string]interface{}{
+			"call_id":     answerData.CallID,
+			"from_user_id": senderID,
+			"sdp":         answerData.SDP,
+		},
+	})
+
+	return nil
+}
+
+// signalICECandidateHTTP relays an ICE candidate to a specific peer (HTTP variant)
+func (s *VideoSignalingService) signalICECandidateHTTP(ctx context.Context, senderID uuid.UUID, data json.RawMessage) error {
+	var candidateData VideoICECandidateData
+	if err := json.Unmarshal(data, &candidateData); err != nil {
+		return fmt.Errorf("invalid ICE candidate data: %w", err)
+	}
+
+	log.Printf("[Video] SignalVideo: relaying ICE candidate from %s to %s", senderID, candidateData.ToUserID)
+
+	s.hub.SendToUser(candidateData.ToUserID, &Event{
+		Op:   OpDispatch,
+		Type: EventTypeVideoICECandidate,
+		Data: map[string]interface{}{
+			"call_id":       candidateData.CallID,
+			"from_user_id":  senderID,
+			"candidate":     candidateData.Candidate,
+			"sdpMid":        candidateData.SDPMid,
+			"sdpMLineIndex": candidateData.SDPMLineIndex,
+		},
+	})
+
+	return nil
 }
 
 // handleRing initiates a video call (rings the target user)
