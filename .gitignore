@@ -129,3 +129,12 @@ PRD.md
 ROADMAP.md
 .claude/
 PRDs/
+mobile/
+
+# === BANNED GHA WORKFLOWS — DO NOT RECREATE ===
+# AI analysis/dev workflows waste tokens and flood notifications.
+# All development dispatch happens via local clawd swarm, NOT GitHub Actions.
+.github/workflows/cron-analyze.yml
+.github/workflows/cron-review.yml
+.github/workflows/cron-ship.yml
+.github/workflows/bedrock-agent.yml
