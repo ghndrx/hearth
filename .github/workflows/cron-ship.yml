@@ -21,7 +21,7 @@ env:
 
 jobs:
   # ============================================================
-  # PHASE 1: Analyze what to build next
+  # PHASE 1: Analyze GitHub Issues for next feature
   # ============================================================
   analyze-roadmap:
     name: 📋 Analyze Roadmap
@@ -29,24 +29,12 @@ jobs:
     outputs:
       next-feature: ${{ steps.prioritize.outputs.next_feature }}
       feature-slug: ${{ steps.prioritize.outputs.feature_slug }}
-      prd-path: ${{ steps.prioritize.outputs.prd_path }}
       scope: ${{ steps.prioritize.outputs.scope }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Scan PRD directory
-        id: scan
-        run: |
-          echo "=== Available PRDs ==="
-          ls -lt PRDs/*.md 2>/dev/null | head -20 | awk '{print $NF}'
-          echo "---"
-          latest=$(ls -t PRDs/*.md | head -1)
-          echo "latest_prd=$latest" >> $GITHUB_OUTPUT
-          age=$(($(date +%s) - $(stat -c %Y "$latest" 2>/dev/null || echo $(date +%s))))
-          echo "latest_age_seconds=$age" >> $GITHUB_OUTPUT
 
       - name: Check for existing feature branches
         id: existing
@@ -58,21 +46,23 @@ jobs:
           echo "$branches" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Prioritize next feature
+      - name: Prioritize next feature from GitHub Issues
         id: prioritize
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Pick the highest priority P0 not already in progress
-          # Skip any feature that already has a branch
-          
+          # Get P0 issues that don't have active branches
           active=$(gh api repos/ghndrx/hearth/branches --jq '.[].name' 2>/dev/null | grep '^feature/' | xargs -I{} basename {} . || true)
           
-          # Find P0s in TASK_QUEUE
+          # Query GitHub Issues for P0 features
           feature=""
           slug=""
           
-          while IFS= read -r line; do
-            if echo "$line" | grep -q '^\- \[ \] \*\*\[P0\]\*\*'; then
-              raw=$(echo "$line" | grep -oE 'Feature: [^—]+' | sed 's/Feature: //' | tr -d '**')
+          # Try to find a P0 issue without an active branch
+          while IFS= read -r issue; do
+            if [ -n "$issue" ]; then
+              # Extract title and create slug
+              raw=$(echo "$issue" | sed 's/"//g')
               s=$(echo "$raw" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
               if ! echo "$active" | grep -q "$s"; then
                 feature="$raw"
@@ -80,13 +70,13 @@ jobs:
                 break
               fi
             fi
-          done < TASK_QUEUE.md
+          done < <(gh issue list --label "P0" --state open --limit 10 --json title --jq '.[].title' 2>/dev/null)
           
           # Fallback to P1
           if [ -z "$feature" ]; then
-            while IFS= read -r line; do
-              if echo "$line" | grep -q '^\- \[ \] \*\*\[P1\]\*\*'; then
-                raw=$(echo "$line" | grep -oE 'Feature: [^—]+' | sed 's/Feature: //' | tr -d '**')
+            while IFS= read -r issue; do
+              if [ -n "$issue" ]; then
+                raw=$(echo "$issue" | sed 's/"//g')
                 s=$(echo "$raw" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
                 if ! echo "$active" | grep -q "$s"; then
                   feature="$raw"
@@ -94,23 +84,19 @@ jobs:
                   break
                 fi
               fi
-            done < TASK_QUEUE.md
+            done < <(gh issue list --label "P1" --state open --limit 10 --json title --jq '.[].title' 2>/dev/null)
           fi
           
           [ -z "$feature" ] && feature="none" && slug="none"
           
-          prd=$(ls PRDs/*${slug}*.md 2>/dev/null | head -1 || echo "none")
-          scope=$(grep -oE '[0-9]+-[0-9]+ weeks?' "PRDs/$prd" 2>/dev/null | head -1 || echo "unknown")
-          
           echo "next_feature=$feature" >> $GITHUB_OUTPUT
           echo "feature_slug=$slug" >> $GITHUB_OUTPUT
-          echo "prd_path=$prd" >> $GITHUB_OUTPUT
-          echo "scope=$scope" >> $GITHUB_OUTPUT
+          echo "scope=2-4 weeks" >> $GITHUB_OUTPUT
           
           echo "=== Selected: $feature ==="
 
   # ============================================================
-  # PHASE 2: Generate implementation plan from PRD
+  # PHASE 2: Generate implementation plan
   # ============================================================
   plan-implementation:
     name: 📐 Plan Implementation
@@ -125,17 +111,6 @@ jobs:
         with:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Read PRD
-        id: prd
-        run: |
-          prd_path="${{ needs.analyze-roadmap.outputs.prd_path }}"
-          if [ -f "$prd_path" ]; then
-            echo "=== Reading PRD: $prd_path ==="
-            head -50 "$prd_path"
-          else
-            echo "No PRD found - using feature name only"
-          fi
 
       - name: Generate implementation plan
         id: plan
@@ -195,7 +170,7 @@ jobs:
           echo "Frontend: $frontend_files"
 
   # ============================================================
-  # PHASE 3: Implement Backend (on develop directly)
+  # PHASE 3: Implement Backend
   # ============================================================
   implement-backend:
     name: 🐹 Implement Backend
@@ -288,7 +263,7 @@ Generated by 🚀 Ship Pipeline cron"
           git push -u origin ${{ steps.branch.outputs.branch_name }}
 
   # ============================================================
-  # PHASE 4: Implement Frontend (on develop directly)
+  # PHASE 4: Implement Frontend
   # ============================================================
   implement-frontend:
     name: 🎨 Implement Frontend
@@ -422,7 +397,7 @@ TSTEMPLATE
 
 Auto-generated implementation scaffold from Ship Pipeline.
 
-**Priority**: P0/P1 competitive gap
+**Priority**: P0/P1 from GitHub Issues
 **Estimated Scope**: ${SCOPE}
 
 ### ✅ What's Done
@@ -461,7 +436,6 @@ PRBODY
           echo "|-------|-------|"
           echo "| **Feature** | ${{ needs.analyze-roadmap.outputs.next-feature || 'Queue empty' }} |"
           echo "| **Slug** | ${{ needs.analyze-roadmap.outputs.feature_slug || 'N/A' }} |"
-          echo "| **PRD** | ${{ needs.analyze-roadmap.outputs.prd_path || 'N/A' }} |"
           echo "| **Scope** | ${{ needs.analyze-roadmap.outputs.scope || 'N/A' }} |"
           echo "| **Branch** | ${{ needs.implement-backend.outputs.branch || 'skipped' }} |"
           echo ""
