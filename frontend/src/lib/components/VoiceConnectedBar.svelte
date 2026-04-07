@@ -2,6 +2,7 @@
 	import { voiceState, voiceActions, isInVoice, voiceChannel } from '$lib/stores/voice';
 	import { getLiveKitManager } from '$lib/voice/livekit';
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+	import SoundboardPicker from './soundboard/SoundboardPicker.svelte';
 
 	const dispatch = createEventDispatcher<{
 		disconnect: void;
@@ -10,6 +11,7 @@
 	let elapsedTime = '00:00';
 	let timeInterval: ReturnType<typeof setInterval> | null = null;
 	let connectionStartTime: Date | null = null;
+	let showSoundboardPicker = false;
 
 	$: if ($isInVoice && !connectionStartTime) {
 		connectionStartTime = new Date();
@@ -70,6 +72,16 @@
 	onDestroy(() => {
 		stopTimer();
 	});
+
+	function handleSoundPlay(event: CustomEvent<{ id: string; name: string; url: string; volume: number }>) {
+		const { url, volume } = event.detail;
+		// Play sound through LiveKit's local audio track or via browser Audio API
+		const audio = new Audio(url);
+		audio.volume = volume / 100;
+		audio.play().catch(err => {
+			console.error('Failed to play soundboard sound:', err);
+		});
+	}
 </script>
 
 {#if $isInVoice}

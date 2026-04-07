@@ -132,8 +132,9 @@
 			isPlayingPreview = false;
 		};
 
-		audioPreview.ontimeout = () => {
+		audioPreview.onerror = () => {
 			isPlayingPreview = false;
+			uploadError = 'Failed to load audio preview';
 		};
 	}
 

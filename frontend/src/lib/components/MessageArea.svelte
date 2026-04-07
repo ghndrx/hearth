@@ -6,6 +6,8 @@
 	import { gateway, onGatewayEvent } from '$lib/gateway';
 	import TypingIndicator from './TypingIndicator.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
+	import VoiceMessageBubble from './VoiceMessageBubble.svelte';
+	import { isVoiceMessage, parseVoiceMessageData } from '$lib/utils/voiceMessages';
 
 	let messageInput = '';
 	let messagesContainer: HTMLDivElement;
@@ -357,7 +359,7 @@
 												waveformData={voiceData.waveform_data || []}
 												username={message.author?.username || 'Unknown'}
 												timestamp={formatTime(message.created_at)}
-												avatarUrl={message.author?.avatar_url || ''}
+												avatarUrl={message.author?.avatar || ''}
 												isOwnMessage={isOwnMessage(message)}
 										/>
 										{/if}
@@ -394,7 +396,7 @@
 										waveformData={voiceData.waveform_data || []}
 										username={message.author?.username || 'Unknown'}
 										timestamp={formatTime(message.created_at)}
-										avatarUrl={message.author?.avatar_url || ''}
+										avatarUrl={message.author?.avatar || ''}
 										isOwnMessage={isOwnMessage(message)}
 									/>
 								{/if}
