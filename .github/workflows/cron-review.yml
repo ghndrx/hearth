@@ -33,6 +33,9 @@ jobs:
           ref: develop
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
       - name: Find merged PRs
         id: find
         env:
@@ -57,9 +60,9 @@ jobs:
                 }
               }
             }
-          ' --jq '.data.repository.pullRequests.nodes | jq -c . 2>/dev/null | head -5 || echo "")
+          ' --template '{{ .data.repository.pullRequests.nodes | toJSON }}' | jq -c '. | head -5' 2>/dev/null || echo "[]")
           
-          count=$(echo "$prs" | jq -s 'length' 2>/dev/null || echo "0")
+          count=$(echo "$prs" | jq 'length' 2>/dev/null || echo "0")
           echo "count=$count" >> $GITHUB_OUTPUT
           echo "pr_list<<EOF" >> $GITHUB_OUTPUT
           echo "$prs" >> $GITHUB_OUTPUT
