@@ -113,8 +113,15 @@ opencode-task.md
 
 # Local build artifacts
 *.backup
+*.bak
 *.swp
 *.swo
+
+# Generated reports and test binaries
+*.test
+**/coverage.html
+**/playwright-report/
+.golangci.bck.yml
 *~
 
 # Editor files
