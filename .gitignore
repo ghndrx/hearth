@@ -51,7 +51,6 @@ vendor/
 specs/
 
 # Agent instruction files
-AGENTS.md
 TASKS.json
 orchestration/
 *.spec.md
