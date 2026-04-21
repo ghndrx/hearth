@@ -34,6 +34,28 @@ services:
     volumes:
       - minio-data:/data
 
+  # LiveKit SFU for voice + video. Uses dev-only keys that match the
+  # backend's LIVEKIT_API_KEY / LIVEKIT_API_SECRET env defaults. Without
+  # this service, the backend's /voice/token endpoint generates tokens
+  # that nowhere can validate and the LiveKitManager WebSocket connect
+  # hangs — which is why voice looks "implemented" but nothing works
+  # end-to-end locally.
+  #
+  # Ports exposed on host:
+  #   7880 (HTTP/WS control plane; the URL the browser connects to)
+  #   7881 (TCP fallback for RTC when UDP is blocked)
+  #   50000-50100 (UDP RTP media — open this range on any local firewall)
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: hearth-livekit
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecretdevsecretdevsecretdevsecret"
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+
 volumes:
   postgres-data:
   redis-data:
