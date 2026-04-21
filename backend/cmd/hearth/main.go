@@ -461,6 +461,23 @@ func main() {
 
 	h := handlers.NewHandlersWithTyping(authService, userService, serverService, channelService, messageService, roleService, searchService, threadService, typingService, webhookService, wsGateway, voiceService)
 
+	// Wire up LiveKit voice handler. Without this, routes.go:819 leaves
+	// /voice/token unregistered and the LiveKitManager client 404s on
+	// connect — despite voice_service.go having a full implementation.
+	liveKitVoiceService := services.NewVoiceService(
+		cfg.LiveKitAPIKey,
+		cfg.LiveKitAPISecret,
+		cfg.LiveKitURL,
+		repos.Channels,
+		repos.Servers,
+	)
+	if liveKitVoiceService.IsConfigured() {
+		h.SetLiveKitVoiceHandler(liveKitVoiceService, userService, channelService, permService)
+		log.Printf("✅ LiveKit voice handler wired up (url=%s)", cfg.LiveKitURL)
+	} else {
+		log.Printf("⚠️  LiveKit voice disabled (set LIVEKIT_API_KEY/SECRET/URL to enable)")
+	}
+
 	// Wire up Poll handler
 	h.SetPollHandler(pollService)
 

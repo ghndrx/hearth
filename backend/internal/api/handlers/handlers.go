@@ -272,6 +272,19 @@ func NewHandlersWithTyping(
 	}
 }
 
+// SetLiveKitVoiceHandler wires up the LiveKit voice handler, unlocking the
+// /voice/token, /voice/participants routes (gated in routes.go on
+// h.LiveKitVoice != nil). Without this, the voice_service.go implementation
+// is dead code — the browser client hits /voice/token and gets 404.
+func (h *Handlers) SetLiveKitVoiceHandler(
+	voiceService services.VoiceServiceInterface,
+	userService services.UserServiceInterface,
+	channelService services.ChannelServiceInterface,
+	permService services.VoicePermissionServiceInterface,
+) {
+	h.LiveKitVoice = NewLiveKitVoiceHandler(voiceService, userService, channelService, permService)
+}
+
 // SetScreenShareHandler sets the screen share handler
 func (h *Handlers) SetScreenShareHandler(
 	screenShareService *services.ScreenShareService,
