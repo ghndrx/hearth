@@ -1024,6 +1024,13 @@ type MatrixFederationDeps struct {
 	Config          *config.Config
 	UserService     matrixfederation.UserGetter
 	SigningKeyStore *matrixfederation.KeyStore
+
+	// Phase 3 (Hearth-03..Hearth-06) federation dependencies.
+	// Optional: when nil, the federation event/state/join/backfill/transaction
+	// endpoints will not be mounted.
+	EventStore  matrixfederation.FederationEventStore
+	StateStore  *matrixfederation.InMemoryStateStore
+	AuthChecker *matrixfederation.AuthChecker
 }
 
 // SetupMatrixFederationRoutes configures Matrix protocol endpoints.
@@ -1092,6 +1099,50 @@ func SetupMatrixFederationRoutes(deps *MatrixFederationDeps) {
 	// Public rooms
 	publicRoomsHandler := matrixfederation.NewPublicRoomsHandler(roomStore, hsCfg)
 	matrixfederation.SetupPublicRoomsRoutes(app, publicRoomsHandler, "/_matrix/client/v3")
+
+	// Phase 3 (Hearth-03..Hearth-06) federation server-server endpoints.
+	// These are mounted only when the necessary dependencies are wired in.
+	if deps.EventStore != nil && deps.StateStore != nil && deps.SigningKeyStore != nil {
+		// X-Matrix authentication middleware for incoming federation requests.
+		fedMiddleware := matrixfederation.NewFederationMiddleware(deps.SigningKeyStore)
+		app.Use(fedMiddleware.VerifyXMatrix())
+
+		// Transaction handler: PUT /_matrix/federation/v1/send/{txnId}
+		txProcessor := matrixfederation.NewTransactionProcessor(
+			hsCfg.ServerName,
+			deps.EventStore,
+			deps.StateStore,
+			deps.AuthChecker,
+		)
+		txHandler := matrixfederation.NewTransactionHandler(txProcessor)
+		matrixfederation.SetupTransactionRoutes(app, txHandler)
+
+		// Event query handlers
+		eventHandler := matrixfederation.NewFederationEventHandler(
+			hsCfg.ServerName, deps.EventStore, deps.StateStore,
+		)
+		matrixfederation.SetupFederationEventRoutes(app, eventHandler)
+
+		// State query handlers
+		stateHandler := matrixfederation.NewFederationStateHandler(
+			hsCfg.ServerName, deps.StateStore, deps.EventStore,
+		)
+		matrixfederation.SetupFederationStateRoutes(app, stateHandler)
+
+		// Join handshake (make_join / send_join)
+		joinHandler := matrixfederation.NewJoinHandler(
+			hsCfg.ServerName, deps.StateStore, deps.EventStore, roomStore, deps.AuthChecker,
+		)
+		matrixfederation.SetupJoinRoutes(app, joinHandler)
+
+		// Backfill
+		backfillHandler := matrixfederation.NewBackfillHandler(
+			hsCfg.ServerName, deps.EventStore, deps.StateStore,
+		)
+		matrixfederation.SetupBackfillRoutes(app, backfillHandler)
+
+		log.Printf("✅ Matrix federation Phase 3 (server-server API) configured")
+	}
 
 	log.Printf("✅ Matrix federation routes configured for %s", hsCfg.ServerName)
 }

@@ -428,6 +428,8 @@ type RoomPowerLevelsContent struct {
 	EventsDefault int64 `json:"events_default"`
 	// UsersDefault is the default power level for users.
 	UsersDefault int64 `json:"users_default"`
+	// StateDefault is the default power level for state events.
+	StateDefault int64 `json:"state_default"`
 	// Users is a map of MXIDs to their power levels.
 	Users map[string]int64 `json:"users"`
 	// Events is a map of event types to their power levels.
@@ -443,6 +445,7 @@ func NewRoomPowerLevelsContent(creatorMXID string) RoomPowerLevelsContent {
 		Invite:        0,
 		EventsDefault: 0,
 		UsersDefault:  0,
+		StateDefault:  50,
 		Users: map[string]int64{
 			creatorMXID: 100,
 		},
