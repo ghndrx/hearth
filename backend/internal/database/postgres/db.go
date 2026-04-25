@@ -169,6 +169,7 @@ type Repositories struct {
 	VoiceActivities              *VoiceActivityRepository
 	Calls                        *CallRepository
 	ChannelNotificationOverrides *ChannelNotificationOverrideRepository
+	Federation            *FederationRepository
 }
 
 // NewRepositories creates all repositories
@@ -202,5 +203,6 @@ func NewRepositories(db *sqlx.DB) *Repositories {
 		VoiceActivities:              NewVoiceActivityRepository(db),
 		Calls:                        NewCallRepository(db.DB),
 		ChannelNotificationOverrides: NewChannelNotificationOverrideRepository(db),
+		Federation:            NewFederationRepository(db),
 	}
 }

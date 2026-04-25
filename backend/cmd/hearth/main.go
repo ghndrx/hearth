@@ -709,8 +709,9 @@ func main() {
 
 		// Wire federation routes with dependencies
 		// HRT-3: Wire Phase 3 federation infrastructure (EventStore, StateStore, AuthChecker)
-		eventStore := matrixfederation.NewInMemoryFederationEventStore()
-		stateStore := matrixfederation.NewInMemoryStateStore()
+		// Use Postgres-backed stores for persistence
+		eventStore := matrixfederation.NewPostgresFederationEventStore(repos.Federation)
+		stateStore := matrixfederation.NewInMemoryStateStore() // TODO: Postgres-backed StateStore
 		authChecker := matrixfederation.NewAuthChecker(cfg.FederationServerName)
 
 		// Create federation client for outbound transactions
@@ -721,7 +722,8 @@ func main() {
 		fedClient := matrixfederation.NewFederationClient(keyStore, hsCfg, nil)
 
 		// HRT-2: Create FederationBridge for outgoing message federation
-		roomAliasStore := matrixfederation.NewInMemoryRoomAliasStore()
+		// Use Postgres-backed room alias store
+		roomAliasStore := matrixfederation.NewPostgresRoomAliasStore(repos.Federation)
 		txQueue := matrixfederation.NewTransactionQueue(fedClient, keyStore, cfg.FederationServerName)
 		fedBridge := matrixfederation.NewFederationBridge(
 			cfg.FederationServerName,
