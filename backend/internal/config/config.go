@@ -99,6 +99,12 @@ type Config struct {
 	AIOllamaURL         string // Ollama server URL
 	AIAllowUserOverride bool   // Allow users to use their own API keys
 
+	// Matrix Federation
+	FederationEnabled     bool   // Enable Matrix federation
+	FederationServerName  string // Canonical homeserver name (e.g., hearth.example.com)
+	FederationURL         string // Public-facing URL for federation API
+	FederationIdentityURL string // URL of the default identity server
+
 	// Stripe Configuration (Premium/Billing)
 	StripeSecretKey     string // Stripe secret key
 	StripeWebhookSecret string // Stripe webhook signing secret
@@ -182,6 +188,12 @@ func Load() (*Config, error) {
 		OAuthDiscordClientID:     getEnv("OAUTH_DISCORD_CLIENT_ID", ""),
 		OAuthDiscordClientSecret: getEnv("OAUTH_DISCORD_CLIENT_SECRET", ""),
 		OAuthRedirectBase:        getEnv("OAUTH_REDIRECT_BASE", ""),
+
+		// Matrix Federation
+		FederationEnabled:     getEnvBool("FEDERATION_ENABLED", false),
+		FederationServerName:  getEnv("FEDERATION_SERVER_NAME", ""),
+		FederationURL:         getEnv("FEDERATION_URL", ""),
+		FederationIdentityURL: getEnv("FEDERATION_IDENTITY_URL", ""),
 
 		// Stripe (Premium & Billing)
 		StripeSecretKey:     getEnv("STRIPE_SECRET_KEY", ""),

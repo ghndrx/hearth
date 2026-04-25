@@ -29,6 +29,7 @@ import (
 	"hearth/internal/config"
 	"hearth/internal/database/postgres"
 	"hearth/internal/events"
+	"hearth/internal/matrixfederation"
 	"hearth/internal/metrics"
 	"hearth/internal/pubsub"
 	"hearth/internal/ratelimit"
@@ -146,10 +147,10 @@ func main() {
 		nodeID := os.Getenv("HEARTH_NODE_ID")
 		if nodeID == "" {
 			hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "unknown-host"
-			log.Printf("⚠️  Failed to get hostname, using fallback: %v", err)
-		}
+			if err != nil {
+				hostname = "unknown-host"
+				log.Printf("⚠️  Failed to get hostname, using fallback: %v", err)
+			}
 			nodeID = fmt.Sprintf("%s-%s", hostname, uuid.New().String()[:8])
 		}
 		log.Printf("📡 Node ID: %s", nodeID)
@@ -309,7 +310,7 @@ func main() {
 	typingService := services.NewTypingService(serviceBus)
 	// Initialize webhook delivery repository
 	webhookDeliveryRepo := postgres.NewWebhookDeliveryRepository(db)
-	
+
 	webhookService := services.NewWebhookService(
 		repos.Webhooks,
 		webhookDeliveryRepo,
@@ -690,6 +691,29 @@ func main() {
 	// Prometheus metrics endpoint (before API routes, no auth required)
 	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 	log.Printf("📊 Prometheus metrics endpoint: /metrics")
+
+	// Matrix Federation routes (mounted at root, before API routes)
+	var keyStore *matrixfederation.KeyStore
+	if cfg.FederationEnabled {
+		log.Printf("🌐 Matrix federation enabled for server: %s", cfg.FederationServerName)
+
+		// Initialize signing key store for federation
+		keyStore = matrixfederation.NewKeyStore(cfg.FederationServerName)
+		signingKey, err := matrixfederation.GenerateSigningKey()
+		if err != nil {
+			log.Fatalf("Failed to generate federation signing key: %v", err)
+		}
+		keyStore.AddKey(signingKey, true)
+		log.Printf("✅ Federation signing key generated: %s", signingKey.KeyID)
+
+		// Wire federation routes with dependencies
+		api.SetupMatrixFederationRoutes(&api.MatrixFederationDeps{
+			App:             app,
+			Config:          cfg,
+			UserService:     userService, // UserService implements UserGetter interface
+			SigningKeyStore: keyStore,
+		})
+	}
 
 	// Setup routes
 	api.SetupRoutes(app, h, m)

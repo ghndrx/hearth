@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"time"
 
 	"github.com/gofiber/contrib/websocket"
@@ -8,6 +9,9 @@ import (
 
 	"hearth/internal/api/handlers"
 	"hearth/internal/api/middleware"
+	"hearth/internal/config"
+	"hearth/internal/matrix"
+	"hearth/internal/matrixfederation"
 )
 
 // SetupRoutes configures all API routes
@@ -1012,4 +1016,82 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	app.Get("*", func(c *fiber.Ctx) error {
 		return c.SendFile("./public/index.html")
 	})
+}
+
+// MatrixFederationDeps holds the dependencies needed for Matrix federation route setup.
+type MatrixFederationDeps struct {
+	App             *fiber.App
+	Config          *config.Config
+	UserService     matrixfederation.UserGetter
+	SigningKeyStore *matrixfederation.KeyStore
+}
+
+// SetupMatrixFederationRoutes configures Matrix protocol endpoints.
+// These are mounted at the root and are not under /api/v1.
+func SetupMatrixFederationRoutes(deps *MatrixFederationDeps) {
+	if !deps.Config.FederationEnabled {
+		return
+	}
+
+	app := deps.App
+	cfg := deps.Config
+
+	// Build homeserver config from environment
+	hsCfg := &matrix.HomeserverConfig{
+		ServerName:         cfg.FederationServerName,
+		BaseURL:            cfg.PublicURL,
+		FederationURL:      cfg.FederationURL,
+		DefaultIdentityURL: cfg.FederationIdentityURL,
+		Version:            "1.12.0",
+		Name:               "Hearth",
+	}
+
+	if hsCfg.ServerName == "" {
+		// Derive from public URL if not explicitly set
+		hsCfg.ServerName = cfg.PublicURL
+	}
+
+	// Validate the homeserver config
+	if err := hsCfg.Validate(); err != nil {
+		log.Printf("⚠️  Matrix federation config invalid: %v", err)
+		return
+	}
+
+	// Well-known endpoints
+	wellKnownOpts := &matrixfederation.WellKnownOptions{
+		IdentityServerURL: cfg.FederationIdentityURL,
+	}
+	wellKnownHandler := matrixfederation.NewWellKnownHandler(hsCfg, wellKnownOpts)
+	matrixfederation.SetupWellKnownRoutes(app, wellKnownHandler)
+
+	// Version endpoints
+	versionsHandler := matrixfederation.NewVersionsHandler("Hearth", "1.0.0")
+	matrixfederation.SetupVersionRoutes(app, versionsHandler)
+
+	// Profile API (Phase 1 - identity layer)
+	// Adapts Hearth user service to Matrix Profile API
+	if deps.UserService != nil {
+		profileAdapter := matrixfederation.NewUserServiceAdapter(deps.UserService, hsCfg)
+		profileHandler := matrixfederation.NewProfileHandler(profileAdapter)
+		matrixfederation.SetupProfileRoutes(app, profileHandler, "/_matrix/client/v3")
+		log.Printf("✅ Matrix Profile API configured")
+	}
+
+	// Server signing keys
+	if deps.SigningKeyStore != nil {
+		keyServerHandler := matrixfederation.NewKeyServerHandler(deps.SigningKeyStore, 0)
+		matrixfederation.SetupKeyServerRoutes(app, keyServerHandler)
+		log.Printf("✅ Matrix Key Server API configured")
+	}
+
+	// Room directory (Phase 2)
+	roomStore := matrixfederation.NewInMemoryRoomAliasStore()
+	directoryHandler := matrixfederation.NewRoomDirectoryHandler(roomStore, hsCfg)
+	matrixfederation.SetupDirectoryRoutes(app, directoryHandler, "/_matrix/client/v3", "/_matrix/federation/v1")
+
+	// Public rooms
+	publicRoomsHandler := matrixfederation.NewPublicRoomsHandler(roomStore, hsCfg)
+	matrixfederation.SetupPublicRoomsRoutes(app, publicRoomsHandler, "/_matrix/client/v3")
+
+	log.Printf("✅ Matrix federation routes configured for %s", hsCfg.ServerName)
 }

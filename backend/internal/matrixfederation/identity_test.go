@@ -23,12 +23,12 @@ func deref(s *string, empty string) string {
 
 func TestGetProfileHandler(t *testing.T) {
 	tests := []struct {
-		name           string
-		userID         string
-		mockProfile    *UserProfile
-		mockErr        error
-		wantStatus     int
-		wantErrcode    string
+		name            string
+		userID          string
+		mockProfile     *UserProfile
+		mockErr         error
+		wantStatus      int
+		wantErrcode     string
 		wantDisplayName *string
 	}{
 		{
@@ -140,15 +140,15 @@ func TestGetAvatarURLHandler(t *testing.T) {
 		{
 			name:        "user not found",
 			userID:      "@ghost:hearth.example.com",
-			mockErr:    ErrUserNotFound,
-			wantStatus: 404,
+			mockErr:     ErrUserNotFound,
+			wantStatus:  404,
 			wantErrcode: "M_NOT_FOUND",
 		},
 		{
 			name:        "internal error",
 			userID:      "@error:hearth.example.com",
-			mockErr:    errors.New("database failure"),
-			wantStatus: 500,
+			mockErr:     errors.New("database failure"),
+			wantStatus:  500,
 			wantErrcode: "M_UNKNOWN",
 		},
 	}
@@ -195,12 +195,12 @@ func TestGetAvatarURLHandler(t *testing.T) {
 
 func TestGetDisplayNameHandler(t *testing.T) {
 	tests := []struct {
-		name           string
-		userID         string
-		mockProfile    *UserProfile
-		mockErr       error
-		wantStatus     int
-		wantErrcode    string
+		name            string
+		userID          string
+		mockProfile     *UserProfile
+		mockErr         error
+		wantStatus      int
+		wantErrcode     string
 		wantDisplayName *string
 	}{
 		{
@@ -218,15 +218,15 @@ func TestGetDisplayNameHandler(t *testing.T) {
 		{
 			name:        "user not found",
 			userID:      "@ghost:hearth.example.com",
-			mockErr:    ErrUserNotFound,
-			wantStatus: 404,
+			mockErr:     ErrUserNotFound,
+			wantStatus:  404,
 			wantErrcode: "M_NOT_FOUND",
 		},
 		{
 			name:        "internal error",
 			userID:      "@error:hearth.example.com",
-			mockErr:    errors.New("database failure"),
-			wantStatus: 500,
+			mockErr:     errors.New("database failure"),
+			wantStatus:  500,
 			wantErrcode: "M_UNKNOWN",
 		},
 	}
@@ -323,8 +323,8 @@ func TestSetupProfileRoutes(t *testing.T) {
 
 	// Pre-populate mock with a known user so handler returns 200
 	mockSvc.Profiles["@alice:hearth.example.com"] = &UserProfile{
-		UserID: "@alice:hearth.example.com",
-		AvatarURL: ptr("https://hearth.example.com/avatar.png"),
+		UserID:      "@alice:hearth.example.com",
+		AvatarURL:   ptr("https://hearth.example.com/avatar.png"),
 		DisplayName: ptr("Alice"),
 	}
 

@@ -52,9 +52,11 @@ func TestNewS3Backend_WithEndpoint(t *testing.T) {
 
 func TestNewS3Backend_ForcePathStyleWithoutEndpoint(t *testing.T) {
 	backend, err := NewS3Backend(S3Config{
-		Bucket:         "test-bucket",
-		Region:         "us-east-1",
-		ForcePathStyle: true,
+		Bucket:          "test-bucket",
+		Region:          "us-east-1",
+		ForcePathStyle:  true,
+		AccessKeyID:     "test-key",
+		SecretAccessKey: "test-secret",
 	})
 	if err != nil {
 		t.Fatalf("NewS3Backend failed: %v", err)
@@ -66,8 +68,10 @@ func TestNewS3Backend_ForcePathStyleWithoutEndpoint(t *testing.T) {
 
 func TestNewS3Backend_MinimalConfig(t *testing.T) {
 	backend, err := NewS3Backend(S3Config{
-		Bucket: "my-bucket",
-		Region: "eu-west-1",
+		Bucket:          "my-bucket",
+		Region:          "eu-west-1",
+		AccessKeyID:     "test-key",
+		SecretAccessKey: "test-secret",
 	})
 	if err != nil {
 		t.Fatalf("NewS3Backend failed: %v", err)
