@@ -40,21 +40,29 @@ func NewS3Backend(cfg S3Config) (*S3Backend, error) {
 		return nil, errors.New("S3 bucket is required")
 	}
 
-	// Build options for AWS SDK v2
-	var opts []func(*config.LoadOptions) error
-	opts = append(opts, config.WithRegion(cfg.Region))
+	var awsCfg aws.Config
+	var err error
 
-	// Configure credentials if provided
+	// If explicit credentials are provided, build a minimal config to avoid
+	// loading shared config files that may contain invalid profiles.
 	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
-		opts = append(opts, config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
-		))
-	}
+		awsCfg = aws.Config{
+			Region: cfg.Region,
+			Credentials: credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
+		}
+	} else {
+		// Build options for AWS SDK v2
+		var opts []func(*config.LoadOptions) error
+		opts = append(opts, config.WithRegion(cfg.Region))
+		// Disable loading shared config files to avoid failures from local
+		// profiles that may not be valid in the runtime environment.
+		opts = append(opts, config.WithSharedConfigFiles([]string{}))
 
-	// Load AWS configuration
-	awsCfg, err := config.LoadDefaultConfig(context.Background(), opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+		// Load AWS configuration
+		awsCfg, err = config.LoadDefaultConfig(context.Background(), opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load AWS config: %w", err)
+		}
 	}
 
 	// Create S3 client options
