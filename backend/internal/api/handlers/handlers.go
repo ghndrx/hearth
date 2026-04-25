@@ -8,63 +8,71 @@ import (
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	Auth                     *AuthHandler
-	Sessions                 *SessionHandler
-	Users                    *UserHandler
-	Settings                 *SettingsHandler
-	SavedMessages            *SavedMessagesHandler
-	Notifications            *NotificationHandler
-	Mentions                 *MentionsHandler
-	Servers                  *ServerHandler
-	Channels                 *ChannelHandler
-	DMs                      *DMHandler
-	Threads                  *ThreadHandler
-	Invites                  *InviteHandler
-	Voice                    *VoiceHandler
-	LiveKitVoice             *LiveKitVoiceHandler
-	Gateway                  *GatewayHandler
-	Search                   *SearchHandler
-	Attachments              *AttachmentHandler
-	Polls                    *PollHandler
-	AuditLog                 *AuditLogHandler
-	ReadState                *ReadStateHandler
-	AI                       *AIHandler
-	AIChat                   *AIChatHandler
-	Webhooks                 *WebhookHandlers
-	E2EE                     *E2EEHandler
-	Stickers                 *StickerHandler
-	Announcements            *AnnouncementHandler
-	Components               *ComponentHandler
-	Events                   *EventHandler
-	ScreenShare              *ScreenShareHandler
-	AutoMod                  *AutoModHandler
-	Discovery                *DiscoveryHandler
-	Forward                  *ForwardHandlers
-	DiscoverableServer       *DiscoverableServerHandler
-	Templates                *TemplateHandler
-	Stream                   *StreamHandler
-	ForumTags                *ForumTagsHandler
-	SlashCommands            *SlashCommandHandler
-	Interactions             *InteractionHandler
-	ServerAudioSettings      *ServerAudioSettingsHandler
-	AppDirectory             *AppDirectoryHandler
-	Welcome                  *WelcomeHandler
-	Soundboard               *SoundboardHandler
-	Premium                  *PremiumHandler
-	ThreadAutoArchive        *ThreadAutoArchiveHandler
-	SmartNotifications       *SmartNotificationHandler
-	Push                     *PushHandler
-	Digest                   *DigestHandler
-	ChannelNotificationPrefs    *ChannelNotificationPreferenceHandler
-	ServerNotificationPrefs     *ServerNotificationPreferenceHandler
+	Auth                         *AuthHandler
+	Sessions                     *SessionHandler
+	Users                        *UserHandler
+	Settings                     *SettingsHandler
+	SavedMessages                *SavedMessagesHandler
+	Notifications                *NotificationHandler
+	Mentions                     *MentionsHandler
+	Servers                      *ServerHandler
+	Channels                     *ChannelHandler
+	DMs                          *DMHandler
+	Threads                      *ThreadHandler
+	Invites                      *InviteHandler
+	Voice                        *VoiceHandler
+	LiveKitVoice                 *LiveKitVoiceHandler
+	Gateway                      *GatewayHandler
+	Search                       *SearchHandler
+	Attachments                  *AttachmentHandler
+	Polls                        *PollHandler
+	AuditLog                     *AuditLogHandler
+	ReadState                    *ReadStateHandler
+	AI                           *AIHandler
+	AIChat                       *AIChatHandler
+	Webhooks                     *WebhookHandlers
+	E2EE                         *E2EEHandler
+	Stickers                     *StickerHandler
+	Announcements                *AnnouncementHandler
+	Components                   *ComponentHandler
+	Events                       *EventHandler
+	ScreenShare                  *ScreenShareHandler
+	AutoMod                      *AutoModHandler
+	Discovery                    *DiscoveryHandler
+	Forward                      *ForwardHandlers
+	DiscoverableServer           *DiscoverableServerHandler
+	Templates                    *TemplateHandler
+	Stream                       *StreamHandler
+	ForumTags                    *ForumTagsHandler
+	SlashCommands                *SlashCommandHandler
+	Interactions                 *InteractionHandler
+	ServerAudioSettings          *ServerAudioSettingsHandler
+	AppDirectory                 *AppDirectoryHandler
+	Welcome                      *WelcomeHandler
+	Soundboard                   *SoundboardHandler
+	Premium                      *PremiumHandler
+	ThreadAutoArchive            *ThreadAutoArchiveHandler
+	SmartNotifications           *SmartNotificationHandler
+	Push                         *PushHandler
+	Digest                       *DigestHandler
+	ChannelNotificationPrefs     *ChannelNotificationPreferenceHandler
+	ServerNotificationPrefs      *ServerNotificationPreferenceHandler
 	ChannelNotificationOverrides *ChannelNotificationOverrideHandler
-	ContentSafety               *ContentSafetyHandler
-	ServerFolders            *ServerFolderHandler
-	SmartModeration          *SmartModerationHandler
-	VoiceActivities          *VoiceActivityHandler
-	Calls                    *CallHandler
-	Embed                    *EmbedHandler
+	ContentSafety                *ContentSafetyHandler
+	ServerFolders                *ServerFolderHandler
+	SmartModeration              *SmartModerationHandler
+	VoiceActivities              *VoiceActivityHandler
+	Calls                        *CallHandler
+	Embed                        *EmbedHandler
+
+	// Matrix Federation (optional)
+	MatrixProfile   interface{} // *matrixfederation.ProfileHandler
+	MatrixWellKnown interface{} // *matrixfederation.WellKnownHandler
+	MatrixDirectory interface{} // *matrixfederation.RoomDirectoryHandler
+	MatrixKeyServer interface{} // *matrixfederation.KeyServerHandler
+	MatrixVersions  interface{} // *matrixfederation.VersionsHandler
 }
+
 // SetE2EEHandler sets the E2EE handler (optional, not all deployments need E2EE)
 func (h *Handlers) SetE2EEHandler(e2eeService *services.E2EEServiceImpl) {
 	h.E2EE = NewE2EEHandler(e2eeService)
