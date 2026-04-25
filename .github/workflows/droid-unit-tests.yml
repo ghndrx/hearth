@@ -1,0 +1,57 @@
+name: Droid Unit Test Coverage
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'backend/**/*.go'
+      - '!backend/**/*_test.go'
+      - 'frontend/src/**/*.ts'
+      - 'frontend/src/**/*.svelte'
+      - '!frontend/src/**/*.test.ts'
+
+jobs:
+  unit-test-coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: bun install
+
+      - name: Run Droid Unit Test Coverage
+        uses: Factory-AI/droid-action@main
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          droid: unit-test-coverage
+          prompt: |
+            Analyze the changed files in this PR and generate/update unit tests.
+            
+            Changed files:
+            ${{ github.event.pull_request.changed_files }}
+            
+            Focus on:
+            1. New functions/components without tests
+            2. Modified functions that need test updates
+            3. Maintaining 70% coverage minimum
+            
+            After generating tests, run them and report results.

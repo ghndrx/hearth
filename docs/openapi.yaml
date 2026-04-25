@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: Hearth API
+  description: |
+    API for Hearth - a self-hosted, federated Discord/Slack alternative.
+    This spec is auto-generated and maintained by the api-tests droid.
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+  - url: https://api.hearth.example/v1
+    description: Production
+
+tags:
+  - name: soundboard
+    description: Soundboard operations
+  - name: servers
+    description: Server/guild management
+  - name: auth
+    description: Authentication
+
+paths:
+  /servers/{serverId}/soundboard:
+    get:
+      tags: [soundboard]
+      summary: Get server sounds
+      operationId: getServerSounds
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of soundboard sounds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SoundboardSound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /soundboard/defaults:
+    get:
+      tags: [soundboard]
+      summary: Get default sounds
+      operationId: getDefaultSounds
+      responses:
+        '200':
+          description: List of default soundboard sounds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SoundboardSound'
+
+components:
+  schemas:
+    SoundboardSound:
+      type: object
+      required:
+        - id
+        - name
+        - volume
+        - audio_url
+        - duration_ms
+        - available
+        - creator_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        emoji_name:
+          type: string
+        volume:
+          type: number
+          minimum: 0
+          maximum: 1
+        audio_url:
+          type: string
+          format: uri
+        duration_ms:
+          type: integer
+        available:
+          type: boolean
+        creator_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        guild_id:
+          type: string
+          format: uuid
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

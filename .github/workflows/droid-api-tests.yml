@@ -1,0 +1,61 @@
+name: Droid API Tests
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'backend/internal/http/**'
+      - 'backend/internal/api/**'
+      - 'docs/openapi.yaml'
+  workflow_dispatch:
+    inputs:
+      refresh_spec:
+        description: 'Force refresh OpenAPI spec'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+
+      - name: Run Droid API Tests
+        uses: Factory-AI/droid-action@main
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          droid: api-tests
+          prompt: |
+            Analyze the Go backend API routes and:
+            
+            1. Update docs/openapi.yaml with any new or changed endpoints
+            2. Generate API contract tests for changed endpoints
+            3. Run tests and validate response schemas
+            
+            ${{ github.event.inputs.refresh_spec == 'true' && 'Force refresh the entire OpenAPI spec from all route handlers.' || 'Focus on changed files only.' }}
+            
+            Report:
+            - New endpoints added
+            - Endpoints modified
+            - Test coverage status
