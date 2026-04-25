@@ -27,6 +27,21 @@ docker compose up -d
 
 Open `http://localhost:3000`
 
+## Try voice locally (Phase 0 smoke test)
+
+```bash
+docker compose -f docker-compose.dev.yml up -d   # postgres + redis + minio + livekit
+cd backend && go run ./cmd/hearth &
+cd frontend && pnpm install && pnpm dev
+```
+
+Open two browser tabs on `http://localhost:3000`, log in as two different
+users, join the same voice channel. If you can hear yourself round-trip,
+the voice stack is live end-to-end. If the `/voice/token` endpoint 500s
+or the LiveKitManager WebSocket connect hangs, check that
+`LIVEKIT_API_SECRET` matches between `.env` and `docker-compose.dev.yml`
+(32-char minimum).
+
 ## Documentation
 
 - [Deployment Guide](docs/DEPLOYMENT.md) — Docker, Kubernetes, bare metal
