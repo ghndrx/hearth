@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,19 +52,27 @@ const AutoThreadThreshold = 3
 
 // MessageService handles message-related business logic
 type MessageService struct {
-	repo           MessageRepository
-	channelRepo    ChannelRepository
-	serverRepo     ServerRepository
-	roleRepo       RoleRepository
-	userRepo       UserRepository
-	quotaService   *QuotaService
-	rateLimiter    RateLimiter
-	e2eeService    E2EEService
-	cache          CacheService
-	eventBus       EventBus
-	permService    *PermissionService
-	threadService  *ThreadService
-	mentionService *MentionService
+	repo              MessageRepository
+	channelRepo       ChannelRepository
+	serverRepo        ServerRepository
+	roleRepo          RoleRepository
+	userRepo          UserRepository
+	quotaService      *QuotaService
+	rateLimiter       RateLimiter
+	e2eeService       E2EEService
+	cache             CacheService
+	eventBus          EventBus
+	permService       *PermissionService
+	threadService     *ThreadService
+	mentionService    *MentionService
+	federationBridge FederationBridgeSender
+	federationServer string // e.g., "hearth.example.com" - needed to construct MXID
+}
+
+// FederationBridgeSender is the interface for sending messages to federated servers.
+// Implemented by matrixfederation.FederationBridge.
+type FederationBridgeSender interface {
+	OnHearthMessage(ctx context.Context, messageID, channelID uuid.UUID, senderMXID, content string) error
 }
 
 // NewMessageService creates a new message service
@@ -103,6 +112,13 @@ func (s *MessageService) SetThreadService(threadService *ThreadService) {
 // SetMentionService sets the mention service for processing mentions
 func (s *MessageService) SetMentionService(mentionService *MentionService) {
 	s.mentionService = mentionService
+}
+
+// SetFederationBridge sets the federation bridge for outgoing message federation.
+// The serverName should be the canonical homeserver name (e.g., "hearth.example.com").
+func (s *MessageService) SetFederationBridge(bridge FederationBridgeSender, serverName string) {
+	s.federationBridge = bridge
+	s.federationServer = serverName
 }
 
 // getMemberPermissions computes effective permissions for a member in a server.
@@ -304,6 +320,20 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 
 	if err := s.repo.Create(ctx, message); err != nil {
 		return nil, err
+	}
+
+	// HRT-2: Federation bridge - send to remote servers if federated.
+	// This is best-effort; failure to enqueue should not fail the user-facing send.
+	if s.federationBridge != nil && s.federationServer != "" && channel.ServerID != nil {
+		go func(msgID, chanID uuid.UUID, senderID uuid.UUID, content string) {
+			// Construct MXID from authorID and federation server name
+			senderMXID := "@" + senderID.String() + ":" + s.federationServer
+			if err := s.federationBridge.OnHearthMessage(context.Background(), msgID, chanID, senderMXID, content); err != nil {
+				// Log but don't fail - federation is best-effort
+				// In production, use proper logging; here we use the standard logger
+				log.Printf("⚠️  federation bridge: failed to send message %s: %v", msgID, err)
+			}
+		}(message.ID, channelID, authorID, content)
 	}
 
 	// Populate author for the response and WebSocket event

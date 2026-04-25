@@ -29,6 +29,7 @@ import (
 	"hearth/internal/config"
 	"hearth/internal/database/postgres"
 	"hearth/internal/events"
+	"hearth/internal/matrix"
 	"hearth/internal/matrixfederation"
 	"hearth/internal/metrics"
 	"hearth/internal/pubsub"
@@ -711,6 +712,29 @@ func main() {
 		eventStore := matrixfederation.NewInMemoryFederationEventStore()
 		stateStore := matrixfederation.NewInMemoryStateStore()
 		authChecker := matrixfederation.NewAuthChecker(cfg.FederationServerName)
+
+		// Create federation client for outbound transactions
+		hsCfg := &matrix.HomeserverConfig{
+			ServerName: cfg.FederationServerName,
+			BaseURL:    cfg.PublicURL,
+		}
+		fedClient := matrixfederation.NewFederationClient(keyStore, hsCfg, nil)
+
+		// HRT-2: Create FederationBridge for outgoing message federation
+		roomAliasStore := matrixfederation.NewInMemoryRoomAliasStore()
+		txQueue := matrixfederation.NewTransactionQueue(fedClient, keyStore, cfg.FederationServerName)
+		fedBridge := matrixfederation.NewFederationBridge(
+			cfg.FederationServerName,
+			txQueue,
+			eventStore,
+			stateStore,
+			keyStore,
+			roomAliasStore,
+			userService, // implements UserGetter
+		)
+		// Wire the bridge into MessageService for outgoing federation
+		messageService.SetFederationBridge(fedBridge, cfg.FederationServerName)
+		log.Printf("✅ Federation bridge wired into MessageService")
 
 		api.SetupMatrixFederationRoutes(&api.MatrixFederationDeps{
 			App:             app,
