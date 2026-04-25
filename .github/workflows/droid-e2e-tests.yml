@@ -1,0 +1,66 @@
+name: Droid E2E Tests
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'frontend/src/routes/**'
+      - 'backend/internal/http/**'
+      - 'tests/e2e/**'
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: bun install
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: bunx playwright install --with-deps chromium
+
+      - name: Build backend
+        working-directory: backend
+        run: go build -o hearth ./cmd/...
+
+      - name: Run Droid E2E Tests
+        uses: Factory-AI/droid-action@main
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          droid: e2e-tests
+          prompt: |
+            Analyze route and API handler changes in this PR.
+            Generate or update E2E tests for affected user flows.
+            
+            Focus on:
+            1. New routes that need E2E coverage
+            2. Changed API handlers that affect existing tests
+            3. Critical user journeys (auth, messaging, etc.)
+            
+            Run tests and report results with screenshots on failure.
