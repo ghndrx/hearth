@@ -707,12 +707,21 @@ func main() {
 		log.Printf("✅ Federation signing key generated: %s", signingKey.KeyID)
 
 		// Wire federation routes with dependencies
+		// HRT-3: Wire Phase 3 federation infrastructure (EventStore, StateStore, AuthChecker)
+		eventStore := matrixfederation.NewInMemoryFederationEventStore()
+		stateStore := matrixfederation.NewInMemoryStateStore()
+		authChecker := matrixfederation.NewAuthChecker(cfg.FederationServerName)
+
 		api.SetupMatrixFederationRoutes(&api.MatrixFederationDeps{
 			App:             app,
 			Config:          cfg,
 			UserService:     userService, // UserService implements UserGetter interface
 			SigningKeyStore: keyStore,
+			EventStore:      eventStore,
+			StateStore:      stateStore,
+			AuthChecker:     authChecker,
 		})
+		log.Printf("✅ Federation Phase 3 wired: EventStore, StateStore, AuthChecker")
 	}
 
 	// Setup routes
