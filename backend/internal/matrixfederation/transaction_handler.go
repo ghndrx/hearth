@@ -41,7 +41,7 @@ type TransactionProcessor struct {
 	eventStore FederationEventStore
 
 	// stateStore manages room state.
-	stateStore *InMemoryStateStore
+	stateStore StateStore
 
 	// authChecker validates event authorization.
 	authChecker *AuthChecker
@@ -54,7 +54,7 @@ type TransactionProcessor struct {
 func NewTransactionProcessor(
 	serverName string,
 	eventStore FederationEventStore,
-	stateStore *InMemoryStateStore,
+	stateStore StateStore,
 	authChecker *AuthChecker,
 ) *TransactionProcessor {
 	return &TransactionProcessor{

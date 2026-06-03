@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,7 +56,7 @@ func (r *EventRepository) UpdateEvent(ctx context.Context, id uuid.UUID, updates
 	var setClauses []string
 
 	for key, value := range updates {
-		setClauses = append(setClauses, key+" = $"+string(rune('0'+argIndex)))
+		setClauses = append(setClauses, key+" = $"+strconv.Itoa(argIndex))
 		args = append(args, value)
 		argIndex++
 	}
@@ -70,7 +71,7 @@ func (r *EventRepository) UpdateEvent(ctx context.Context, id uuid.UUID, updates
 		}
 		query += clause
 	}
-	query += " WHERE id = $" + string(rune('0'+argIndex))
+	query += " WHERE id = $" + strconv.Itoa(argIndex)
 	args = append(args, id)
 
 	_, err := r.db.ExecContext(ctx, query, args...)

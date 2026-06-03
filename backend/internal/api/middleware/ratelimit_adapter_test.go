@@ -285,12 +285,6 @@ func TestHybridRateLimiterAdapter_IsRedisAvailable(t *testing.T) {
 	assert.False(t, adapter.IsRedisAvailable())
 }
 
-func TestNewHybridLimiter_Compatibility(t *testing.T) {
-	// NewHybridLimiter is an alias for NewHybridRateLimiterAdapter
-	adapter := NewHybridLimiter(nil, nil)
-	assert.NotNil(t, adapter)
-}
-
 func TestHybridRateLimiterAdapter_Check_UsesMemoryWhenRedisUnavailable(t *testing.T) {
 	// This test verifies the fallback path when Redis is configured but unavailable
 	// We can't easily test Redis unavailability without a real Redis mock,

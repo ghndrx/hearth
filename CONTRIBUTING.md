@@ -34,7 +34,7 @@ Be respectful, inclusive, and constructive. We're all here to build something gr
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.26+
 - Node.js 22+
 - Docker & Docker Compose
 - PostgreSQL 16+ (or use Docker)
@@ -53,16 +53,16 @@ go run ./cmd/hearth
 
 # Frontend (new terminal)
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 ### Environment Variables
 
-Copy `.env.example` to `.env` and configure:
+Copy an environment example to `.env` and configure:
 
 ```bash
-cp .env.example .env
+cp deploy/docker-compose/.env.example .env  # or create your own
 # Edit .env with your values
 ```
 
@@ -85,7 +85,7 @@ hotfix/* (urgent fixes)
 
 ### Branch Naming
 
-- `feature/short-description` - New features
+- `feat/<feature-id>` - New features
 - `fix/issue-number-description` - Bug fixes
 - `hotfix/critical-issue` - Urgent production fixes
 - `docs/what-changed` - Documentation only
@@ -187,13 +187,8 @@ Before submitting UI changes, run the contrast checker:
 
 ```bash
 # Check color contrast compliance (WCAG AA)
-node scripts/contrast-checker.js
-
-# CI mode (fails on violations)
-node scripts/contrast-checker.js --ci
+# Accessibility checks run automatically in CI via the accessibility workflow.
 ```
-
-See [docs/accessibility/A11Y-003-contrast-audit.md](docs/accessibility/A11Y-003-contrast-audit.md) for color guidelines.
 
 **Key requirements:**
 - Text must have 4.5:1 contrast ratio on backgrounds
@@ -224,22 +219,16 @@ go test ./internal/services/...
 cd frontend
 
 # Run tests
-npm run test
-
-# Watch mode
-npm run test:watch
+bun test
 
 # Coverage
-npm run test:coverage
+bun run test:coverage
 ```
 
 ### Integration Tests
 
 ```bash
-# Start test environment
-docker compose -f docker-compose.test.yml up -d
-
-# Run integration tests
+# Run integration tests (requires local PostgreSQL + Redis)
 go test -tags=integration ./...
 ```
 

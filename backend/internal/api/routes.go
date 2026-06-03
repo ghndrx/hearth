@@ -36,6 +36,14 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		Window:         time.Second,
 		AuthMultiplier: 1.0,
 	})
+	// Webhooks: 30 req/min per webhook
+	webhookRateLimit := m.RateLimitWithConfig(middleware.RateLimitConfig{
+		Limit:  30,
+		Window: time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return "webhook:" + c.Params("webhookID")
+		},
+	})
 
 	// API v1
 	v1 := app.Group("/api/v1")
@@ -78,35 +86,35 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		publicServers := v1.Group("/servers")
 		publicServers.Get("/", h.Discovery.GetPublicServers)
 		publicServers.Get("/categories", h.Discovery.GetPublicCategories)
-		publicServers.Get("/:id", h.Discovery.GetPublicServer)
+		// Note: GET /:id is registered below in discoverServers group
 	}
 
 	// Enhanced Public Server Discovery (new endpoints)
-	if h.DiscoverableServer != nil {
+	if h.Discovery != nil {
 		discoverServers := v1.Group("/servers")
-		discoverServers.Get("/discover", h.DiscoverableServer.GetDiscoverableServers)
-		discoverServers.Get("/discover/featured", h.DiscoverableServer.GetFeaturedServers)
-		discoverServers.Get("/discover/trending", h.DiscoverableServer.GetTrendingServers)
-		discoverServers.Get("/discover/recommended", h.DiscoverableServer.GetRecommendedServers)
-		discoverServers.Get("/discover/search", h.DiscoverableServer.SearchServersEnhanced)
-		discoverServers.Get("/discover/home", h.DiscoverableServer.GetDiscoveryHomePage)
-		discoverServers.Get("/discover/categories/stats", h.DiscoverableServer.GetCategoriesWithStats)
-		discoverServers.Get("/discover/tags", h.DiscoverableServer.GetPopularTags)
-		discoverServers.Get("/discover/stats", h.DiscoverableServer.GetDiscoveryStats)
-		discoverServers.Get("/discover/suggestions", h.DiscoverableServer.GetSearchSuggestions)
-		discoverServers.Get("/categories", h.DiscoverableServer.GetCategories)
-		discoverServers.Get("/:id", h.DiscoverableServer.GetServerDetail)
+		discoverServers.Get("/discover", h.Discovery.GetDiscoverableServers)
+		discoverServers.Get("/discover/featured", h.Discovery.GetFeaturedServersDS)
+		discoverServers.Get("/discover/trending", h.Discovery.GetTrendingServersDS)
+
+		discoverServers.Get("/discover/search", h.Discovery.SearchServersEnhancedDS)
+		discoverServers.Get("/discover/home", h.Discovery.GetDiscoveryHomePage)
+		discoverServers.Get("/discover/categories/stats", h.Discovery.GetCategoriesWithStats)
+		discoverServers.Get("/discover/tags", h.Discovery.GetPopularTagsDS)
+		discoverServers.Get("/discover/stats", h.Discovery.GetDiscoveryStatsDS)
+		discoverServers.Get("/discover/suggestions", h.Discovery.GetSearchSuggestions)
+		discoverServers.Get("/categories", h.Discovery.GetCategoriesDS)
+		discoverServers.Get("/:id", h.Discovery.GetServerDetail)
 
 		// Main public server directory endpoint - GET /api/v1/discovery
 		// Lists servers that have opted into being discoverable with featured, trending, recommendations
-		v1.Get("/discovery", h.DiscoverableServer.GetDiscovery)
+		v1.Get("/discovery", h.Discovery.GetDiscovery)
 
 		// Public server directory endpoint - GET /api/v1/directory
 		// Public server directory with search, categories, and pagination
-		v1.Get("/directory", h.DiscoverableServer.GetDirectory)
+		v1.Get("/directory", h.Discovery.GetDirectory)
 
 		// Discovery activity tracking (no auth required, user optional)
-		v1.Post("/directory/:id/track", h.DiscoverableServer.TrackDiscoveryActivity)
+		v1.Post("/directory/:id/track", h.Discovery.TrackDiscoveryActivity)
 	}
 
 	// Protected routes
@@ -151,8 +159,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	}
 
 	// Read State / Unread
-	if h.ReadState != nil {
-		users.Get("/@me/unread", h.ReadState.GetUnreadSummary)
+	if h.Notifications != nil {
+		users.Get("/@me/unread", h.Notifications.GetUnreadSummary)
 	}
 
 	// Notifications
@@ -168,84 +176,82 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	}
 
 	// Smart Notifications
-	if h.SmartNotifications != nil {
+	if h.Notifications != nil {
 		smartNotifs := users.Group("/@me/notifications")
-		smartNotifs.Post("/score", h.SmartNotifications.ScoreNotification)
-		smartNotifs.Post("/snooze", h.SmartNotifications.SnoozeNotifications)
-		smartNotifs.Get("/snooze", h.SmartNotifications.GetSnoozeStatus)
-		smartNotifs.Delete("/snooze", h.SmartNotifications.UnsnoozeNotifications)
-		smartNotifs.Post("/mute", h.SmartNotifications.MuteNotifications)
-		smartNotifs.Get("/mute", h.SmartNotifications.GetMuteStatus)
-		smartNotifs.Get("/engagement", h.SmartNotifications.GetEngagement)
-		smartNotifs.Get("/preferences", h.SmartNotifications.GetPreferences)
-		smartNotifs.Patch("/preferences", h.SmartNotifications.UpdatePreferences)
-		smartNotifs.Get("/digests", h.SmartNotifications.ListDigests)
-		smartNotifs.Get("/digests/:id", h.SmartNotifications.GetDigest)
-		smartNotifs.Post("/digests/:id/read", h.SmartNotifications.MarkDigestRead)
-		smartNotifs.Post("/:id/click", h.SmartNotifications.TrackClick)
-		smartNotifs.Post("/:id/dismiss", h.SmartNotifications.DismissNotification)
+		smartNotifs.Post("/score", h.Notifications.ScoreNotification)
+		smartNotifs.Post("/snooze", h.Notifications.SnoozeNotifications)
+		smartNotifs.Get("/snooze", h.Notifications.GetSnoozeStatus)
+		smartNotifs.Delete("/snooze", h.Notifications.UnsnoozeNotifications)
+		smartNotifs.Post("/mute", h.Notifications.MuteNotifications)
+		smartNotifs.Get("/mute", h.Notifications.GetMuteStatus)
+		smartNotifs.Get("/engagement", h.Notifications.GetEngagement)
+		smartNotifs.Get("/preferences", h.Notifications.GetSmartNotificationPreferences)
+		smartNotifs.Patch("/preferences", h.Notifications.UpdateSmartNotificationPreferences)
+		smartNotifs.Get("/digests", h.Notifications.ListDigests)
+		smartNotifs.Get("/digests/:id", h.Notifications.GetDigest)
+		smartNotifs.Post("/digests/:id/read", h.Notifications.MarkDigestRead)
+		smartNotifs.Post("/:id/click", h.Notifications.TrackClick)
+		smartNotifs.Post("/:id/dismiss", h.Notifications.DismissNotification)
 	}
 
 	// Push Notifications
-	if h.Push != nil {
+	if h.Notifications != nil {
 		push := api.Group("/push")
-		push.Post("/subscription", h.Push.RegisterSubscription)
-		push.Delete("/subscription", h.Push.UnregisterSubscription)
-		push.Get("/preferences", h.Push.GetPreferences)
-		push.Patch("/preferences", h.Push.UpdatePreferences)
+		push.Post("/subscription", h.Notifications.RegisterSubscription)
+		push.Delete("/subscription", h.Notifications.UnregisterSubscription)
+		push.Get("/preferences", h.Notifications.GetPushPreferences)
+		push.Patch("/preferences", h.Notifications.UpdatePushPreferences)
 	}
 
 	// Digest Notifications
-	if h.Digest != nil {
+	if h.NotificationPreferences != nil {
 		digest := users.Group("/@me/digest")
-		digest.Get("/preferences", h.Digest.GetPreferences)
-		digest.Patch("/preferences", h.Digest.UpdatePreferences)
-		digest.Get("/channels", h.Digest.GetChannelPreferences)
-		digest.Get("/channels/:channelId", h.Digest.GetChannelPreference)
-		digest.Patch("/channels/:channelId", h.Digest.UpdateChannelPreference)
-		digest.Get("/servers", h.Digest.GetServerPreferences)
-		digest.Get("/servers/:serverId", h.Digest.GetServerPreference)
-		digest.Patch("/servers/:serverId", h.Digest.UpdateServerPreference)
-		digest.Get("/preview", h.Digest.GetDigestPreview)
-		digest.Delete("/queue", h.Digest.ClearDigestQueue)
-		digest.Get("/history", h.Digest.GetDigestHistory)
-		digest.Get("/history/:digestId", h.Digest.GetDigest)
-		digest.Post("/generate", h.Digest.GenerateDigestNow)
+		digest.Get("/preferences", h.NotificationPreferences.GetPreferences)
+		digest.Patch("/preferences", h.NotificationPreferences.UpdatePreferences)
+		digest.Get("/channels", h.NotificationPreferences.GetChannelPreferences)
+		digest.Get("/channels/:channelId", h.NotificationPreferences.GetChannelPreference)
+		digest.Patch("/channels/:channelId", h.NotificationPreferences.UpdateChannelPreference)
+		digest.Get("/servers", h.NotificationPreferences.GetServerPreferences)
+		digest.Get("/servers/:serverId", h.NotificationPreferences.GetServerPreference)
+		digest.Patch("/servers/:serverId", h.NotificationPreferences.UpdateServerPreference)
+		digest.Get("/preview", h.NotificationPreferences.GetDigestPreview)
+		digest.Delete("/queue", h.NotificationPreferences.ClearDigestQueue)
+		digest.Get("/history", h.NotificationPreferences.GetDigestHistory)
+		digest.Get("/history/:digestId", h.NotificationPreferences.GetDigest)
+		digest.Post("/generate", h.NotificationPreferences.GenerateDigestNow)
 	}
 
 	// Channel Notification Preferences
-	if h.ChannelNotificationPrefs != nil {
+	if h.NotificationPreferences != nil {
 		channelNotifPrefs := users.Group("/@me/channels/:channelId/notifications")
-		channelNotifPrefs.Get("/", h.ChannelNotificationPrefs.GetChannelNotificationPreference)
-		channelNotifPrefs.Patch("/", h.ChannelNotificationPrefs.UpdateChannelNotificationPreference)
+		channelNotifPrefs.Get("/", h.NotificationPreferences.GetChannelNotificationPreference)
+		channelNotifPrefs.Patch("/", h.NotificationPreferences.UpdateChannelNotificationPreference)
 	}
 
 	// Channel Notification Overrides (simplified level-based system)
-	if h.ChannelNotificationOverrides != nil {
-		channelOverrides := users.Group("/@me/notification-overrides")
-		channelOverrides.Get("/", h.ChannelNotificationOverrides.ListChannelOverrides)
-		channelOverrides.Get("/:channel_id", h.ChannelNotificationOverrides.GetChannelOverride)
-		channelOverrides.Put("/:channel_id", h.ChannelNotificationOverrides.SetChannelOverride)
-		channelOverrides.Delete("/:channel_id", h.ChannelNotificationOverrides.ClearChannelOverride)
-	}
+	channelOverrides := users.Group("/@me/notification-overrides")
+	channelOverrides.Get("/", h.Channels.ListChannelOverrides)
+	channelOverrides.Get("/:channel_id", h.Channels.GetChannelOverride)
+	channelOverrides.Put("/:channel_id", h.Channels.SetChannelOverride)
+	channelOverrides.Delete("/:channel_id", h.Channels.ClearChannelOverride)
 
 	// Server Notification Preferences
-	if h.ServerNotificationPrefs != nil {
+	if h.NotificationPreferences != nil {
 		serverNotifPrefs := users.Group("/@me/servers/:serverId/notifications")
-		serverNotifPrefs.Get("/", h.ServerNotificationPrefs.GetServerNotificationPreference)
-		serverNotifPrefs.Patch("/", h.ServerNotificationPrefs.UpdateServerNotificationPreference)
+		serverNotifPrefs.Get("/", h.NotificationPreferences.GetServerNotificationPreference)
+		serverNotifPrefs.Patch("/", h.NotificationPreferences.UpdateServerNotificationPreference)
 	}
 
 	// Mentions
-	if h.Mentions != nil {
+	if h.Notifications != nil {
 		mentions := api.Group("/mentions")
-		mentions.Get("/", h.Mentions.GetMentions)
-		mentions.Get("/unread/count", h.Mentions.GetUnreadCount)
-		mentions.Get("/stats", h.Mentions.GetStats)
-		mentions.Get("/search", h.Mentions.Search)
-		mentions.Post("/read-all", h.Mentions.MarkAllAsRead)
-		mentions.Patch("/:id/read", h.Mentions.MarkAsRead)
-		mentions.Post("/channel/:channelId/read-all", h.Mentions.MarkChannelMentionsAsRead)
+		mentions.Get("/", h.Notifications.GetMentions)
+		mentions.Get("/unread/count", h.Notifications.GetUnreadCount)
+		mentions.Get("/stats", h.Notifications.GetStats)
+		mentions.Get("/search", h.Notifications.Search)
+		mentions.Post("/read-all", h.Notifications.MarkAllMentionsAsRead)
+		mentions.Patch("/:id/read", h.Notifications.MarkMentionAsRead)
+		mentions.Post("/channel/:channelId/read-all", h.Notifications.MarkChannelMentionsAsRead)
 	}
 
 	// Saved Messages (Bookmarks)
@@ -259,19 +265,6 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		savedMessages.Patch("/:id", h.SavedMessages.UpdateSavedMessage)
 		savedMessages.Delete("/:id", h.SavedMessages.RemoveSavedMessage)
 		savedMessages.Delete("/message/:messageId", h.SavedMessages.RemoveSavedMessageByMessage)
-	}
-
-	// Server Folders
-	if h.ServerFolders != nil {
-		serverFolders := users.Group("/@me/server-folders")
-		serverFolders.Get("/", h.ServerFolders.GetAll)
-		serverFolders.Post("/", h.ServerFolders.Create)
-		serverFolders.Get("/:id", h.ServerFolders.Get)
-		serverFolders.Patch("/:id", h.ServerFolders.Update)
-		serverFolders.Delete("/:id", h.ServerFolders.Delete)
-		serverFolders.Post("/move", h.ServerFolders.MoveServer)
-		serverFolders.Post("/move-batch", h.ServerFolders.MoveServers)
-		serverFolders.Post("/reorder", h.ServerFolders.ReorderServers)
 	}
 
 	// Relationships
@@ -305,18 +298,25 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 
 	// Servers
 	servers := api.Group("/servers")
+	servers.Get("/discover/recommended", h.Discovery.GetRecommendedServers)
 	servers.Post("/", h.Servers.Create)
 	servers.Get("/:id", h.Servers.Get)
+	if h.Discovery != nil {
+		servers.Get("/discover/recommended", h.Discovery.GetRecommendedServers)
+	}
+	if h.Discovery != nil {
+		servers.Get("/discover/recommended", h.Discovery.GetRecommendedServers)
+	}
 	servers.Patch("/:id", h.Servers.Update)
 	servers.Delete("/:id", h.Servers.Delete)
 	servers.Post("/:id/transfer-ownership", h.Servers.TransferOwnership)
-	servers.Post("/:id/join", h.DiscoverableServer.JoinServer)
+	servers.Post("/:id/join", h.Discovery.JoinServer)
 
 	// Server discovery registration (auth-protected, server owner only)
-	if h.DiscoverableServer != nil {
-		servers.Post("/:serverId/discover", h.DiscoverableServer.RegisterServer)
-		servers.Patch("/discover/:id", h.DiscoverableServer.UpdateRegisteredServer)
-		servers.Delete("/discover/:id", h.DiscoverableServer.DeleteRegisteredServer)
+	if h.Discovery != nil {
+		servers.Post("/:serverId/discover", h.Discovery.RegisterServer)
+		servers.Patch("/discover/:id", h.Discovery.UpdateRegisteredServer)
+		servers.Delete("/discover/:id", h.Discovery.DeleteRegisteredServer)
 	}
 
 	// Server members
@@ -362,9 +362,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	}
 
 	// Server read state / Ack
-	if h.ReadState != nil {
-		servers.Get("/:id/unread", h.ReadState.GetServerUnread)
-		servers.Post("/:id/ack", h.ReadState.MarkServerAsRead)
+	if h.Notifications != nil {
+		servers.Get("/:id/unread", h.Notifications.GetServerUnread)
+		servers.Post("/:id/ack", h.Notifications.MarkServerAsRead)
 	}
 
 	// Channels
@@ -372,6 +372,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	channels.Get("/:id", h.Channels.Get)
 	channels.Patch("/:id", h.Channels.Update)
 	channels.Delete("/:id", h.Channels.Delete)
+	channels.Post("/:id/federate", h.Channels.Federate)
 
 	// Channel messages (send/edit have per-user rate limits)
 	channels.Get("/:id/messages", h.Channels.GetMessages)
@@ -404,9 +405,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	channels.Get("/:id/typing", h.Channels.GetTypingUsers)
 
 	// Read state / Ack
-	if h.ReadState != nil {
-		channels.Post("/:id/ack", h.ReadState.MarkChannelAsRead)
-		channels.Get("/:id/unread", h.ReadState.GetChannelUnread)
+	if h.Notifications != nil {
+		channels.Post("/:id/ack", h.Notifications.MarkChannelAsRead)
+		channels.Get("/:id/unread", h.Notifications.GetChannelUnread)
 	}
 
 	// Channel threads
@@ -434,23 +435,23 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	threads.Delete("/:id/presence", h.Threads.ExitThreadPresence)
 
 	// Forum tags (thread tags for forum posts)
-	threads.Put("/:id/tags", h.ForumTags.ApplyTags)
-	threads.Get("/:id/tags", h.ForumTags.GetThreadTags)
-	threads.Put("/:id/pin", h.ForumTags.PinThread)
-	threads.Put("/:id/solved", h.ForumTags.MarkSolved)
+	threads.Put("/:id/tags", h.Threads.ApplyTags)
+	threads.Get("/:id/tags", h.Threads.GetThreadTags)
+	threads.Put("/:id/pin", h.Threads.PinThread)
+	threads.Put("/:id/solved", h.Threads.MarkSolved)
 
 	// Forum channel tags
-	channels.Get("/:id/tags", h.ForumTags.ListTags)
-	channels.Post("/:id/tags", h.ForumTags.CreateTag)
-	channels.Get("/:id/posts", h.ForumTags.ListPosts)
-	channels.Get("/:id/forum-config", h.ForumTags.GetForumConfig)
-	channels.Patch("/:id/forum-config", h.ForumTags.UpdateForumConfig)
-	channels.Patch("/:id/tags/:tagId", h.ForumTags.UpdateTag)
-	channels.Delete("/:id/tags/:tagId", h.ForumTags.DeleteTag)
+	channels.Get("/:id/tags", h.Threads.ListTags)
+	channels.Post("/:id/tags", h.Threads.CreateTag)
+	channels.Get("/:id/posts", h.Threads.ListPosts)
+	channels.Get("/:id/forum-config", h.Threads.GetForumConfig)
+	channels.Patch("/:id/forum-config", h.Threads.UpdateForumConfig)
+	channels.Patch("/:id/tags/:tagId", h.Threads.UpdateTag)
+	channels.Delete("/:id/tags/:tagId", h.Threads.DeleteTag)
 
 	// Global tag management
-	api.Patch("/forum-tags/:tagId", h.ForumTags.UpdateTag)
-	api.Delete("/forum-tags/:tagId", h.ForumTags.DeleteTag)
+	api.Patch("/forum-tags/:tagId", h.Threads.UpdateTag)
+	api.Delete("/forum-tags/:tagId", h.Threads.DeleteTag)
 
 	// Message components
 	if h.Components != nil {
@@ -476,12 +477,12 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 
 	// Interactions - public endpoint (token-based and interaction_id-based)
 	if h.Interactions != nil {
-		api.Post("/interactions", h.Interactions.HandleInteraction)
+		v1.Post("/interactions", h.Interactions.HandleInteraction)
 		// POST /interactions/{interaction_id}/callback - accepts both interaction_id and token
-		api.Post("/interactions/:interaction_id/callback", h.Interactions.RespondToInteraction)
-		api.Post("/interactions/:interaction_id/callback/:token", h.Interactions.RespondToInteractionWithToken)
-		api.Patch("/interactions/:interaction_id/messages/:messageId", h.Interactions.EditInteractionResponse)
-		api.Delete("/interactions/:interaction_id/messages/:messageId", h.Interactions.DeleteInteractionResponse)
+		v1.Post("/interactions/:interaction_id/callback", h.Interactions.RespondToInteraction)
+		v1.Post("/interactions/:interaction_id/callback/:token", h.Interactions.RespondToInteractionWithToken)
+		v1.Patch("/interactions/:interaction_id/messages/:messageId", h.Interactions.EditInteractionResponse)
+		v1.Delete("/interactions/:interaction_id/messages/:messageId", h.Interactions.DeleteInteractionResponse)
 
 		// Modal submit endpoint
 		api.Post("/interactions/modals/submit", h.Interactions.HandleModalSubmit)
@@ -492,8 +493,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 	servers.Post("/:id/channels", h.Servers.CreateChannel)
 
 	// Invites
+	v1.Get("/invites/:code", h.Invites.Get)
 	invites := api.Group("/invites")
-	invites.Get("/:code", h.Invites.Get)
 	invites.Post("/:code", h.Invites.Accept)
 	invites.Delete("/:code", h.Invites.Delete)
 	invites.Get("/:code/analytics", h.Invites.GetAnalytics)
@@ -535,9 +536,9 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		channels.Get("/:id/attachments", h.Attachments.GetChannelAttachments)
 
 		// Attachments
+		v1.Get("/attachments/:id", h.Attachments.Get)
+		v1.Get("/attachments/:id/download", h.Attachments.Download)
 		attachments := api.Group("/attachments")
-		attachments.Get("/:id", h.Attachments.Get)
-		attachments.Get("/:id/download", h.Attachments.Download)
 		attachments.Get("/:id/signed-url", h.Attachments.GetSignedURL)
 		attachments.Delete("/:id", h.Attachments.Delete)
 	}
@@ -733,7 +734,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 
 	// Webhook execution (public, token-based auth - no RequireAuth)
 	if h.Webhooks != nil {
-		v1.Post("/webhooks/:webhookID/:token", h.Webhooks.ExecuteWebhook)
+		v1.Post("/webhooks/:webhookID/:token", webhookRateLimit, h.Webhooks.ExecuteWebhook)
 	}
 
 	// Search
@@ -766,19 +767,19 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		servers.Post("/:id/listing", h.Discovery.SubmitForDiscovery)
 		servers.Patch("/:id/listing", h.Discovery.UpdateListing)
 
-		// Admin discovery management (if user has admin role - handled in middleware)
-		adminDiscovery := api.Group("/admin/discovery")
+		// Admin discovery management (requires admin role)
+		adminDiscovery := api.Group("/admin/discovery", m.RequireAdmin)
 		adminDiscovery.Post("/:listingId/approve", h.Discovery.ApproveListing)
 		adminDiscovery.Post("/:listingId/reject", h.Discovery.RejectListing)
 		adminDiscovery.Post("/:listingId/featured", h.Discovery.SetFeatured)
 	}
 
 	// Admin directory management (approve/feature servers in the directory)
-	if h.DiscoverableServer != nil {
-		adminDirectory := api.Group("/admin/directory")
-		adminDirectory.Post("/:id/approve", h.DiscoverableServer.AdminApproveServer)
-		adminDirectory.Post("/:id/reject", h.DiscoverableServer.AdminRejectServer)
-		adminDirectory.Post("/:id/feature", h.DiscoverableServer.AdminFeatureServer)
+	if h.Discovery != nil {
+		adminDirectory := api.Group("/admin/directory", m.RequireAdmin)
+		adminDirectory.Post("/:id/approve", h.Discovery.AdminApproveServer)
+		adminDirectory.Post("/:id/reject", h.Discovery.AdminRejectServer)
+		adminDirectory.Post("/:id/feature", h.Discovery.AdminFeatureServer)
 	}
 
 	// App Directory / Bot Marketplace
@@ -808,78 +809,68 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		developer.Get("/analytics", h.AppDirectory.GetDeveloperAnalytics)
 
 		// Admin app management
-		adminApps := api.Group("/admin/apps")
+		adminApps := api.Group("/admin/apps", m.RequireAdmin)
 		adminApps.Post("/:appId/approve", h.AppDirectory.ApproveApp)
 		adminApps.Post("/:appId/reject", h.AppDirectory.RejectApp)
 		adminApps.Post("/:appId/suspend", h.AppDirectory.SuspendApp)
 	}
 
 	// Voice (WebRTC signaling)
+	v1.Get("/voice/regions", h.Voice.GetRegions)
 	voice := api.Group("/voice")
-	voice.Get("/regions", h.Voice.GetRegions)
 	voice.Get("/channels/:channelId/states", h.Voice.GetChannelVoiceStates)
 
 	// Voice (LiveKit)
-	if h.LiveKitVoice != nil {
-		voice.Post("/token", h.LiveKitVoice.GenerateToken)
-		voice.Get("/participants/:channelId", h.LiveKitVoice.GetParticipants)
-		voice.Delete("/participants/:channelId/:userId", h.LiveKitVoice.DisconnectParticipant)
-		voice.Post("/participants/:channelId/:userId/mute", h.LiveKitVoice.MuteParticipant)
-	}
+	voice.Post("/token", h.Voice.GenerateToken)
+	voice.Get("/participants/:channelId", h.Voice.GetParticipants)
+	voice.Delete("/participants/:channelId/:userId", h.Voice.DisconnectParticipant)
+	voice.Post("/participants/:channelId/:userId/mute", h.Voice.MuteParticipant)
 
 	// Voice Activities (Poker, Chess, Watch Together)
-	if h.VoiceActivities != nil {
-		channels.Post("/:id/activities", h.VoiceActivities.StartActivity)
-		channels.Get("/:id/activities", h.VoiceActivities.GetChannelActivity)
+	channels.Post("/:id/activities", h.Voice.StartActivity)
+	channels.Get("/:id/activities", h.Voice.GetChannelActivity)
 
-		activities := api.Group("/activities")
-		activities.Get("/:activityId", h.VoiceActivities.GetActivity)
-		activities.Post("/:activityId/join", h.VoiceActivities.JoinActivity)
-		activities.Delete("/:activityId/participants/@me", h.VoiceActivities.LeaveActivity)
-		activities.Delete("/:activityId", h.VoiceActivities.EndActivity)
-		activities.Get("/:activityId/state", h.VoiceActivities.GetGameState)
-		activities.Post("/:activityId/moves", h.VoiceActivities.GameMove)
-	}
+	activities := api.Group("/activities")
+	activities.Get("/:activityId", h.Voice.GetActivity)
+	activities.Post("/:activityId/join", h.Voice.JoinActivity)
+	activities.Delete("/:activityId/participants/@me", h.Voice.LeaveActivity)
+	activities.Delete("/:activityId", h.Voice.EndActivity)
+	activities.Get("/:activityId/state", h.Voice.GetGameState)
+	activities.Post("/:activityId/moves", h.Voice.GameMove)
 
 	// Calls (video/audio)
-	if h.Calls != nil {
-		calls := api.Group("/calls")
-		calls.Post("/", h.Calls.Create)
-		calls.Get("/:id", h.Calls.Get)
-		calls.Post("/:id/join", h.Calls.Join)
-		calls.Post("/:id/leave", h.Calls.Leave)
-		calls.Post("/:id/signal", h.Calls.Signal)
-	}
+	calls := api.Group("/calls")
+	calls.Post("/", h.Voice.Create)
+	calls.Get("/:id", h.Voice.Get)
+	calls.Post("/:id/join", h.Voice.Join)
+	calls.Post("/:id/leave", h.Voice.Leave)
+	calls.Post("/:id/signal", h.Voice.Signal)
 
-	// Screen Share / Streams (if handler is configured)
-	if h.ScreenShare != nil {
-		// Channel streams
-		channels.Post("/:id/streams", h.ScreenShare.StartStream)
-		channels.Get("/:id/streams", h.ScreenShare.GetActiveStreamForChannel)
+	// Screen Share / Streams
+	// Channel streams
+	channels.Post("/:id/streams", h.Voice.StartStream)
+	channels.Get("/:id/streams", h.Voice.GetActiveStreamForChannel)
 
-		// Stream operations
-		streams := api.Group("/streams")
-		streams.Get("/:streamId", h.ScreenShare.GetStreamInfo)
-		streams.Patch("/:streamId", h.ScreenShare.UpdateStream)
-		streams.Delete("/:streamId", h.ScreenShare.EndStream)
-		streams.Post("/:streamId/join", h.ScreenShare.JoinStream)
-		streams.Delete("/:streamId/leave", h.ScreenShare.LeaveStream)
-	}
+	// Stream operations
+	streams := api.Group("/streams")
+	streams.Get("/:streamId", h.Voice.GetStreamInfo)
+	streams.Patch("/:streamId", h.Voice.UpdateStream)
+	streams.Delete("/:streamId", h.Voice.EndStream)
+	streams.Post("/:streamId/join", h.Voice.JoinStream)
+	streams.Delete("/:streamId/leave", h.Voice.LeaveStream)
 
-	// Live Streaming to Channels (if handler is configured)
-	if h.Stream != nil {
-		// Channel live streams
-		channels.Post("/:id/stream/start", h.Stream.StartStream)
-		channels.Post("/:id/stream/stop", h.Stream.StopStream)
-		channels.Get("/:id/stream", h.Stream.GetActiveStream)
+	// Live Streaming to Channels
+	// Channel live streams
+	channels.Post("/:id/stream/start", h.Voice.StartLiveStream)
+	channels.Post("/:id/stream/stop", h.Voice.StopLiveStream)
+	channels.Get("/:id/stream", h.Voice.GetActiveLiveStream)
 
-		// Live stream operations
-		api.Get("/streams/:streamId", h.Stream.GetStream)
-		api.Patch("/streams/:streamId", h.Stream.UpdateStream)
-		api.Post("/streams/:streamId/join", h.Stream.JoinStream)
-		api.Post("/streams/:streamId/leave", h.Stream.LeaveStream)
-		api.Get("/streams/:streamId/viewers", h.Stream.GetStreamViewers)
-	}
+	// Live stream operations
+	api.Get("/streams/:streamId", h.Voice.GetLiveStream)
+	api.Patch("/streams/:streamId", h.Voice.UpdateLiveStream)
+	api.Post("/streams/:streamId/join", h.Voice.JoinLiveStream)
+	api.Post("/streams/:streamId/leave", h.Voice.LeaveLiveStream)
+	api.Get("/streams/:streamId/viewers", h.Voice.GetLiveStreamViewers)
 
 	// Server audio settings (per-server audio device preferences)
 	if h.ServerAudioSettings != nil {
@@ -904,6 +895,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		premium.Get("/features/:feature/check", h.Premium.CheckFeatureAccess)
 		premium.Get("/invoices", h.Premium.GetBillingInvoices)
 		premium.Get("/payment-methods", h.Premium.GetPaymentMethods)
+		premium.Delete("/payment-methods/:id", h.Premium.DeletePaymentMethod)
 		premium.Post("/gift", h.Premium.GiftSubscription)
 		premium.Get("/billing-portal", h.Premium.GetBillingPortal)
 
@@ -949,12 +941,13 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		aiGroup.Get("/health", h.AI.HealthCheck)
 
 		// Provider management (admin routes)
-		aiGroup.Get("/providers", h.AI.GetProviders)
-		aiGroup.Get("/providers/:id", h.AI.GetProvider)
-		aiGroup.Get("/providers/:id/models", h.AI.GetProviderModels)
-		aiGroup.Post("/providers", h.AI.CreateProvider)
-		aiGroup.Patch("/providers/:id", h.AI.UpdateProvider)
-		aiGroup.Delete("/providers/:id", h.AI.DeleteProvider)
+		aiAdmin := aiGroup.Group("", m.RequireAdmin)
+		aiAdmin.Get("/providers", h.AI.GetProviders)
+		aiAdmin.Get("/providers/:id", h.AI.GetProvider)
+		aiAdmin.Get("/providers/:id/models", h.AI.GetProviderModels)
+		aiAdmin.Post("/providers", h.AI.CreateProvider)
+		aiAdmin.Patch("/providers/:id", h.AI.UpdateProvider)
+		aiAdmin.Delete("/providers/:id", h.AI.DeleteProvider)
 
 		// User AI settings (consolidated credentials + preferences)
 		aiGroup.Get("/settings", h.AI.GetUserSettings)
@@ -971,8 +964,8 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, m *middleware.Middleware)
 		aiGroup.Delete("/routing/:id", h.AI.DeleteModelRouting)
 
 		// Admin defaults (server-wide AI configuration)
-		aiGroup.Get("/admin/defaults", h.AI.GetAdminDefaults)
-		aiGroup.Post("/admin/defaults", h.AI.SetAdminDefaults)
+		aiAdmin.Get("/admin/defaults", h.AI.GetAdminDefaults)
+		aiAdmin.Post("/admin/defaults", h.AI.SetAdminDefaults)
 
 		// Chat & generation
 		aiGroup.Post("/chat", h.AI.ChatCompletion)
@@ -1028,9 +1021,10 @@ type MatrixFederationDeps struct {
 	// Phase 3 (Hearth-03..Hearth-06) federation dependencies.
 	// Optional: when nil, the federation event/state/join/backfill/transaction
 	// endpoints will not be mounted.
-	EventStore  matrixfederation.FederationEventStore
-	StateStore  *matrixfederation.InMemoryStateStore
-	AuthChecker *matrixfederation.AuthChecker
+	EventStore     matrixfederation.FederationEventStore
+	StateStore     matrixfederation.StateStore
+	AuthChecker    *matrixfederation.AuthChecker
+	RoomAliasStore matrixfederation.RoomAliasStore
 }
 
 // SetupMatrixFederationRoutes configures Matrix protocol endpoints.
@@ -1092,7 +1086,10 @@ func SetupMatrixFederationRoutes(deps *MatrixFederationDeps) {
 	}
 
 	// Room directory (Phase 2)
-	roomStore := matrixfederation.NewInMemoryRoomAliasStore()
+	roomStore := deps.RoomAliasStore
+	if roomStore == nil {
+		roomStore = matrixfederation.NewInMemoryRoomAliasStore()
+	}
 	directoryHandler := matrixfederation.NewRoomDirectoryHandler(roomStore, hsCfg)
 	matrixfederation.SetupDirectoryRoutes(app, directoryHandler, "/_matrix/client/v3", "/_matrix/federation/v1")
 

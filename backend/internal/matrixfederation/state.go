@@ -266,6 +266,15 @@ func toInt64(v interface{}) int64 {
 	}
 }
 
+// StateStore manages room state for federation.
+type StateStore interface {
+	// GetOrCreateRoomState returns the existing room state or creates a new one.
+	GetOrCreateRoomState(roomID RoomID) *FederatedRoomState
+
+	// GetRoomState returns the room state for the given room ID.
+	GetRoomState(roomID RoomID) (*FederatedRoomState, error)
+}
+
 // InMemoryStateStore manages multiple FederatedRoomState instances.
 // All methods are safe for concurrent use.
 type InMemoryStateStore struct {

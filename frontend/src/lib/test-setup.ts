@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import fakeIndexedDB from 'fake-indexeddb';
+
+// Polyfill IndexedDB for tests using fake-indexeddb
+if (typeof indexedDB === 'undefined') {
+  Object.defineProperty(globalThis, 'indexedDB', {
+    value: fakeIndexedDB,
+    writable: true,
+    configurable: true,
+  });
+}
 
 // jsdom does not implement window.matchMedia, which is needed by theme.ts
 // Polyfill matchMedia for jsdom environment
@@ -15,6 +25,21 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(() => true),
   })),
+});
+
+// Polyfill localStorage for test environments
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] || null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+    clear: vi.fn(() => { store = {}; }),
+  };
+})();
+Object.defineProperty(window, 'localStorage', {
+  writable: true,
+  value: localStorageMock,
 });
 
 // happy-dom does not implement navigator.clipboard (or only provides a getter)

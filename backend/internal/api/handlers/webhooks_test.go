@@ -1085,7 +1085,7 @@ func TestWebhookToResponse(t *testing.T) {
 		Type:      1,
 	}
 
-	resp := webhookToResponse(webhook)
+	resp := webhookToResponse(webhook, true)
 	assert.Equal(t, webhook.ID.String(), resp.ID)
 	assert.Equal(t, webhook.Name, resp.Name)
 	assert.Equal(t, webhook.ChannelID.String(), resp.ChannelID)
@@ -1107,8 +1107,9 @@ func TestWebhookToResponse_NoServerID(t *testing.T) {
 		Type:      0,
 	}
 
-	resp := webhookToResponse(webhook)
+	resp := webhookToResponse(webhook, false)
 	assert.Equal(t, "", resp.ServerID)
+	assert.Equal(t, "", resp.Token)
 	assert.Nil(t, resp.AvatarURL)
 }
 

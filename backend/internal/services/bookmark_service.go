@@ -17,11 +17,13 @@ type Bookmark struct {
 	Note      string
 }
 
+// BookmarkService handles bookmark operations
 type BookmarkService struct {
 	mu        sync.RWMutex
 	bookmarks map[uuid.UUID][]*Bookmark
 }
 
+// NewBookmarkService creates a new bookmark service
 func NewBookmarkService() *BookmarkService {
 	return &BookmarkService{
 		bookmarks: make(map[uuid.UUID][]*Bookmark),

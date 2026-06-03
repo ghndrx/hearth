@@ -77,10 +77,6 @@ func discoveryHomePageKey(userID uuid.UUID, fl, tl, rl int) string {
 	return fmt.Sprintf("discovery:home:%s:%d:%d:%d", userID.String(), fl, tl, rl)
 }
 
-func discoveryDirectoryKey(query, category, sort, order string, limit, offset int) string {
-	return fmt.Sprintf("discovery:directory:q%s:c%s:s%s:o%s:l%d:off%d", query, category, sort, order, limit, offset)
-}
-
 // GetDiscoveryServers retrieves cached paginated discovery servers
 func (c *RedisCache) GetDiscoveryServers(ctx context.Context, page, limit int, query, category string) (*models.PaginatedDiscoverableServers, error) {
 	data, err := c.Get(ctx, discoveryListKey(page, limit, query, category))

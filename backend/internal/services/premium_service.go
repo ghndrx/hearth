@@ -466,3 +466,8 @@ func (s *PremiumService) GetBillingInvoices(ctx context.Context, userID uuid.UUI
 func (s *PremiumService) GetPaymentMethods(ctx context.Context, userID uuid.UUID) ([]*models.PaymentMethod, error) {
 	return s.repo.GetPaymentMethods(ctx, userID)
 }
+
+// DeletePaymentMethod removes a payment method for the user.
+func (s *PremiumService) DeletePaymentMethod(ctx context.Context, userID uuid.UUID, paymentMethodID string) error {
+	return s.repo.DeletePaymentMethod(ctx, userID, paymentMethodID)
+}

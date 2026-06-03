@@ -58,7 +58,7 @@
 
 	let reason = '';
 	let selectedDuration: number | null = null; // null = permanent
-	let deleteMessageSeconds = 0;
+	export let deleteMessageSeconds = 0;
 	let loading = false;
 	let error: string | null = null;
 	let confirmStep = false;

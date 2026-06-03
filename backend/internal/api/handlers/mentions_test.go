@@ -127,7 +127,7 @@ func (m *mockMentionRepository) Search(ctx context.Context, userID uuid.UUID, qu
 // --- testMentionsHandler helper ---
 
 type testMentionsHandler struct {
-	handler *MentionsHandler
+	handler *NotificationHandler
 	repo    *mockMentionRepository
 	app     *fiber.App
 	userID  uuid.UUID
@@ -136,15 +136,15 @@ type testMentionsHandler struct {
 func newTestMentionsHandler(tb testing.TB) *testMentionsHandler {
 	repo := &mockMentionRepository{}
 	svc := services.NewMentionAPIService(repo, nil)
-	handler := NewMentionsHandler(svc)
+	handler := &NotificationHandler{mentionService: svc}
 
 	app := fiber.New()
 	app.Get("/mentions", handler.GetMentions)
 	app.Get("/mentions/unread/count", handler.GetUnreadCount)
 	app.Get("/mentions/stats", handler.GetStats)
 	app.Get("/mentions/search", handler.Search)
-	app.Patch("/mentions/:id/read", handler.MarkAsRead)
-	app.Post("/mentions/read-all", handler.MarkAllAsRead)
+	app.Patch("/mentions/:id/read", handler.MarkMentionAsRead)
+	app.Post("/mentions/read-all", handler.MarkAllMentionsAsRead)
 	app.Post("/mentions/channel/:channelId/read-all", handler.MarkChannelMentionsAsRead)
 
 	// Add userID middleware
@@ -332,7 +332,7 @@ func TestMentionsHandler_GetMentions(t *testing.T) {
 			th.repo = &mockMentionRepository{} // fresh mock
 			tt.setupMock(th.repo)
 			svc := services.NewMentionAPIService(th.repo, nil)
-			th.handler = NewMentionsHandler(svc)
+			th.handler = &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.expectedStatus == fiber.StatusUnauthorized {
@@ -417,7 +417,7 @@ func TestMentionsHandler_GetUnreadCount(t *testing.T) {
 			repo := &mockMentionRepository{}
 			tt.setupMock(repo)
 			svc := services.NewMentionAPIService(repo, nil)
-			handler := NewMentionsHandler(svc)
+			handler := &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.setupUser {
@@ -491,7 +491,7 @@ func TestMentionsHandler_GetStats(t *testing.T) {
 			repo := &mockMentionRepository{}
 			tt.setupMock(repo)
 			svc := services.NewMentionAPIService(repo, nil)
-			handler := NewMentionsHandler(svc)
+			handler := &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.setupUser {
@@ -597,7 +597,7 @@ func TestMentionsHandler_MarkAsRead(t *testing.T) {
 			repo := &mockMentionRepository{}
 			tt.setupMock(repo, testUserID)
 			svc := services.NewMentionAPIService(repo, nil)
-			handler := NewMentionsHandler(svc)
+			handler := &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.setupUser {
@@ -606,7 +606,7 @@ func TestMentionsHandler_MarkAsRead(t *testing.T) {
 					return c.Next()
 				})
 			}
-			app.Patch("/mentions/:id/read", handler.MarkAsRead)
+			app.Patch("/mentions/:id/read", handler.MarkMentionAsRead)
 
 			req := httptest.NewRequest("PATCH", "/mentions/"+tt.mentionIDParam+"/read", nil)
 			resp, err := app.Test(req)
@@ -673,7 +673,7 @@ func TestMentionsHandler_MarkAllAsRead(t *testing.T) {
 			repo := &mockMentionRepository{}
 			tt.setupMock(repo)
 			svc := services.NewMentionAPIService(repo, nil)
-			handler := NewMentionsHandler(svc)
+			handler := &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.setupUser {
@@ -683,7 +683,7 @@ func TestMentionsHandler_MarkAllAsRead(t *testing.T) {
 					return c.Next()
 				})
 			}
-			app.Post("/mentions/read-all", handler.MarkAllAsRead)
+			app.Post("/mentions/read-all", handler.MarkAllMentionsAsRead)
 
 			req := httptest.NewRequest("POST", "/mentions/read-all", nil)
 			resp, err := app.Test(req)
@@ -759,7 +759,7 @@ func TestMentionsHandler_MarkChannelMentionsAsRead(t *testing.T) {
 			repo := &mockMentionRepository{}
 			tt.setupMock(repo)
 			svc := services.NewMentionAPIService(repo, nil)
-			handler := NewMentionsHandler(svc)
+			handler := &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.setupUser {
@@ -866,7 +866,7 @@ func TestMentionsHandler_Search(t *testing.T) {
 			repo := &mockMentionRepository{}
 			tt.setupMock(repo)
 			svc := services.NewMentionAPIService(repo, nil)
-			handler := NewMentionsHandler(svc)
+			handler := &NotificationHandler{mentionService: svc}
 
 			app := fiber.New()
 			if tt.setupUser {
@@ -908,7 +908,7 @@ func TestMentionsHandler_GetMentions_QueryParamEdgeCases(t *testing.T) {
 			return []models.MentionWithContext{}, 0, nil
 		}
 		svc := services.NewMentionAPIService(repo, nil)
-		handler := NewMentionsHandler(svc)
+		handler := &NotificationHandler{mentionService: svc}
 
 		app := fiber.New()
 		app.Use(func(c *fiber.Ctx) error {
@@ -930,7 +930,7 @@ func TestMentionsHandler_GetMentions_QueryParamEdgeCases(t *testing.T) {
 			return []models.MentionWithContext{}, 0, nil
 		}
 		svc := services.NewMentionAPIService(repo, nil)
-		handler := NewMentionsHandler(svc)
+		handler := &NotificationHandler{mentionService: svc}
 
 		app := fiber.New()
 		app.Use(func(c *fiber.Ctx) error {
@@ -951,7 +951,7 @@ func TestMentionsHandler_GetMentions_QueryParamEdgeCases(t *testing.T) {
 			return []models.MentionWithContext{}, 0, nil
 		}
 		svc := services.NewMentionAPIService(repo, nil)
-		handler := NewMentionsHandler(svc)
+		handler := &NotificationHandler{mentionService: svc}
 
 		app := fiber.New()
 		app.Use(func(c *fiber.Ctx) error {
@@ -972,7 +972,7 @@ func TestMentionsHandler_GetMentions_QueryParamEdgeCases(t *testing.T) {
 			return []models.MentionWithContext{}, 0, nil
 		}
 		svc := services.NewMentionAPIService(repo, nil)
-		handler := NewMentionsHandler(svc)
+		handler := &NotificationHandler{mentionService: svc}
 
 		app := fiber.New()
 		app.Use(func(c *fiber.Ctx) error {
@@ -993,7 +993,7 @@ func TestMentionsHandler_GetMentions_QueryParamEdgeCases(t *testing.T) {
 			return []models.MentionWithContext{}, 0, nil
 		}
 		svc := services.NewMentionAPIService(repo, nil)
-		handler := NewMentionsHandler(svc)
+		handler := &NotificationHandler{mentionService: svc}
 
 		app := fiber.New()
 		app.Use(func(c *fiber.Ctx) error {

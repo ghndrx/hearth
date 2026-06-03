@@ -63,11 +63,11 @@ func setupPushTestApp(mock *mockPushService) *fiber.App {
 		return c.Next()
 	})
 
-	handler := NewPushHandler(mock)
+	handler := &NotificationHandler{pushService: mock}
 	app.Post("/push/subscription", handler.RegisterSubscription)
 	app.Delete("/push/subscription", handler.UnregisterSubscription)
-	app.Get("/push/preferences", handler.GetPreferences)
-	app.Patch("/push/preferences", handler.UpdatePreferences)
+	app.Get("/push/preferences", handler.GetPushPreferences)
+	app.Patch("/push/preferences", handler.UpdatePushPreferences)
 
 	return app
 }

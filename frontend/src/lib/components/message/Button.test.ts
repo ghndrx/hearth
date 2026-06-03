@@ -144,25 +144,5 @@ describe('Button (Message Component)', () => {
     expect(svg).toBeInTheDocument();
   });
 
-  it.skip('does not respond to click when loading', async () => {
-    // Skipped: fireEvent.click() in @testing-library/svelte does not respect the
-    // disabled attribute, so this test cannot properly verify that clicks are
-    // ignored when loading. This would need userEvent.click() from
-    // @testing-library/user-event for proper testing.
-    const handleClick = vi.fn();
-    const { container } = render(Button, {
-      props: { label: 'Loading', customId: 'loading_btn' }
-    });
 
-    // First click sets loading
-    const button = container.querySelector('button');
-    button?.addEventListener('click', handleClick);
-    
-    await fireEvent.click(button!);
-    await tick();
-    
-    // Second click should not trigger when loading
-    await fireEvent.click(button!);
-    expect(handleClick).toHaveBeenCalledTimes(1);
-  });
 });

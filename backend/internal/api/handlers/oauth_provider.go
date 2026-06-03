@@ -39,7 +39,10 @@ type CreateAppRequest struct {
 // CreateApp creates a new OAuth application
 // POST /oauth/apps
 func (h *OAuthProviderHandler) CreateApp(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req CreateAppRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -93,7 +96,10 @@ func (h *OAuthProviderHandler) CreateApp(c *fiber.Ctx) error {
 // GetApps returns all OAuth apps owned by the user
 // GET /oauth/apps
 func (h *OAuthProviderHandler) GetApps(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	apps, err := h.oauthService.GetAppsByOwner(c.Context(), userID)
 	if err != nil {
@@ -130,7 +136,10 @@ func (h *OAuthProviderHandler) GetApps(c *fiber.Ctx) error {
 // GetApp returns a specific OAuth app
 // GET /oauth/apps/:id
 func (h *OAuthProviderHandler) GetApp(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	appID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -169,7 +178,10 @@ func (h *OAuthProviderHandler) GetApp(c *fiber.Ctx) error {
 // UpdateApp updates an OAuth app
 // PATCH /oauth/apps/:id
 func (h *OAuthProviderHandler) UpdateApp(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	appID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -218,7 +230,10 @@ func (h *OAuthProviderHandler) UpdateApp(c *fiber.Ctx) error {
 // DeleteApp deletes an OAuth app
 // DELETE /oauth/apps/:id
 func (h *OAuthProviderHandler) DeleteApp(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	appID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -240,7 +255,10 @@ func (h *OAuthProviderHandler) DeleteApp(c *fiber.Ctx) error {
 // RegenerateSecret generates a new client secret
 // POST /oauth/apps/:id/secret
 func (h *OAuthProviderHandler) RegenerateSecret(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	appID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -274,7 +292,10 @@ func (h *OAuthProviderHandler) RegenerateSecret(c *fiber.Ctx) error {
 // Authorize handles the authorization endpoint
 // GET /oauth/authorize
 func (h *OAuthProviderHandler) Authorize(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	req := &services.AuthorizeRequest{
 		ClientID:     c.Query("client_id"),
@@ -343,7 +364,10 @@ func (h *OAuthProviderHandler) Authorize(c *fiber.Ctx) error {
 // AuthorizeConsent handles user consent approval
 // POST /oauth/authorize
 func (h *OAuthProviderHandler) AuthorizeConsent(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var body struct {
 		ClientID            string  `json:"client_id"`
@@ -533,7 +557,10 @@ func (h *OAuthProviderHandler) Introspect(c *fiber.Ctx) error {
 // GetAuthorizations returns all apps the user has authorized
 // GET /oauth/authorizations
 func (h *OAuthProviderHandler) GetAuthorizations(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	auths, err := h.oauthService.GetUserAuthorizations(c.Context(), userID)
 	if err != nil {
@@ -551,7 +578,10 @@ func (h *OAuthProviderHandler) GetAuthorizations(c *fiber.Ctx) error {
 // RevokeAuthorization revokes a user's authorization for an app
 // DELETE /oauth/authorizations/:client_id
 func (h *OAuthProviderHandler) RevokeAuthorization(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	clientID := c.Params("client_id")
 
 	if clientID == "" {

@@ -95,10 +95,7 @@ describe('Button', () => {
     expect(button).toHaveClass('w-full');
   });
 
-  // Skip slot test - needs Svelte 5 migration
-  it.skip('renders slot content', () => {
-    // Svelte 5 uses snippets instead of slots
-  });
+
 
   it('supports submit type', () => {
     const { container } = render(Button, {

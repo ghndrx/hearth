@@ -16,12 +16,12 @@ import (
 // BackfillHandler returns historical events by walking the prev_events DAG.
 type BackfillHandler struct {
 	eventStore FederationEventStore
-	stateStore *InMemoryStateStore
+	stateStore StateStore
 	serverName string
 }
 
 // NewBackfillHandler creates a new BackfillHandler.
-func NewBackfillHandler(serverName string, store FederationEventStore, state *InMemoryStateStore) *BackfillHandler {
+func NewBackfillHandler(serverName string, store FederationEventStore, state StateStore) *BackfillHandler {
 	return &BackfillHandler{
 		eventStore: store,
 		stateStore: state,

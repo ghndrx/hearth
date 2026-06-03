@@ -127,7 +127,7 @@ func (m *mockDigestService) GenerateDigest(ctx context.Context, userID uuid.UUID
 
 func setupDigestTestApp(svc *mockDigestService) *fiber.App {
 	app := fiber.New()
-	h := NewDigestHandler(svc)
+	h := &NotificationPreferenceHandler{digestService: svc}
 
 	app.Use(func(c *fiber.Ctx) error {
 		c.Locals("userID", uuid.MustParse("11111111-1111-1111-1111-111111111111"))

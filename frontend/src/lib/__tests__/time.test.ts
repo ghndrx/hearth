@@ -286,22 +286,22 @@ describe('snowflakeToDate', () => {
     // Known Discord snowflake: 175928847299117063 (Discord's ID)
     // Created around 2016-04-30
     const date = snowflakeToDate('175928847299117063');
-    expect(date.getFullYear()).toBe(2016);
-    expect(date.getMonth()).toBe(3); // April (0-indexed)
+    expect(date.getUTCFullYear()).toBe(2016);
+    expect(date.getUTCMonth()).toBe(3); // April (0-indexed)
   });
 
   it('should handle recent snowflakes', () => {
     // A snowflake from 2024 would have a timestamp after 2024-01-01
     const recentSnowflake = '1199477000000000000';
     const date = snowflakeToDate(recentSnowflake);
-    expect(date.getFullYear()).toBeGreaterThanOrEqual(2024);
+    expect(date.getUTCFullYear()).toBeGreaterThanOrEqual(2024);
   });
 
   it('should handle minimum valid snowflake', () => {
     // Snowflake 0 would be Discord epoch (2015-01-01)
     const date = snowflakeToDate('0');
-    expect(date.getFullYear()).toBe(2015);
-    expect(date.getMonth()).toBe(0); // January
-    expect(date.getDate()).toBe(1);
+    expect(date.getUTCFullYear()).toBe(2015);
+    expect(date.getUTCMonth()).toBe(0); // January
+    expect(date.getUTCDate()).toBe(1);
   });
 });

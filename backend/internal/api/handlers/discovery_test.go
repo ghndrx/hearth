@@ -48,6 +48,9 @@ func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
 				c.Locals("userID", uid)
 			}
 		}
+		if c.Get("X-Test-Is-Admin") == "true" {
+			c.Locals("isAdmin", true)
+		}
 		return c.Next()
 	})
 
@@ -218,6 +221,10 @@ func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
 	})
 
 	app.Post("/admin/discovery/:listingId/approve", func(c *fiber.Ctx) error {
+		isAdmin, ok := c.Locals("isAdmin").(bool)
+		if !ok || !isAdmin {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
+		}
 		listingID, err := uuid.Parse(c.Params("listingId"))
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid listing ID"})
@@ -237,6 +244,10 @@ func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
 	})
 
 	app.Post("/admin/discovery/:listingId/reject", func(c *fiber.Ctx) error {
+		isAdmin, ok := c.Locals("isAdmin").(bool)
+		if !ok || !isAdmin {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
+		}
 		listingID, err := uuid.Parse(c.Params("listingId"))
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid listing ID"})
@@ -262,6 +273,10 @@ func setupDiscoveryApp(mock *mockDiscoveryService) *fiber.App {
 	})
 
 	app.Post("/admin/discovery/:listingId/featured", func(c *fiber.Ctx) error {
+		isAdmin, ok := c.Locals("isAdmin").(bool)
+		if !ok || !isAdmin {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
+		}
 		listingID, err := uuid.Parse(c.Params("listingId"))
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid listing ID"})
@@ -738,6 +753,7 @@ func TestApproveListing_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/approve", nil)
 	req.Header.Set("X-Test-User-ID", adminID.String())
+	req.Header.Set("X-Test-Is-Admin", "true")
 
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
@@ -758,10 +774,32 @@ func TestApproveListing_NotFound(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/approve", nil)
 	req.Header.Set("X-Test-User-ID", adminID.String())
+	req.Header.Set("X-Test-Is-Admin", "true")
 
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestApproveListing_Forbidden(t *testing.T) {
+	listingID := uuid.New()
+	adminID := uuid.New()
+	mock := &mockDiscoveryService{
+		approveListingFunc: func(ctx context.Context, lID, aID uuid.UUID) error {
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/approve", nil)
+	req.Header.Set("X-Test-User-ID", adminID.String())
+	// No X-Test-Is-Admin header
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
 func TestRejectListing_Success(t *testing.T) {
@@ -783,10 +821,34 @@ func TestRejectListing_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/reject", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Test-User-ID", adminID.String())
+	req.Header.Set("X-Test-Is-Admin", "true")
 
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestRejectListing_Forbidden(t *testing.T) {
+	listingID := uuid.New()
+	adminID := uuid.New()
+	mock := &mockDiscoveryService{
+		rejectListingFunc: func(ctx context.Context, lID, aID uuid.UUID, reason string) error {
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"reason":"inappropriate content"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/reject", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-User-ID", adminID.String())
+	// No X-Test-Is-Admin header
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
 func TestSetFeatured_Success(t *testing.T) {
@@ -805,6 +867,7 @@ func TestSetFeatured_Success(t *testing.T) {
 	body := `{"featured":true}`
 	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/featured", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-Is-Admin", "true")
 
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
@@ -825,10 +888,32 @@ func TestSetFeatured_NotFound(t *testing.T) {
 	body := `{"featured":true}`
 	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/featured", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-Is-Admin", "true")
 
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestSetFeatured_Forbidden(t *testing.T) {
+	listingID := uuid.New()
+	mock := &mockDiscoveryService{
+		setFeaturedFunc: func(ctx context.Context, lID uuid.UUID, featured bool) error {
+			return nil
+		},
+	}
+
+	app := setupDiscoveryApp(mock)
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	body := `{"featured":true}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/discovery/"+listingID.String()+"/featured", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// No X-Test-Is-Admin header
+
+	resp, err := app.Test(req, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
 // Ensure services import is used
@@ -1384,12 +1469,15 @@ func setupDiscoveryHandlerTestApp(discoveryRepo *MockDiscoveryRepo, serverRepo *
 				c.Locals("userID", uid)
 			}
 		}
+		if c.Get("X-Test-Is-Admin") == "true" {
+			c.Locals("isAdmin", true)
+		}
 		return c.Next()
 	})
 
 	// Create service and handler with mocks
 	svc := services.NewDiscoveryService(discoveryRepo, serverRepo, inviteRepo, nil, eventBus)
-	handler := NewDiscoveryHandler(svc, nil)
+	handler := NewDiscoveryHandler(svc, nil, nil)
 
 	// Register routes calling actual handler methods
 	app.Get("/discovery/featured", handler.GetFeaturedServers)

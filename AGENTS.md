@@ -1,16 +1,16 @@
 # AGENTS.md — Hearth backend + web frontend
 
 ## Stack
-- Backend: Go 1.25 in `backend/` — entry `backend/cmd/...`, module name `hearth`
+- Backend: Go 1.26 in `backend/` — entry `backend/cmd/...`, module name `hearth`
 - Frontend: SvelteKit in `frontend/`
 - Default branch: `develop` (not `main`)
 - Pre-commit: lefthook (`lefthook.yml` at repo root)
 
 ## Commands
 - Test backend: `cd backend && go test ./...`
-- Test frontend: `cd frontend && pnpm test`
+- Test frontend: `cd frontend && bun test`
 - Lint backend: `cd backend && go vet ./...`
-- Format: `gofmt -w backend/` and `cd frontend && pnpm format`
+- Format: `gofmt -w backend/` and `cd frontend && bun format`
 - Build: `make build`
 
 ## Conventions
@@ -27,8 +27,8 @@
 
 ## Security
 - No secrets in code. Use `os.Getenv` + `.env` (gitignored).
-- All inbound HTTP goes through the auth middleware in `backend/internal/http/middleware/`.
-- Database queries via `sqlc`-generated code; no raw `db.Exec` with string interpolation.
+- All inbound HTTP goes through the auth middleware in `backend/internal/api/middleware/`.
+- Database queries use `sqlx` with parameterized queries; avoid raw `db.Exec` with string interpolation.
 
 ## Hearth-specific
 - This is a self-hosted, federated Discord/Slack alternative. Federation via Matrix.

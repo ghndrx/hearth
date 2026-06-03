@@ -90,6 +90,7 @@ type Claims struct {
 	UserID   string `json:"uid"`
 	Username string `json:"usr"`
 	Type     string `json:"typ"`
+	IsAdmin  bool   `json:"adm"`
 }
 
 // RequireAuth validates JWT and sets userID in context
@@ -156,6 +157,7 @@ func (m *Middleware) RequireAuth(c *fiber.Ctx) error {
 
 	c.Locals("userID", userID)
 	c.Locals("username", claims.Username)
+	c.Locals("isAdmin", claims.IsAdmin)
 	return c.Next()
 }
 
@@ -242,21 +244,6 @@ func formatInt64(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
 
-// CORS adds CORS headers
-func (m *Middleware) CORS() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		c.Set("Access-Control-Allow-Origin", "*")
-		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
-
-		if c.Method() == "OPTIONS" {
-			return c.SendStatus(fiber.StatusNoContent)
-		}
-
-		return c.Next()
-	}
-}
-
 // RequestID adds a unique request ID
 func (m *Middleware) RequestID() fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -312,6 +299,17 @@ func (m *Middleware) Logger() fiber.Handler {
 
 		return err
 	}
+}
+
+// RequireAdmin checks if the authenticated user has admin privileges
+func (m *Middleware) RequireAdmin(c *fiber.Ctx) error {
+	isAdmin, ok := c.Locals("isAdmin").(bool)
+	if !ok || !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "admin access required",
+		})
+	}
+	return c.Next()
 }
 
 // Recover recovers from panics

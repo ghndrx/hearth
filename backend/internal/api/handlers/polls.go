@@ -61,7 +61,10 @@ type VoteRequest struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/polls [post]
 func (h *PollHandler) CreatePoll(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -196,7 +199,10 @@ func (h *PollHandler) GetPoll(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /polls/{id}/vote [post]
 func (h *PollHandler) Vote(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	pollID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -312,7 +318,10 @@ func (h *PollHandler) GetResults(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /polls/{id}/close [post]
 func (h *PollHandler) ClosePoll(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	pollID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -402,7 +411,10 @@ func (h *PollHandler) GetChannelPolls(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /polls/{id} [delete]
 func (h *PollHandler) DeletePoll(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	pollID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

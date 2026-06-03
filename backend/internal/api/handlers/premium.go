@@ -422,6 +422,34 @@ func (h *PremiumHandler) GetPaymentMethods(c *fiber.Ctx) error {
 	return c.JSON(methods)
 }
 
+// DeletePaymentMethod removes a payment method for the current user
+// @Summary Delete payment method
+// @Description Removes a stored payment method
+// @Tags Premium
+// @Produce json
+// @Param id path string true "Payment method ID"
+// @Success 200 {object} fiber.Map
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /premium/payment-methods/{id} [delete]
+func (h *PremiumHandler) DeletePaymentMethod(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return Unauthorized(c, "unauthorized")
+	}
+
+	paymentMethodID := c.Params("id")
+	if paymentMethodID == "" {
+		return ValidationError(c, "id", "payment method ID is required")
+	}
+
+	if err := h.premiumService.DeletePaymentMethod(c.Context(), userID, paymentMethodID); err != nil {
+		return HandleServiceError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"message": "payment method deleted"})
+}
+
 // HandleBillingWebhook handles billing provider webhooks
 // @Summary Handle billing webhook
 // @Description Processes webhooks from billing providers (Stripe, Paddle)
@@ -446,6 +474,8 @@ func (h *PremiumHandler) HandleBillingWebhook(c *fiber.Ctx) error {
 
 	signature := c.Get("Stripe-Signature")
 
+	// Signature verification is handled inside the billing service, which
+	// already validates Stripe signatures before processing the payload.
 	if err := h.billingService.HandleWebhook(c.Context(), provider, payload, signature); err != nil {
 		return HandleServiceError(c, err)
 	}

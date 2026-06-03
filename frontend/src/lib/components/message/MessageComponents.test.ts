@@ -80,32 +80,7 @@ describe('MessageComponents', () => {
     expect(selectMenu).toBeInTheDocument();
   });
 
-  // Svelte 5 does not support createEventDispatcher with addEventListener in tests
-  // These tests verify the component renders and responds to user interaction
-  // but cannot test event emission through createEventDispatcher
-  it.skip('dispatches componentClick event when button is clicked', async () => {
-    // Skipped: In Svelte 5, createEventDispatcher events cannot be captured via
-    // component.addEventListener. This component needs to be migrated to use
-    // callback props (Svelte 5 pattern) for proper event testing.
-  });
 
-  it.skip('dispatches componentChange event when select changes', async () => {
-    // Skipped: In Svelte 5, createEventDispatcher events cannot be captured via
-    // component.addEventListener. This component needs to be migrated to use
-    // callback props (Svelte 5 pattern) for proper event testing.
-  });
-
-  it.skip('passes custom_id in button click event', async () => {
-    // Skipped: In Svelte 5, createEventDispatcher events cannot be captured via
-    // component.addEventListener. This component needs to be migrated to use
-    // callback props (Svelte 5 pattern) for proper event testing.
-  });
-
-  it.skip('passes custom_id in select change event', async () => {
-    // Skipped: In Svelte 5, createEventDispatcher events cannot be captured via
-    // component.addEventListener. This component needs to be migrated to use
-    // callback props (Svelte 5 pattern) for proper event testing.
-  });
 
   it('renders disabled button', () => {
     const disabledComponents = [

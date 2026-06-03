@@ -232,8 +232,18 @@ describe('Encryption Module', () => {
     });
 
     it('should return false when indexedDB is unavailable', () => {
-      // In Node.js test env, indexedDB is undefined by default
+      const originalIndexedDB = globalThis.indexedDB;
+      Object.defineProperty(globalThis, 'indexedDB', {
+        value: undefined,
+        writable: true,
+        configurable: true
+      });
       expect(isE2EESupported()).toBe(false);
+      Object.defineProperty(globalThis, 'indexedDB', {
+        value: originalIndexedDB,
+        writable: true,
+        configurable: true
+      });
     });
 
     it('should check for required crypto methods', () => {

@@ -77,7 +77,10 @@ func NewComponentHandler(
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /api/v1/interactions/components [post]
 func (h *ComponentHandler) HandleComponentInteractionV2(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req struct {
 		MessageID string   `json:"message_id"`
@@ -145,7 +148,10 @@ func (h *ComponentHandler) HandleComponentInteractionV2(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /api/v1/channels/{id}/messages/{messageId}/components [get]
 func (h *ComponentHandler) GetMessageComponents(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return InvalidUUID(c, "message ID")
@@ -189,7 +195,10 @@ func (h *ComponentHandler) GetMessageComponents(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /api/v1/channels/{id}/messages/{messageId}/components [patch]
 func (h *ComponentHandler) UpdateMessageComponents(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return InvalidUUID(c, "message ID")
@@ -275,7 +284,10 @@ func (h *ComponentHandler) UpdateMessageComponents(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /api/v1/channels/{id}/messages/{messageId}/components [delete]
 func (h *ComponentHandler) RemoveAllComponents(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return InvalidUUID(c, "message ID")

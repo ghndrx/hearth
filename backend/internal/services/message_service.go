@@ -2,7 +2,15 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,19 +60,19 @@ const AutoThreadThreshold = 3
 
 // MessageService handles message-related business logic
 type MessageService struct {
-	repo              MessageRepository
-	channelRepo       ChannelRepository
-	serverRepo        ServerRepository
-	roleRepo          RoleRepository
-	userRepo          UserRepository
-	quotaService      *QuotaService
-	rateLimiter       RateLimiter
-	e2eeService       E2EEService
-	cache             CacheService
-	eventBus          EventBus
-	permService       *PermissionService
-	threadService     *ThreadService
-	mentionService    *MentionService
+	repo             MessageRepository
+	channelRepo      ChannelRepository
+	serverRepo       ServerRepository
+	roleRepo         RoleRepository
+	userRepo         UserRepository
+	quotaService     *QuotaService
+	rateLimiter      RateLimiter
+	e2eeService      E2EEService
+	cache            CacheService
+	eventBus         EventBus
+	permService      *PermissionService
+	threadService    *ThreadService
+	mentionService   *MentionService
 	federationBridge FederationBridgeSender
 	federationServer string // e.g., "hearth.example.com" - needed to construct MXID
 }
@@ -302,7 +310,12 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 	// Fetch author first so we can process mentions with proper server membership validation
 	var author *models.User
 	if s.userRepo != nil {
-		author, _ = s.userRepo.GetByID(ctx, authorID)
+		var err error
+		author, err = s.userRepo.GetByID(ctx, authorID)
+		if err != nil {
+			// Log but don't fail message send - mention processing is best-effort
+			log.Printf("Warning: failed to fetch author %s for mention processing: %v", authorID, err)
+		}
 	}
 
 	// Process mentions with security validation (if mentionService is available)
@@ -325,15 +338,19 @@ func (s *MessageService) SendMessage(ctx context.Context, authorID uuid.UUID, ch
 	// HRT-2: Federation bridge - send to remote servers if federated.
 	// This is best-effort; failure to enqueue should not fail the user-facing send.
 	if s.federationBridge != nil && s.federationServer != "" && channel.ServerID != nil {
-		go func(msgID, chanID uuid.UUID, senderID uuid.UUID, content string) {
-			// Construct MXID from authorID and federation server name
-			senderMXID := "@" + senderID.String() + ":" + s.federationServer
+		senderName := authorID.String()
+		if author != nil {
+			senderName = author.Username
+		}
+		go func(msgID, chanID uuid.UUID, senderID uuid.UUID, content, username string) {
+			// Construct MXID from username and federation server name
+			senderMXID := "@" + username + ":" + s.federationServer
 			if err := s.federationBridge.OnHearthMessage(context.Background(), msgID, chanID, senderMXID, content); err != nil {
 				// Log but don't fail - federation is best-effort
 				// In production, use proper logging; here we use the standard logger
 				log.Printf("⚠️  federation bridge: failed to send message %s: %v", msgID, err)
 			}
-		}(message.ID, channelID, authorID, content)
+		}(message.ID, channelID, authorID, content, senderName)
 	}
 
 	// Populate author for the response and WebSocket event
@@ -1255,4 +1272,1015 @@ type ReactionRemovedEvent struct {
 type ReactionRemovedAllEvent struct {
 	MessageID uuid.UUID
 	ChannelID uuid.UUID
+}
+
+var ErrReactionExists = errors.New("reaction already exists")
+var ErrReactionNotFound = errors.New("reaction not found")
+
+type Reaction struct {
+	MessageID string
+	UserID    string
+	Emoji     string
+}
+
+// ReactionService handles message reactions
+type ReactionService struct {
+	mu        sync.RWMutex
+	reactions map[string][]Reaction // messageID -> reactions
+}
+
+// NewReactionService creates a new reaction service
+func NewReactionService() *ReactionService {
+	return &ReactionService{
+		reactions: make(map[string][]Reaction),
+	}
+}
+
+func (s *ReactionService) AddReaction(ctx context.Context, messageID, userID, emoji string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, r := range s.reactions[messageID] {
+		if r.UserID == userID && r.Emoji == emoji {
+			return ErrReactionExists
+		}
+	}
+	s.reactions[messageID] = append(s.reactions[messageID], Reaction{
+		MessageID: messageID,
+		UserID:    userID,
+		Emoji:     emoji,
+	})
+	return nil
+}
+
+func (s *ReactionService) RemoveReaction(ctx context.Context, messageID, userID, emoji string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	reactions := s.reactions[messageID]
+	for i, r := range reactions {
+		if r.UserID == userID && r.Emoji == emoji {
+			s.reactions[messageID] = append(reactions[:i], reactions[i+1:]...)
+			return nil
+		}
+	}
+	return ErrReactionNotFound
+}
+
+func (s *ReactionService) GetReactions(ctx context.Context, messageID string) ([]Reaction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.reactions[messageID], nil
+}
+
+// Common errors
+var (
+	ErrCannotForwardToSameChannel = errors.New("cannot forward message to the same channel")
+)
+
+// ForwardService handles message forwarding business logic
+type ForwardService struct {
+	messageRepo      MessageRepository
+	forwardedMsgRepo ForwardedMessageRepository
+	channelRepo      ChannelRepository
+	serverRepo       ServerRepository
+	permService      *PermissionService
+	eventBus         EventBus
+}
+
+// NewForwardService creates a new forward service
+func NewForwardService(
+	messageRepo MessageRepository,
+	forwardedMsgRepo ForwardedMessageRepository,
+	channelRepo ChannelRepository,
+	serverRepo ServerRepository,
+	permService *PermissionService,
+	eventBus EventBus,
+) *ForwardService {
+	return &ForwardService{
+		messageRepo:      messageRepo,
+		forwardedMsgRepo: forwardedMsgRepo,
+		channelRepo:      channelRepo,
+		serverRepo:       serverRepo,
+		permService:      permService,
+		eventBus:         eventBus,
+	}
+}
+
+// ForwardMessage forwards a message to a destination channel
+func (s *ForwardService) ForwardMessage(
+	ctx context.Context,
+	originalMessageID uuid.UUID,
+	forwarderID uuid.UUID,
+	destinationChannelID uuid.UUID,
+	comment string,
+) (*models.ForwardedMessage, error) {
+	// Get the original message
+	originalMsg, err := s.messageRepo.GetByID(ctx, originalMessageID)
+	if err != nil {
+		return nil, err
+	}
+	if originalMsg == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	// Get the destination channel
+	destChannel, err := s.channelRepo.GetByID(ctx, destinationChannelID)
+	if err != nil {
+		return nil, err
+	}
+	if destChannel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Check that we're not forwarding to the same channel
+	if originalMsg.ChannelID == destinationChannelID {
+		return nil, ErrCannotForwardToSameChannel
+	}
+
+	// Check that the forwarder can read the original message
+	sourceChannel, err := s.channelRepo.GetByID(ctx, originalMsg.ChannelID)
+	if err != nil {
+		return nil, err
+	}
+	if sourceChannel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Check read permission on source channel
+	if err := s.checkReadPermission(ctx, sourceChannel, forwarderID); err != nil {
+		return nil, err
+	}
+
+	// Check send permission on destination channel
+	if err := s.checkSendPermission(ctx, destChannel, forwarderID); err != nil {
+		return nil, err
+	}
+
+	// Create the forwarded message record
+	forwardedMsg := &models.ForwardedMessage{
+		ID:                   uuid.New(),
+		OriginalMessageID:    originalMessageID,
+		ForwardedByID:        forwarderID,
+		DestinationChannelID: destinationChannelID,
+		Comment:              comment,
+		CreatedAt:            time.Now(),
+	}
+
+	if err := s.forwardedMsgRepo.Create(ctx, forwardedMsg); err != nil {
+		return nil, err
+	}
+
+	// Publish event for the forward
+	s.eventBus.Publish("message.forwarded", &MessageForwardedEvent{
+		OriginalMessageID:    originalMessageID,
+		ForwardedByID:        forwarderID,
+		DestinationChannelID: destinationChannelID,
+	})
+
+	return forwardedMsg, nil
+}
+
+// GetForwardsByOriginalMessage returns all forwards of a message
+func (s *ForwardService) GetForwardsByOriginalMessage(ctx context.Context, originalMessageID uuid.UUID) ([]*models.ForwardedMessage, error) {
+	return s.forwardedMsgRepo.GetByOriginalMessageID(ctx, originalMessageID)
+}
+
+// GetForwardsByDestinationChannel returns all forwards sent to a channel
+func (s *ForwardService) GetForwardsByDestinationChannel(ctx context.Context, channelID uuid.UUID, limit, offset int) ([]*models.ForwardedMessage, int, error) {
+	return s.forwardedMsgRepo.GetByDestinationChannelID(ctx, channelID, limit, offset)
+}
+
+// checkReadPermission checks if a user can read messages in a channel
+func (s *ForwardService) checkReadPermission(ctx context.Context, channel *models.Channel, userID uuid.UUID) error {
+	if s.permService != nil && channel.ServerID != nil {
+		// Check both view channels and read message history permissions
+		if err := s.permService.RequirePermission(ctx, *channel.ServerID, userID, models.PermViewChannels); err != nil {
+			return err
+		}
+		return s.permService.RequirePermission(ctx, *channel.ServerID, userID, models.PermReadMessageHistory)
+	}
+	// Fallback: check channel membership
+	if channel.Type == models.ChannelTypeDM {
+		// For DMs, check if user is a recipient
+		count, err := s.channelRepo.CountRecipients(ctx, channel.ID)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return ErrNotChannelMember
+		}
+		return nil
+	}
+	// For server channels, check membership
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, userID)
+		if err != nil || member == nil {
+			return ErrNotChannelMember
+		}
+	}
+	return nil
+}
+
+// checkSendPermission checks if a user can send messages in a channel
+func (s *ForwardService) checkSendPermission(ctx context.Context, channel *models.Channel, userID uuid.UUID) error {
+	if s.permService != nil && channel.ServerID != nil {
+		return s.permService.RequirePermission(ctx, *channel.ServerID, userID, models.PermSendMessages)
+	}
+	// Fallback: check channel membership
+	if channel.Type == models.ChannelTypeDM {
+		// For DMs, any recipient can send
+		count, err := s.channelRepo.CountRecipients(ctx, channel.ID)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return ErrNotChannelMember
+		}
+		return nil
+	}
+	// For server channels, check membership
+	if channel.ServerID != nil {
+		member, err := s.serverRepo.GetMember(ctx, *channel.ServerID, userID)
+		if err != nil || member == nil {
+			return ErrNotChannelMember
+		}
+	}
+	return nil
+}
+
+// MessageForwardedEvent is published when a message is forwarded
+type MessageForwardedEvent struct {
+	OriginalMessageID    uuid.UUID `json:"original_message_id"`
+	ForwardedByID        uuid.UUID `json:"forwarded_by_id"`
+	DestinationChannelID uuid.UUID `json:"destination_channel_id"`
+}
+
+var (
+	ErrEmbedNotFound    = errors.New("embed not found")
+	ErrInvalidEmbedData = errors.New("invalid embed data")
+)
+
+// EmbedRepositoryInterface defines methods needed from EmbedRepository
+type EmbedRepositoryInterface interface {
+	CreateTemplate(ctx context.Context, template *models.EmbedTemplate) error
+	GetTemplateByID(ctx context.Context, id uuid.UUID) (*models.EmbedTemplate, error)
+	GetTemplatesByUserID(ctx context.Context, userID uuid.UUID) ([]models.EmbedTemplate, error)
+	UpdateTemplate(ctx context.Context, template *models.EmbedTemplate) error
+	DeleteTemplate(ctx context.Context, id, userID uuid.UUID) error
+}
+
+// EmbedService handles embed operations
+type EmbedService struct {
+	repo       EmbedRepositoryInterface
+	httpClient *http.Client
+}
+
+// NewEmbedService creates a new embed service
+func NewEmbedService(repo EmbedRepositoryInterface) *EmbedService {
+	return &EmbedService{
+		repo: repo,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return errors.New("too many redirects")
+				}
+				return nil
+			},
+		},
+	}
+}
+
+// CreateTemplate creates a new embed template
+func (s *EmbedService) CreateTemplate(ctx context.Context, userID uuid.UUID, req *models.CreateEmbedTemplateRequest) (*models.EmbedTemplate, error) {
+	if req.Name == "" {
+		return nil, ErrInvalidEmbedData
+	}
+
+	template := &models.EmbedTemplate{
+		ID:           uuid.New(),
+		UserID:       userID,
+		Name:         req.Name,
+		Title:        req.Title,
+		Description:  req.Description,
+		URL:          req.URL,
+		Color:        req.Color,
+		AuthorName:   req.AuthorName,
+		AuthorURL:    req.AuthorURL,
+		AuthorIcon:   req.AuthorIcon,
+		FooterText:   req.FooterText,
+		FooterIcon:   req.FooterIcon,
+		ImageURL:     req.ImageURL,
+		ThumbnailURL: req.ThumbnailURL,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	if err := s.repo.CreateTemplate(ctx, template); err != nil {
+		return nil, fmt.Errorf("failed to create template: %w", err)
+	}
+
+	return template, nil
+}
+
+// GetTemplates retrieves all embed templates for a user
+func (s *EmbedService) GetTemplates(ctx context.Context, userID uuid.UUID) ([]models.EmbedTemplate, error) {
+	templates, err := s.repo.GetTemplatesByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get templates: %w", err)
+	}
+	if templates == nil {
+		return []models.EmbedTemplate{}, nil
+	}
+	return templates, nil
+}
+
+// GetTemplate retrieves a specific template
+func (s *EmbedService) GetTemplate(ctx context.Context, userID, templateID uuid.UUID) (*models.EmbedTemplate, error) {
+	template, err := s.repo.GetTemplateByID(ctx, templateID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get template: %w", err)
+	}
+	if template == nil {
+		return nil, ErrTemplateNotFound
+	}
+	if template.UserID != userID {
+		return nil, ErrTemplateNotFound
+	}
+	return template, nil
+}
+
+// UpdateTemplate updates an embed template
+func (s *EmbedService) UpdateTemplate(ctx context.Context, userID, templateID uuid.UUID, req *models.UpdateEmbedTemplateRequest) (*models.EmbedTemplate, error) {
+	template, err := s.repo.GetTemplateByID(ctx, templateID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get template: %w", err)
+	}
+	if template == nil {
+		return nil, ErrTemplateNotFound
+	}
+	if template.UserID != userID {
+		return nil, ErrTemplateNotFound
+	}
+
+	// Update fields if provided
+	if req.Name != nil {
+		template.Name = *req.Name
+	}
+	if req.Title != nil {
+		template.Title = req.Title
+	}
+	if req.Description != nil {
+		template.Description = req.Description
+	}
+	if req.URL != nil {
+		template.URL = req.URL
+	}
+	if req.Color != nil {
+		template.Color = req.Color
+	}
+	if req.AuthorName != nil {
+		template.AuthorName = req.AuthorName
+	}
+	if req.AuthorURL != nil {
+		template.AuthorURL = req.AuthorURL
+	}
+	if req.AuthorIcon != nil {
+		template.AuthorIcon = req.AuthorIcon
+	}
+	if req.FooterText != nil {
+		template.FooterText = req.FooterText
+	}
+	if req.FooterIcon != nil {
+		template.FooterIcon = req.FooterIcon
+	}
+	if req.ImageURL != nil {
+		template.ImageURL = req.ImageURL
+	}
+	if req.ThumbnailURL != nil {
+		template.ThumbnailURL = req.ThumbnailURL
+	}
+	template.UpdatedAt = time.Now()
+
+	if err := s.repo.UpdateTemplate(ctx, template); err != nil {
+		return nil, fmt.Errorf("failed to update template: %w", err)
+	}
+
+	return template, nil
+}
+
+// DeleteTemplate deletes an embed template
+func (s *EmbedService) DeleteTemplate(ctx context.Context, userID, templateID uuid.UUID) error {
+	if err := s.repo.DeleteTemplate(ctx, templateID, userID); err != nil {
+		return ErrTemplateNotFound
+	}
+	return nil
+}
+
+// FetchURLMetadata fetches OpenGraph/metadata for a URL and returns a link preview response
+func (s *EmbedService) FetchURLMetadata(ctx context.Context, rawURL string) (*models.LinkPreviewResponse, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return nil, ErrInvalidURL
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, ErrInvalidURL
+	}
+	req.Header.Set("User-Agent", "HearthEmbedPreview/1.0 (+https://hearth.chat)")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, ErrUnreachableURL
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return nil, ErrUnreachableURL
+	}
+
+	// Limit body read
+	limited := io.LimitReader(resp.Body, 5*1024*1024) // 5MB
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, ErrUnreachableURL
+	}
+
+	htmlContent := string(body)
+
+	preview := &models.LinkPreviewResponse{
+		ID:   uuid.New(),
+		URL:  rawURL,
+		Type: "website",
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "video") {
+		preview.Type = "video"
+	} else if strings.Contains(contentType, "audio") {
+		preview.Type = "audio"
+	} else if strings.Contains(contentType, "image") {
+		preview.Type = "image"
+	}
+
+	// Extract title from <title> tag as fallback
+	if preview.Title == nil {
+		if titleMatch := regexp.MustCompile(`<title[^>]*>([^<]+)</title>`).FindStringSubmatch(htmlContent); len(titleMatch) > 1 {
+			title := titleMatch[1]
+			preview.Title = &title
+		}
+	}
+
+	return preview, nil
+}
+
+// TemplateToEmbedData converts a template to EmbedData for the frontend
+func (s *EmbedService) TemplateToEmbedData(template *models.EmbedTemplate) map[string]interface{} {
+	data := make(map[string]interface{})
+
+	if template.Title != nil {
+		data["title"] = *template.Title
+	}
+	if template.Description != nil {
+		data["description"] = *template.Description
+	}
+	if template.URL != nil {
+		data["url"] = *template.URL
+	}
+	if template.Color != nil {
+		data["color"] = *template.Color
+	}
+	if template.AuthorName != nil || template.AuthorURL != nil || template.AuthorIcon != nil {
+		author := make(map[string]interface{})
+		if template.AuthorName != nil {
+			author["name"] = *template.AuthorName
+		}
+		if template.AuthorURL != nil {
+			author["url"] = *template.AuthorURL
+		}
+		if template.AuthorIcon != nil {
+			author["icon"] = *template.AuthorIcon
+		}
+		data["author"] = author
+	}
+	if template.FooterText != nil || template.FooterIcon != nil {
+		footer := make(map[string]interface{})
+		if template.FooterText != nil {
+			footer["text"] = *template.FooterText
+		}
+		if template.FooterIcon != nil {
+			footer["icon"] = *template.FooterIcon
+		}
+		data["footer"] = footer
+	}
+	if template.ImageURL != nil {
+		data["image_url"] = *template.ImageURL
+	}
+	if template.ThumbnailURL != nil {
+		data["thumbnail_url"] = *template.ThumbnailURL
+	}
+
+	return data
+}
+
+// MentionType represents different types of mentions
+type MentionType string
+
+const (
+	MentionTypeUser     MentionType = "user"
+	MentionTypeRole     MentionType = "role"
+	MentionTypeEveryone MentionType = "everyone"
+	MentionTypeHere     MentionType = "here"
+)
+
+// ParsedMention represents a parsed mention from message content
+type ParsedMention struct {
+	Type     MentionType
+	ID       *uuid.UUID // nil for @everyone/@here
+	Username string     // For display purposes
+	Raw      string     // The original matched text
+	Start    int        // Position in string
+	End      int        // End position in string
+}
+
+// MentionParseResult contains all parsed mentions from a message
+type MentionParseResult struct {
+	UserMentions    []uuid.UUID
+	RoleMentions    []uuid.UUID
+	MentionEveryone bool
+	MentionHere     bool
+	AllMentions     []ParsedMention
+}
+
+// MentionService handles mention parsing and notification creation
+type MentionService struct {
+	userRepo         UserRepository
+	roleRepo         RoleRepository
+	memberRepo       ServerRepository
+	notificationRepo NotificationRepository
+	readStateRepo    ReadStateRepository
+	mentionRepo      MentionRepository
+	eventBus         EventBus
+}
+
+// NewMentionService creates a new mention service
+func NewMentionService(
+	userRepo UserRepository,
+	roleRepo RoleRepository,
+	memberRepo ServerRepository,
+	notificationRepo NotificationRepository,
+	readStateRepo ReadStateRepository,
+	eventBus EventBus,
+) *MentionService {
+	return &MentionService{
+		userRepo:         userRepo,
+		roleRepo:         roleRepo,
+		memberRepo:       memberRepo,
+		notificationRepo: notificationRepo,
+		readStateRepo:    readStateRepo,
+		eventBus:         eventBus,
+	}
+}
+
+// NewMentionServiceWithRepo creates a new mention service with mention repository
+func NewMentionServiceWithRepo(
+	userRepo UserRepository,
+	roleRepo RoleRepository,
+	memberRepo ServerRepository,
+	notificationRepo NotificationRepository,
+	readStateRepo ReadStateRepository,
+	mentionRepo MentionRepository,
+	eventBus EventBus,
+) *MentionService {
+	return &MentionService{
+		userRepo:         userRepo,
+		roleRepo:         roleRepo,
+		memberRepo:       memberRepo,
+		notificationRepo: notificationRepo,
+		readStateRepo:    readStateRepo,
+		mentionRepo:      mentionRepo,
+		eventBus:         eventBus,
+	}
+}
+
+// SetMentionRepo sets the mention repository (allows adding after creation)
+func (s *MentionService) SetMentionRepo(repo MentionRepository) {
+	s.mentionRepo = repo
+}
+
+var (
+	// Matches @username (alphanumeric + underscore, 2-32 chars)
+	userMentionRegex = regexp.MustCompile(`@([a-zA-Z0-9_]{2,32})`)
+	// Matches <@user_id> format (Discord-style)
+	userIDMentionRegex = regexp.MustCompile(`<@!?([a-f0-9-]{36})>`)
+	// Matches <@&role_id> format (Discord-style role mention)
+	roleMentionRegex = regexp.MustCompile(`<@&([a-f0-9-]{36})>`)
+	// Matches @everyone
+	everyoneMentionRegex = regexp.MustCompile(`@everyone\b`)
+	// Matches @here
+	hereMentionRegex = regexp.MustCompile(`@here\b`)
+)
+
+// ParseMentions extracts all mentions from message content
+func (s *MentionService) ParseMentions(ctx context.Context, content string, serverID *uuid.UUID) (*MentionParseResult, error) {
+	result := &MentionParseResult{
+		UserMentions: make([]uuid.UUID, 0),
+		RoleMentions: make([]uuid.UUID, 0),
+		AllMentions:  make([]ParsedMention, 0),
+	}
+
+	seenUsers := make(map[uuid.UUID]bool)
+	seenRoles := make(map[uuid.UUID]bool)
+
+	// Parse @everyone
+	if everyoneMentionRegex.MatchString(content) {
+		result.MentionEveryone = true
+		matches := everyoneMentionRegex.FindAllStringIndex(content, -1)
+		for _, match := range matches {
+			result.AllMentions = append(result.AllMentions, ParsedMention{
+				Type:  MentionTypeEveryone,
+				Raw:   "@everyone",
+				Start: match[0],
+				End:   match[1],
+			})
+		}
+	}
+
+	// Parse @here
+	if hereMentionRegex.MatchString(content) {
+		result.MentionHere = true
+		matches := hereMentionRegex.FindAllStringIndex(content, -1)
+		for _, match := range matches {
+			result.AllMentions = append(result.AllMentions, ParsedMention{
+				Type:  MentionTypeHere,
+				Raw:   "@here",
+				Start: match[0],
+				End:   match[1],
+			})
+		}
+	}
+
+	// Parse <@user_id> format
+	userIDMatches := userIDMentionRegex.FindAllStringSubmatchIndex(content, -1)
+	for _, match := range userIDMatches {
+		idStr := content[match[2]:match[3]]
+		if id, err := uuid.Parse(idStr); err == nil {
+			if !seenUsers[id] {
+				seenUsers[id] = true
+				result.UserMentions = append(result.UserMentions, id)
+			}
+			result.AllMentions = append(result.AllMentions, ParsedMention{
+				Type:  MentionTypeUser,
+				ID:    &id,
+				Raw:   content[match[0]:match[1]],
+				Start: match[0],
+				End:   match[1],
+			})
+		}
+	}
+
+	// Parse <@&role_id> format
+	roleMatches := roleMentionRegex.FindAllStringSubmatchIndex(content, -1)
+	for _, match := range roleMatches {
+		idStr := content[match[2]:match[3]]
+		if id, err := uuid.Parse(idStr); err == nil {
+			if !seenRoles[id] {
+				seenRoles[id] = true
+				result.RoleMentions = append(result.RoleMentions, id)
+			}
+			result.AllMentions = append(result.AllMentions, ParsedMention{
+				Type:  MentionTypeRole,
+				ID:    &id,
+				Raw:   content[match[0]:match[1]],
+				Start: match[0],
+				End:   match[1],
+			})
+		}
+	}
+
+	// Parse @username format (resolve to user IDs)
+	userMatches := userMentionRegex.FindAllStringSubmatchIndex(content, -1)
+	for _, match := range userMatches {
+		username := content[match[2]:match[3]]
+		rawMention := content[match[0]:match[1]]
+
+		// Skip if it's @everyone or @here
+		if username == "everyone" || username == "here" {
+			continue
+		}
+
+		// Try to resolve username to user
+		user, err := s.userRepo.GetByUsername(ctx, username)
+		if err == nil && user != nil {
+			if !seenUsers[user.ID] {
+				seenUsers[user.ID] = true
+				result.UserMentions = append(result.UserMentions, user.ID)
+			}
+			id := user.ID
+			result.AllMentions = append(result.AllMentions, ParsedMention{
+				Type:     MentionTypeUser,
+				ID:       &id,
+				Username: username,
+				Raw:      rawMention,
+				Start:    match[0],
+				End:      match[1],
+			})
+		}
+	}
+
+	return result, nil
+}
+
+// ParseMentionsSimple is a simpler version that just extracts user IDs
+// Used by the message service for the Mentions field
+func ParseMentionsSimple(content string) []uuid.UUID {
+	mentions := make([]uuid.UUID, 0)
+	seen := make(map[uuid.UUID]bool)
+
+	// Parse <@user_id> format
+	matches := userIDMentionRegex.FindAllStringSubmatch(content, -1)
+	for _, match := range matches {
+		if len(match) > 1 {
+			if id, err := uuid.Parse(match[1]); err == nil {
+				if !seen[id] {
+					seen[id] = true
+					mentions = append(mentions, id)
+				}
+			}
+		}
+	}
+
+	return mentions
+}
+
+// ProcessMessageMentions processes mentions in a message and creates notifications
+func (s *MentionService) ProcessMessageMentions(
+	ctx context.Context,
+	message *models.Message,
+	author *models.User,
+	serverID *uuid.UUID,
+) error {
+	if message.EncryptedContent != "" {
+		// Skip encrypted messages - can't parse mentions
+		return nil
+	}
+
+	result, err := s.ParseMentions(ctx, message.Content, serverID)
+	if err != nil {
+		return err
+	}
+
+	// Update message with parsed mentions
+	message.Mentions = result.UserMentions
+	message.MentionRoles = result.RoleMentions
+	message.MentionEveryone = result.MentionEveryone
+
+	// Create notifications and mention records for user mentions
+	for _, userID := range result.UserMentions {
+		if userID == message.AuthorID {
+			continue // Don't notify yourself
+		}
+		// SECURITY: Validate user is a server member before sending mention notification
+		// This prevents users from mentioning arbitrary people who aren't in the server
+		if serverID != nil && s.memberRepo != nil {
+			member, err := s.memberRepo.GetMember(ctx, *serverID, userID)
+			if err != nil || member == nil {
+				continue // User is not a server member, skip notification
+			}
+		}
+		if err := s.createMentionNotification(ctx, message, author, userID, serverID); err != nil {
+			continue // Log but don't fail
+		}
+		// Create mention record
+		if s.mentionRepo != nil {
+			mention := &models.Mention{
+				UserID:      userID,
+				MessageID:   message.ID,
+				MentionedBy: message.AuthorID,
+				ChannelID:   message.ChannelID,
+				GuildID:     serverID,
+				MentionType: models.MentionKindUser,
+			}
+			_ = s.mentionRepo.Create(ctx, mention)
+		}
+		// Increment mention count for read state
+		if err := s.readStateRepo.IncrementMentionCount(ctx, userID, message.ChannelID); err != nil {
+			continue
+		}
+	}
+
+	// Handle @everyone/@here mentions in servers
+	if serverID != nil && (result.MentionEveryone || result.MentionHere) {
+		mentionType := models.MentionKindEveryone
+		if result.MentionHere {
+			mentionType = models.MentionKindHere
+		}
+		members, err := s.getAllMembersWithPagination(ctx, *serverID)
+		if err == nil {
+			for _, member := range members {
+				if member.UserID == message.AuthorID {
+					continue
+				}
+				// For @here, we'd check online status - simplified for now
+				if err := s.createMentionNotification(ctx, message, author, member.UserID, serverID); err != nil {
+					continue
+				}
+				// Create mention record
+				if s.mentionRepo != nil {
+					mention := &models.Mention{
+						UserID:      member.UserID,
+						MessageID:   message.ID,
+						MentionedBy: message.AuthorID,
+						ChannelID:   message.ChannelID,
+						GuildID:     serverID,
+						MentionType: mentionType,
+					}
+					_ = s.mentionRepo.Create(ctx, mention)
+				}
+				if err := s.readStateRepo.IncrementMentionCount(ctx, member.UserID, message.ChannelID); err != nil {
+					continue
+				}
+			}
+		}
+	}
+
+	// Handle role mentions
+	if serverID != nil && len(result.RoleMentions) > 0 {
+		for _, roleID := range result.RoleMentions {
+			// Get members with this role
+			membersWithRole, err := s.memberRepo.GetMembersWithRole(ctx, *serverID, roleID)
+			if err != nil {
+				continue
+			}
+			for _, member := range membersWithRole {
+				if member.UserID == message.AuthorID {
+					continue
+				}
+				if err := s.createMentionNotification(ctx, message, author, member.UserID, serverID); err != nil {
+					continue
+				}
+				// Create mention record for role mention
+				if s.mentionRepo != nil {
+					mention := &models.Mention{
+						UserID:          member.UserID,
+						MessageID:       message.ID,
+						MentionedBy:     message.AuthorID,
+						ChannelID:       message.ChannelID,
+						GuildID:         serverID,
+						MentionType:     models.MentionKindRole,
+						MentionedRoleID: &roleID,
+					}
+					_ = s.mentionRepo.Create(ctx, mention)
+				}
+				if err := s.readStateRepo.IncrementMentionCount(ctx, member.UserID, message.ChannelID); err != nil {
+					continue
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// createMentionNotification creates a notification for a mention
+func (s *MentionService) createMentionNotification(
+	ctx context.Context,
+	message *models.Message,
+	author *models.User,
+	recipientID uuid.UUID,
+	serverID *uuid.UUID,
+) error {
+	// Truncate content for notification body
+	body := message.Content
+	if len(body) > 200 {
+		body = body[:197] + "..."
+	}
+
+	notification := &models.Notification{
+		UserID:    recipientID,
+		Type:      models.NotificationTypeMention,
+		Title:     author.Username + " mentioned you",
+		Body:      body,
+		ActorID:   &message.AuthorID,
+		ServerID:  serverID,
+		ChannelID: &message.ChannelID,
+		MessageID: &message.ID,
+	}
+
+	if err := s.notificationRepo.Create(ctx, notification); err != nil {
+		return err
+	}
+
+	// Emit event for real-time delivery
+	s.eventBus.Publish("notification.created", &NotificationCreatedEvent{
+		Notification: notification,
+	})
+
+	return nil
+}
+
+// ProcessReplyMention creates a notification when someone replies to a message
+func (s *MentionService) ProcessReplyMention(
+	ctx context.Context,
+	message *models.Message,
+	author *models.User,
+	replyToAuthorID uuid.UUID,
+	serverID *uuid.UUID,
+) error {
+	if replyToAuthorID == message.AuthorID {
+		return nil // Don't notify yourself
+	}
+
+	body := message.Content
+	if len(body) > 200 {
+		body = body[:197] + "..."
+	}
+
+	notification := &models.Notification{
+		UserID:    replyToAuthorID,
+		Type:      models.NotificationTypeReply,
+		Title:     author.Username + " replied to you",
+		Body:      body,
+		ActorID:   &message.AuthorID,
+		ServerID:  serverID,
+		ChannelID: &message.ChannelID,
+		MessageID: &message.ID,
+	}
+
+	if err := s.notificationRepo.Create(ctx, notification); err != nil {
+		return err
+	}
+
+	// Emit event for real-time delivery
+	s.eventBus.Publish("notification.created", &NotificationCreatedEvent{
+		Notification: notification,
+	})
+
+	// Increment mention count
+	return s.readStateRepo.IncrementMentionCount(ctx, replyToAuthorID, message.ChannelID)
+}
+
+// FormatMentionContent converts @username mentions to <@user_id> format for storage
+func (s *MentionService) FormatMentionContent(ctx context.Context, content string) string {
+	// Find all @username mentions and replace with <@user_id>
+	result := userMentionRegex.ReplaceAllStringFunc(content, func(match string) string {
+		username := strings.TrimPrefix(match, "@")
+		if username == "everyone" || username == "here" {
+			return match // Keep as-is
+		}
+		user, err := s.userRepo.GetByUsername(ctx, username)
+		if err == nil && user != nil {
+			return "<@" + user.ID.String() + ">"
+		}
+		return match // Keep original if user not found
+	})
+	return result
+}
+
+// RenderMentionContent converts <@user_id> format back to displayable format
+func RenderMentionContent(content string, usernames map[uuid.UUID]string) string {
+	result := userIDMentionRegex.ReplaceAllStringFunc(content, func(match string) string {
+		// Extract ID from <@id> or <@!id>
+		idStr := strings.TrimPrefix(match, "<@")
+		idStr = strings.TrimPrefix(idStr, "!")
+		idStr = strings.TrimSuffix(idStr, ">")
+
+		if id, err := uuid.Parse(idStr); err == nil {
+			if username, ok := usernames[id]; ok {
+				return "@" + username
+			}
+		}
+		return match
+	})
+	return result
+}
+
+func (s *MentionService) getAllMembersWithPagination(ctx context.Context, serverID uuid.UUID) ([]*models.Member, error) {
+	const batchSize = 100
+	var allMembers []*models.Member
+	var cursor *models.MemberCursor
+
+	for {
+		result, err := s.memberRepo.GetMembersPaginated(ctx, serverID, cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+
+		allMembers = append(allMembers, result.Members...)
+
+		if !result.HasMore {
+			break
+		}
+
+		nextCursor, err := models.DecodeMemberCursor(result.NextCursor)
+		if err != nil {
+			return nil, err
+		}
+		cursor = nextCursor
+	}
+
+	return allMembers, nil
 }

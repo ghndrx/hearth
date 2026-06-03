@@ -70,7 +70,7 @@ func (m *mockReadStateService) MarkServerAsRead(ctx context.Context, userID, ser
 
 func setupReadStateTestApp(svc *mockReadStateService) *fiber.App {
 	app := fiber.New()
-	h := NewReadStateHandler(svc)
+	h := &NotificationHandler{readStateService: svc}
 
 	app.Use(func(c *fiber.Ctx) error {
 		userIDStr := c.Get("X-Test-User-ID")

@@ -2,7 +2,7 @@
 # Multi-stage build for minimal, secure production image
 # Security best practices applied throughout
 
-ARG GO_VERSION=1.25.8
+ARG GO_VERSION=1.26
 ARG NODE_VERSION=22
 ARG ALPINE_VERSION=3.20
 
@@ -34,17 +34,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # =============================================================================
 # Stage 2: Build frontend
 # =============================================================================
-FROM node:${NODE_VERSION}-alpine AS frontend-builder
+FROM oven/bun:1-alpine AS frontend-builder
 
 WORKDIR /build
 
 # Cache dependencies
-COPY frontend/package*.json ./
-RUN npm ci --ignore-scripts --no-audit
+COPY frontend/package.json frontend/bun.lock ./
+RUN bun install --frozen-lockfile
 
 # Copy source and build
 COPY frontend/ ./
-RUN npm run build
+RUN bun run build
 
 # =============================================================================
 # Stage 3: Production image

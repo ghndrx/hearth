@@ -159,10 +159,7 @@ describe('FileUpload', () => {
 	});
 
 	describe('file removal', () => {
-		// Skip - Svelte 5 custom events cannot be captured via addEventListener on DOM
-		it.skip('dispatches remove event when file removed', async () => {
-			// Svelte 5 events dispatched via createEventDispatcher can't be captured with DOM addEventListener
-		});
+
 
 		it('shows remove button for files', () => {
 			render(FileUpload, {
@@ -198,11 +195,7 @@ describe('FileUpload', () => {
 			expect(screen.getByText('Drop files here')).toBeInTheDocument();
 		});
 
-		// Skip - drag state management in tests is complex with nested elements
-		it.skip('hides drag overlay on dragleave', async () => {
-			// Drag leave behavior depends on mouse leaving the entire component area
-			// which is difficult to simulate properly in tests
-		});
+
 	});
 
 	describe('upload progress', () => {
@@ -247,10 +240,7 @@ describe('FileUpload', () => {
 	});
 
 	describe('upload action', () => {
-		// Skip - Svelte 5 custom events cannot be captured via addEventListener on DOM
-		it.skip('dispatches upload event when upload button clicked', async () => {
-			// Svelte 5 events dispatched via createEventDispatcher can't be captured with DOM addEventListener
-		});
+
 
 		it('shows upload button when files are present', () => {
 			render(FileUpload, {

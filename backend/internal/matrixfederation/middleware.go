@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -211,10 +212,44 @@ func isUnauthenticatedEndpoint(path string) bool {
 
 // checkRequestAge verifies the request timestamp is within acceptable bounds.
 func (fm *FederationMiddleware) checkRequestAge(c *fiber.Ctx) error {
-	// Matrix uses the X-Matrix-Origin-TS header or we can check the request time
-	// For simplicity, we just check that the request isn't too old based on
-	// the current time. In production, you might want to check a timestamp header.
-	return nil
+	now := time.Now()
+	maxAge := time.Duration(fm.maxRequestAge) * time.Millisecond
+	futureTolerance := time.Minute
+
+	// Try X-Matrix-Origin-TS header first
+	tsHeader := string(c.Request().Header.Peek("X-Matrix-Origin-TS"))
+	if tsHeader != "" {
+		ts, err := strconv.ParseInt(tsHeader, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid timestamp header")
+		}
+		reqTime := time.UnixMilli(ts)
+		if now.Sub(reqTime) > maxAge {
+			return fmt.Errorf("request too old")
+		}
+		if reqTime.Sub(now) > futureTolerance {
+			return fmt.Errorf("request timestamp is in the future")
+		}
+		return nil
+	}
+
+	// Fall back to Date header
+	dateHeader := string(c.Request().Header.Peek("Date"))
+	if dateHeader != "" {
+		reqTime, err := http.ParseTime(dateHeader)
+		if err != nil {
+			return fmt.Errorf("invalid date header")
+		}
+		if now.Sub(reqTime) > maxAge {
+			return fmt.Errorf("request too old")
+		}
+		if reqTime.Sub(now) > futureTolerance {
+			return fmt.Errorf("request timestamp is in the future")
+		}
+		return nil
+	}
+
+	return fmt.Errorf("missing timestamp header")
 }
 
 // verifyRequestSignature verifies the X-Matrix signature on the request.
@@ -292,7 +327,11 @@ func (fcm *FederationClientMiddleware) SignRequest(req *http.Request) error {
 	// Read the request body
 	var body []byte
 	if req.Body != nil {
-		body, _ = io.ReadAll(req.Body)
+		var err error
+		body, err = io.ReadAll(req.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read request body: %w", err)
+		}
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
@@ -327,6 +366,7 @@ func (fcm *FederationClientMiddleware) SignRequest(req *http.Request) error {
 		sig,
 	)
 	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("X-Matrix-Origin-TS", strconv.FormatInt(time.Now().UnixMilli(), 10))
 
 	return nil
 }

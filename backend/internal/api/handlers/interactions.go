@@ -248,7 +248,10 @@ func (h *InteractionHandler) HandleModalSubmit(c *fiber.Ctx) error {
 	}
 
 	// Get the user ID from the authenticated context
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	// Create a modal submit interaction
 	interaction := &models.Interaction{

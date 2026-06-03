@@ -7,6 +7,7 @@
  * we test what we can and document the component's behavior.
  */
 import { describe, it, expect } from 'vitest';
+import VoiceMiniPlayer from './VoiceMiniPlayer.svelte';
 
 // Note: Full integration tests for VoiceMiniPlayer would require mocking
 // the voice stores ($lib/stores/voice) which are imported by the component.
@@ -24,9 +25,8 @@ import { describe, it, expect } from 'vitest';
 describe('VoiceMiniPlayer', () => {
 	describe('Component Structure', () => {
 		it('should export as a Svelte component', async () => {
-			// Verify the component can be imported
-			const module = await import('./VoiceMiniPlayer.svelte');
-			expect(module.default).toBeDefined();
+			// Verify the component is defined
+			expect(VoiceMiniPlayer).toBeDefined();
 		});
 	});
 
@@ -118,8 +118,6 @@ describe('VoiceMiniPlayer', () => {
 describe('VoiceMiniPlayer - Import Test', () => {
 	it('component should be importable', async () => {
 		// This will fail if the component has syntax errors or invalid imports
-		const module = await import('./VoiceMiniPlayer.svelte');
-		expect(module).toBeDefined();
-		expect(module.default).toBeDefined();
+		expect(VoiceMiniPlayer).toBeDefined();
 	});
 });

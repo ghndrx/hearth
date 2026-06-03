@@ -124,10 +124,6 @@ func httpErr(status int, errType, message string) *HTTPError {
 	return &HTTPError{Status: status, ErrorType: errType, Message: message}
 }
 
-func httpErrWithCode(status int, errType, message, code string) *HTTPError {
-	return &HTTPError{Status: status, ErrorType: errType, Message: message, Code: code}
-}
-
 // HandleServiceError maps a service error to an HTTPError.
 // The caller MUST return this error to Fiber (not nil) so that Fiber's
 // custom error handler serializes it as JSON.
@@ -340,6 +336,15 @@ func HandleServiceError(c *fiber.Ctx, err error) error {
 
 	case errors.Is(err, services.ErrFolderNameRequired):
 		return httpErr(fiber.StatusBadRequest, "bad_request", "folder name is required")
+
+	case errors.Is(err, services.ErrScreeningAlreadyExists):
+		return httpErr(fiber.StatusConflict, "conflict", "screening already submitted")
+
+	case errors.Is(err, services.ErrModerationRuleNotFound):
+		return httpErr(fiber.StatusNotFound, "not_found", "moderation rule not found")
+
+	case errors.Is(err, services.ErrNotServerModerator):
+		return httpErr(fiber.StatusForbidden, "forbidden", "only server moderators can perform this action")
 
 	case errors.Is(err, services.ErrRegistrationClosed):
 		return httpErr(fiber.StatusForbidden, "forbidden", "registration is currently closed")

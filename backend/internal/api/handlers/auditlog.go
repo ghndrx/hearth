@@ -70,7 +70,10 @@ func NewAuditLogHandler(auditLogService AuditLogServiceInterface, serverService 
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/audit-logs [get]
 func (h *AuditLogHandler) GetAuditLogs(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	// Parse server ID
 	serverID, err := uuid.Parse(c.Params("id"))
@@ -223,7 +226,10 @@ func (h *AuditLogHandler) GetAuditLogs(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/audit-logs/{entryId} [get]
 func (h *AuditLogHandler) GetAuditLogEntry(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	// Parse server ID
 	serverID, err := uuid.Parse(c.Params("id"))
@@ -280,7 +286,10 @@ func (h *AuditLogHandler) GetAuditLogEntry(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/audit-logs/action-types [get]
 func (h *AuditLogHandler) GetActionTypes(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	// Parse server ID
 	serverID, err := uuid.Parse(c.Params("id"))
@@ -320,7 +329,10 @@ func (h *AuditLogHandler) GetActionTypes(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/audit-logs/categories [get]
 func (h *AuditLogHandler) GetCategories(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	// Parse server ID
 	serverID, err := uuid.Parse(c.Params("id"))
@@ -361,7 +373,10 @@ func (h *AuditLogHandler) GetCategories(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/moderation/dashboard [get]
 func (h *AuditLogHandler) GetModerationDashboard(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -417,7 +432,10 @@ func (h *AuditLogHandler) GetModerationDashboard(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/moderation/trends [get]
 func (h *AuditLogHandler) GetModerationTrend(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -476,7 +494,10 @@ func (h *AuditLogHandler) GetModerationTrend(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/moderation/moderators [get]
 func (h *AuditLogHandler) GetModeratorActivity(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -536,7 +557,10 @@ func (h *AuditLogHandler) GetModeratorActivity(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/moderation/offenders [get]
 func (h *AuditLogHandler) GetRepeatOffenders(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -606,7 +630,10 @@ func (h *AuditLogHandler) GetRepeatOffenders(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/moderation/automod [get]
 func (h *AuditLogHandler) GetAutoModStats(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -668,7 +695,10 @@ func (h *AuditLogHandler) GetAutoModStats(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/audit-logs/export [get]
 func (h *AuditLogHandler) ExportAuditLogs(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {

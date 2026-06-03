@@ -28,6 +28,7 @@ type FederationClient struct {
 	keyStore      *KeyStore
 	homeserverCfg *matrix.HomeserverConfig
 	userAgent     string
+	rateLimiter  *FederationRateLimiter
 }
 
 // FederationClientOptions configures the federation client.
@@ -40,6 +41,13 @@ type FederationClientOptions struct {
 
 	// RequestTimeout is the timeout for federation requests.
 	RequestTimeout time.Duration
+
+	// MaxRequestsPerWindow is the max requests per remote server per window.
+	// Default: 100 requests per 10 seconds.
+	MaxRequestsPerWindow int
+
+	// RateLimitWindow is the time window for rate limiting.
+	RateLimitWindow time.Duration
 }
 
 // NewFederationClient creates a new outbound federation client.
@@ -70,6 +78,7 @@ func NewFederationClient(keyStore *KeyStore, homeserverCfg *matrix.HomeserverCon
 		keyStore:      keyStore,
 		homeserverCfg: homeserverCfg,
 		userAgent:     userAgent,
+		rateLimiter:  NewFederationRateLimiter(opts.MaxRequestsPerWindow, opts.RateLimitWindow),
 	}
 }
 
@@ -114,6 +123,11 @@ func (c *FederationClient) ResolveServerName(ctx context.Context, serverName str
 //
 // Matrix spec § 12: PUT /_matrix/federation/v1/send/{txnId}.
 func (c *FederationClient) SendTransaction(ctx context.Context, serverName string, txnID string, pdus []map[string]interface{}, edus []map[string]interface{}) error {
+	// Check rate limit before attempting request
+	if c.rateLimiter != nil && !c.rateLimiter.Allow(serverName) {
+		return fmt.Errorf("rate limited for server %s", serverName)
+	}
+
 	targetURL, err := c.ResolveServerName(ctx, serverName)
 	if err != nil {
 		return fmt.Errorf("failed to resolve server %s: %w", serverName, err)

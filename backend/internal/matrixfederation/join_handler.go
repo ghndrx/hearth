@@ -16,7 +16,7 @@ import (
 
 // JoinHandler implements the make_join / send_join handshake.
 type JoinHandler struct {
-	stateStore     *InMemoryStateStore
+	stateStore     StateStore
 	eventStore     FederationEventStore
 	roomAliasStore RoomAliasStore
 	authChecker    *AuthChecker
@@ -26,7 +26,7 @@ type JoinHandler struct {
 // NewJoinHandler creates a new JoinHandler.
 func NewJoinHandler(
 	serverName string,
-	state *InMemoryStateStore,
+	state StateStore,
 	store FederationEventStore,
 	roomAlias RoomAliasStore,
 	auth *AuthChecker,

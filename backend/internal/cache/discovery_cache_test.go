@@ -76,10 +76,7 @@ func TestDiscoveryCacheKeyGeneration(t *testing.T) {
 		assert.Equal(t, "discovery:home:12345678-1234-1234-1234-123456789abc:5:10:10", key)
 	})
 
-	t.Run("discovery directory key", func(t *testing.T) {
-		key := discoveryDirectoryKey("test", "gaming", "popular", "desc", 25, 0)
-		assert.Equal(t, "discovery:directory:qtest:cgaming:spopular:odesc:l25:off0", key)
-	})
+
 }
 
 func TestDiscoveryCacheTTLValues(t *testing.T) {

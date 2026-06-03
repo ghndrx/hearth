@@ -49,7 +49,10 @@ type FollowChannelResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channelID}/followers [post]
 func (h *AnnouncementHandler) FollowChannel(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	sourceChannelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -148,7 +151,10 @@ func (h *AnnouncementHandler) FollowChannel(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channelID}/followers/{webhookID} [delete]
 func (h *AnnouncementHandler) UnfollowChannel(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	sourceChannelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -275,7 +281,10 @@ func (h *AnnouncementHandler) GetFollowers(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channelID}/messages/{messageID}/crosspost [post]
 func (h *AnnouncementHandler) CrosspostMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

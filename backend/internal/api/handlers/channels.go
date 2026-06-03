@@ -1,24 +1,36 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"hearth/internal/matrix"
+	"hearth/internal/matrixfederation"
 	"hearth/internal/models"
 	"hearth/internal/services"
 )
 
 type ChannelHandler struct {
-	channelService   *services.ChannelService
-	messageService   *services.MessageService
-	typingService    *services.TypingService
-	inviteService    *services.InviteService
-	componentService *services.ComponentService
+	channelService              *services.ChannelService
+	messageService              *services.MessageService
+	typingService               *services.TypingService
+	inviteService               *services.InviteService
+	componentService            *services.ComponentService
+	muteService                 ChannelMuteServiceInterface
+	notificationOverrideService ChannelNotificationOverrideService
+	serverService               *services.ServerService
+	roomAliasStore              matrixfederation.RoomAliasStore
+	homeserverCfg               *matrix.HomeserverConfig
+	eventStore                  matrixfederation.FederationEventStore
+	stateStore                  matrixfederation.StateStore
 }
 
+// NewChannelHandler creates a new channel handler
 func NewChannelHandler(channelService *services.ChannelService, messageService *services.MessageService) *ChannelHandler {
 	return &ChannelHandler{
 		channelService: channelService,
@@ -53,6 +65,41 @@ func NewChannelHandlerFull(
 // SetComponentService sets the component service for handling message components
 func (h *ChannelHandler) SetComponentService(componentService *services.ComponentService) {
 	h.componentService = componentService
+}
+
+// SetMuteService sets the mute service for channel mute operations
+func (h *ChannelHandler) SetMuteService(muteService ChannelMuteServiceInterface) {
+	h.muteService = muteService
+}
+
+// SetNotificationOverrideService sets the notification override service
+func (h *ChannelHandler) SetNotificationOverrideService(service ChannelNotificationOverrideService) {
+	h.notificationOverrideService = service
+}
+
+// SetServerService sets the server service for server-related operations
+func (h *ChannelHandler) SetServerService(serverService *services.ServerService) {
+	h.serverService = serverService
+}
+
+// SetRoomAliasStore sets the room alias store for federation
+func (h *ChannelHandler) SetRoomAliasStore(store matrixfederation.RoomAliasStore) {
+	h.roomAliasStore = store
+}
+
+// SetHomeserverConfig sets the homeserver config for federation
+func (h *ChannelHandler) SetHomeserverConfig(cfg *matrix.HomeserverConfig) {
+	h.homeserverCfg = cfg
+}
+
+// SetFederationEventStore sets the federation event store for persisting room state
+func (h *ChannelHandler) SetFederationEventStore(store matrixfederation.FederationEventStore) {
+	h.eventStore = store
+}
+
+// SetFederationStateStore sets the federation state store for tracking room state
+func (h *ChannelHandler) SetFederationStateStore(store matrixfederation.StateStore) {
+	h.stateStore = store
 }
 
 // Get returns a channel by ID
@@ -92,6 +139,177 @@ func (h *ChannelHandler) Get(c *fiber.Ctx) error {
 	return c.JSON(channel)
 }
 
+// Federate federates a Hearth channel to Matrix
+// @Summary Federate channel to Matrix
+// @Description Creates a Matrix room for a Hearth channel and bootstraps room state
+// @Tags Channels
+// @Produce json
+// @Param id path string true "Channel ID"
+// @Success 200 {object} fiber.Map "Room ID and alias"
+// @Failure 400 {object} fiber.Map "Invalid channel ID or cannot federate DM"
+// @Failure 403 {object} fiber.Map "Not authorized"
+// @Failure 404 {object} fiber.Map "Channel or server not found"
+// @Failure 409 {object} fiber.Map "Channel already federated"
+// @Failure 501 {object} fiber.Map "Federation not configured"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /channels/{id}/federate [post]
+func (h *ChannelHandler) Federate(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	if h.serverService == nil || h.roomAliasStore == nil || h.homeserverCfg == nil {
+		return NotImplemented(c, "federation not configured")
+	}
+
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return BadRequest(c, "invalid channel id")
+	}
+
+	channel, err := h.channelService.GetChannel(c.Context(), channelID)
+	if err != nil {
+		if errors.Is(err, services.ErrChannelNotFound) {
+			return NotFound(c, "channel not found")
+		}
+		return InternalError(c, "failed to get channel")
+	}
+
+	if channel.ServerID == nil {
+		return BadRequest(c, "cannot federate DM channel")
+	}
+
+	server, err := h.serverService.GetServer(c.Context(), *channel.ServerID)
+	if err != nil {
+		if errors.Is(err, services.ErrServerNotFound) {
+			return NotFound(c, "server not found")
+		}
+		return InternalError(c, "failed to get server")
+	}
+
+	// Check ownership or admin permission
+	if server.OwnerID != userID {
+		member, err := h.serverService.GetMember(c.Context(), server.ID, userID)
+		if err != nil {
+			return Forbidden(c, "not authorized")
+		}
+
+		roles, err := h.serverService.GetRoles(c.Context(), server.ID)
+		if err != nil {
+			return InternalError(c, "failed to get server roles")
+		}
+
+		isAdmin := false
+		memberRoleIDs := make(map[uuid.UUID]bool)
+		for _, rid := range member.Roles {
+			memberRoleIDs[rid] = true
+		}
+
+		for _, role := range roles {
+			if memberRoleIDs[role.ID] && role.Permissions&models.PermAdministrator != 0 {
+				isAdmin = true
+				break
+			}
+		}
+
+		if !isAdmin {
+			return Forbidden(c, "only server owners and administrators can federate channels")
+		}
+	}
+
+	// Generate room ID and alias
+	roomID := matrixfederation.GenerateRoomID(channelID, h.homeserverCfg.ServerName)
+	alias := matrixfederation.Alias{
+		Localpart:  "hearth-" + channelID.String(),
+		ServerName: h.homeserverCfg.ServerName,
+	}
+
+	// Persist the mapping
+	if err := h.roomAliasStore.CreateMapping(c.Context(), roomID, channelID, []matrixfederation.Alias{alias}); err != nil {
+		if errors.Is(err, matrixfederation.ErrAliasAlreadyExists) {
+			return Conflict(c, "channel is already federated")
+		}
+		return InternalError(c, "failed to create room mapping")
+	}
+
+	// Bootstrap room state
+	creatorMXID := h.homeserverCfg.MakeMXID(userID.String()).String()
+
+	// m.room.create
+	createEvent := matrixfederation.NewCreateEvent(roomID, creatorMXID, h.homeserverCfg.ServerName)
+
+	// m.room.power_levels
+	powerLevelsContent := matrixfederation.NewRoomPowerLevelsContent(creatorMXID)
+	powerLevelsEvent := matrixfederation.NewPowerLevelsEvent(
+		roomID, creatorMXID, h.homeserverCfg.ServerName, powerLevelsContent,
+		[]string{createEvent.EventID}, []string{createEvent.EventID}, 2,
+	)
+
+	// m.room.join_rules — default to invite-only since Server model has no Public field
+	joinRule := "invite"
+	emptyStateKey := ""
+	joinRulesEvent := &matrixfederation.Event{
+		EventID:        matrixfederation.GenerateEventID(uuid.New(), h.homeserverCfg.ServerName),
+		RoomID:         roomID.String(),
+		Sender:         creatorMXID,
+		Type:           matrixfederation.EventTypeJoinRules,
+		StateKey:       &emptyStateKey,
+		Content:        map[string]interface{}{"join_rule": joinRule},
+		PrevEvents:     []string{powerLevelsEvent.EventID},
+		AuthEvents:     []string{createEvent.EventID, powerLevelsEvent.EventID},
+		Depth:          3,
+		Origin:         h.homeserverCfg.ServerName,
+		OriginServerTS: time.Now().UnixMilli(),
+	}
+
+	// Store events if event store is configured
+	if h.eventStore != nil {
+		_ = h.eventStore.StoreEvent(c.Context(), createEvent)
+		_ = h.eventStore.StoreEvent(c.Context(), powerLevelsEvent)
+		_ = h.eventStore.StoreEvent(c.Context(), joinRulesEvent)
+	}
+
+	if h.stateStore != nil {
+		roomState := h.stateStore.GetOrCreateRoomState(roomID)
+		_ = roomState.AddEvent(createEvent)
+		_ = roomState.AddEvent(powerLevelsEvent)
+		_ = roomState.AddEvent(joinRulesEvent)
+	}
+
+	// Member events for existing server members
+	members, err := h.serverService.GetMembers(c.Context(), server.ID, 1000, 0)
+	if err == nil && len(members) > 0 {
+		prevEvents := []string{joinRulesEvent.EventID}
+		authEvents := []string{createEvent.EventID, powerLevelsEvent.EventID, joinRulesEvent.EventID}
+		depth := int64(4)
+
+		for _, member := range members {
+			memberMXID := h.homeserverCfg.MakeMXID(member.UserID.String()).String()
+			memberEvent := matrixfederation.NewMemberEvent(
+				roomID, creatorMXID, memberMXID, matrixfederation.MembershipJoin,
+				h.homeserverCfg.ServerName, prevEvents, authEvents, depth,
+			)
+
+			if h.eventStore != nil {
+				_ = h.eventStore.StoreEvent(c.Context(), memberEvent)
+			}
+			if h.stateStore != nil {
+				roomState := h.stateStore.GetOrCreateRoomState(roomID)
+				_ = roomState.AddEvent(memberEvent)
+			}
+
+			prevEvents = []string{memberEvent.EventID}
+			depth++
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"room_id": roomID.String(),
+		"alias":   alias.String(),
+	})
+}
+
 // Update updates a channel
 // @Summary Update channel
 // @Description Updates a channel's name, topic, position, NSFW flag, or slowmode settings
@@ -107,7 +325,10 @@ func (h *ChannelHandler) Get(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id} [patch]
 func (h *ChannelHandler) Update(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -180,7 +401,10 @@ func (h *ChannelHandler) Update(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id} [delete]
 func (h *ChannelHandler) Delete(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -214,7 +438,10 @@ func (h *ChannelHandler) Delete(c *fiber.Ctx) error {
 
 // ReorderChannels bulk-updates channel positions and category assignments
 func (h *ChannelHandler) ReorderChannels(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.ReorderChannelsRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -267,7 +494,10 @@ func (h *ChannelHandler) ReorderChannels(c *fiber.Ctx) error {
 // @Failure 403 {object} fiber.Map "Access denied"
 // @Router /channels/{id}/messages [get]
 func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -312,7 +542,10 @@ func (h *ChannelHandler) GetMessages(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/messages [post]
 func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -396,7 +629,10 @@ func (h *ChannelHandler) SendMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/messages/{messageId} [get]
 func (h *ChannelHandler) GetMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -442,7 +678,10 @@ func (h *ChannelHandler) GetMessage(c *fiber.Ctx) error {
 // @Failure 400 {object} fiber.Map "Invalid message ID or request body"
 // @Router /channels/{id}/messages/{messageId} [patch]
 func (h *ChannelHandler) EditMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -481,7 +720,10 @@ func (h *ChannelHandler) EditMessage(c *fiber.Ctx) error {
 // @Failure 403 {object} fiber.Map "Access denied"
 // @Router /channels/{id}/messages/{messageId} [delete]
 func (h *ChannelHandler) DeleteMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -509,7 +751,10 @@ func (h *ChannelHandler) DeleteMessage(c *fiber.Ctx) error {
 // @Failure 400 {object} fiber.Map "Invalid message ID"
 // @Router /channels/{id}/messages/{messageId}/reactions/{emoji} [put]
 func (h *ChannelHandler) AddReaction(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -538,7 +783,10 @@ func (h *ChannelHandler) AddReaction(c *fiber.Ctx) error {
 // @Failure 400 {object} fiber.Map "Invalid message ID"
 // @Router /channels/{id}/messages/{messageId}/reactions/{emoji} [delete]
 func (h *ChannelHandler) RemoveReaction(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -570,7 +818,10 @@ func (h *ChannelHandler) RemoveReaction(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/messages/{messageId}/reactions [get]
 func (h *ChannelHandler) GetReactions(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -619,7 +870,10 @@ func (h *ChannelHandler) GetReactions(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/messages/{messageId}/reactions/{emoji} [get]
 func (h *ChannelHandler) GetReactionUsers(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -667,7 +921,10 @@ func (h *ChannelHandler) GetReactionUsers(c *fiber.Ctx) error {
 // @Failure 404 {object} fiber.Map "Message not found"
 // @Router /channels/{id}/messages/{messageId}/reactions [delete]
 func (h *ChannelHandler) RemoveAllReactions(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -717,7 +974,10 @@ func (h *ChannelHandler) GetPins(c *fiber.Ctx) error {
 // @Failure 400 {object} fiber.Map "Invalid message ID"
 // @Router /channels/{id}/pins/{messageId} [put]
 func (h *ChannelHandler) PinMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -747,7 +1007,10 @@ func (h *ChannelHandler) PinMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/pins/{messageId} [delete]
 func (h *ChannelHandler) UnpinMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -790,7 +1053,10 @@ func (h *ChannelHandler) UnpinMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/typing [post]
 func (h *ChannelHandler) TriggerTyping(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -887,7 +1153,10 @@ func (h *ChannelHandler) GetTypingUsers(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/invites [post]
 func (h *ChannelHandler) CreateInvite(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -900,7 +1169,11 @@ func (h *ChannelHandler) CreateInvite(c *fiber.Ctx) error {
 		MaxUses   int  `json:"max_uses"` // 0 = unlimited
 		Temporary bool `json:"temporary"`
 	}
-	_ = c.BodyParser(&req) // Optional body
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
 
 	// Get channel to find server ID
 	channel, err := h.channelService.GetChannel(c.Context(), channelID)
@@ -983,7 +1256,10 @@ func (h *ChannelHandler) CreateInvite(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/permission-overwrites [get]
 func (h *ChannelHandler) GetPermissionOverrides(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -1031,7 +1307,10 @@ func (h *ChannelHandler) GetPermissionOverrides(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/permission-overwrites [put]
 func (h *ChannelHandler) SetPermissionOverride(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -1108,7 +1387,10 @@ func (h *ChannelHandler) SetPermissionOverride(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{id}/permission-overwrites/{targetType}/{targetId} [delete]
 func (h *ChannelHandler) DeletePermissionOverride(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -1156,4 +1438,275 @@ func (h *ChannelHandler) DeletePermissionOverride(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// ChannelMuteServiceInterface defines the methods needed from UserChannelSettingsService
+type ChannelMuteServiceInterface interface {
+	SetChannelMuted(ctx context.Context, userID, channelID uuid.UUID, muted bool) (*models.UserChannelSettings, error)
+	IsChannelMuted(ctx context.Context, userID, channelID uuid.UUID) (bool, error)
+	GetMutedChannelIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+}
+
+// SetChannelMute sets the mute state for a channel
+// @Summary Mute or unmute a channel
+// @Description Sets the mute state for a channel for the current user
+// @Tags Channel Settings
+// @Accept json
+// @Produce json
+// @Param id path string true "Channel ID (UUID)"
+// @Param body body models.UpdateChannelMuteRequest true "Mute state"
+// @Success 200 {object} models.UserChannelSettings "Updated settings"
+// @Failure 400 {object} fiber.Map "Invalid request"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/channels/{id}/mute [put]
+func (h *ChannelHandler) SetChannelMute(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	var req models.UpdateChannelMuteRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	settings, err := h.muteService.SetChannelMuted(c.Context(), userID, channelID, req.Muted)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update channel mute state",
+		})
+	}
+
+	return c.JSON(settings)
+}
+
+// GetChannelMuteState returns whether a channel is muted
+// @Summary Get channel mute state
+// @Description Returns whether the channel is muted for the current user
+// @Tags Channel Settings
+// @Produce json
+// @Param id path string true "Channel ID (UUID)"
+// @Success 200 {object} fiber.Map "Mute state"
+// @Failure 400 {object} fiber.Map "Invalid channel ID"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/channels/{id}/mute [get]
+func (h *ChannelHandler) GetChannelMuteState(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	channelID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	muted, err := h.muteService.IsChannelMuted(c.Context(), userID, channelID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel mute state",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"channel_id": channelID,
+		"muted":      muted,
+	})
+}
+
+// GetMutedChannels returns all muted channel IDs for the current user
+// @Summary Get muted channels
+// @Description Returns a list of all muted channel IDs for the current user
+// @Tags Channel Settings
+// @Produce json
+// @Success 200 {object} fiber.Map "List of muted channel IDs"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/channels/muted [get]
+func (h *ChannelHandler) GetMutedChannels(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	ids, err := h.muteService.GetMutedChannelIDs(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get muted channels",
+		})
+	}
+
+	if ids == nil {
+		ids = []uuid.UUID{}
+	}
+
+	return c.JSON(fiber.Map{
+		"muted_channel_ids": ids,
+	})
+}
+
+// ChannelNotificationOverrideService defines the interface for channel override operations
+type ChannelNotificationOverrideService interface {
+	GetChannelOverride(ctx context.Context, userID, channelID uuid.UUID) (*models.ChannelNotificationOverride, error)
+	SetChannelOverride(ctx context.Context, userID, channelID uuid.UUID, level models.ChannelNotificationLevel) (*models.ChannelNotificationOverride, error)
+	ClearChannelOverride(ctx context.Context, userID, channelID uuid.UUID) error
+	ListChannelOverrides(ctx context.Context, userID uuid.UUID) ([]models.ChannelNotificationOverride, error)
+}
+
+// GetChannelOverride returns the notification override for a specific channel
+// @Summary Get channel notification override
+// @Description Returns the notification override level for a specific channel
+// @Tags Notification Overrides
+// @Produce json
+// @Param channel_id path string true "Channel ID (UUID)"
+// @Success 200 {object} models.ChannelNotificationOverride
+// @Failure 400 {object} fiber.Map "Invalid channel ID"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/notification-overrides/{channel_id} [get]
+func (h *ChannelHandler) GetChannelOverride(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	channelID, err := uuid.Parse(c.Params("channel_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	override, err := h.notificationOverrideService.GetChannelOverride(c.Context(), userID, channelID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get channel override",
+		})
+	}
+
+	return c.JSON(override)
+}
+
+// SetChannelOverride sets or updates the notification override for a channel
+// @Summary Set channel notification override
+// @Description Sets the notification level override for a specific channel
+// @Tags Notification Overrides
+// @Accept json
+// @Produce json
+// @Param channel_id path string true "Channel ID (UUID)"
+// @Param body body models.SetChannelOverrideRequest true "Override settings"
+// @Success 200 {object} models.ChannelNotificationOverride
+// @Failure 400 {object} fiber.Map "Invalid request"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/notification-overrides/{channel_id} [put]
+func (h *ChannelHandler) SetChannelOverride(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	channelID, err := uuid.Parse(c.Params("channel_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	var req models.SetChannelOverrideRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	// Validate notification level
+	if req.NotificationLevel != models.ChannelNotificationLevelAllMessages &&
+		req.NotificationLevel != models.ChannelNotificationLevelMentionsOnly &&
+		req.NotificationLevel != models.ChannelNotificationLevelNothing {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid notification_level. must be one of: all_messages, mentions_only, nothing",
+		})
+	}
+
+	override, err := h.notificationOverrideService.SetChannelOverride(c.Context(), userID, channelID, req.NotificationLevel)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to set channel override",
+		})
+	}
+
+	return c.JSON(override)
+}
+
+// ClearChannelOverride removes the notification override for a channel
+// @Summary Clear channel notification override
+// @Description Removes the notification override for a specific channel (reverts to default)
+// @Tags Notification Overrides
+// @Param channel_id path string true "Channel ID (UUID)"
+// @Success 204 "Override cleared"
+// @Failure 400 {object} fiber.Map "Invalid channel ID"
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/notification-overrides/{channel_id} [delete]
+func (h *ChannelHandler) ClearChannelOverride(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	channelID, err := uuid.Parse(c.Params("channel_id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid channel id",
+		})
+	}
+
+	if err := h.notificationOverrideService.ClearChannelOverride(c.Context(), userID, channelID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to clear channel override",
+		})
+	}
+
+	return c.Status(fiber.StatusNoContent).Send(nil)
+}
+
+// ListChannelOverrides returns all channel notification overrides for the current user
+// @Summary List channel notification overrides
+// @Description Returns all channel notification overrides for the current user
+// @Tags Notification Overrides
+// @Produce json
+// @Success 200 {object} models.ListChannelOverridesResponse
+// @Failure 401 {object} fiber.Map "Unauthorized"
+// @Failure 500 {object} fiber.Map "Internal server error"
+// @Router /users/@me/notification-overrides [get]
+func (h *ChannelHandler) ListChannelOverrides(c *fiber.Ctx) error {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
+
+	overrides, err := h.notificationOverrideService.ListChannelOverrides(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to list channel overrides",
+		})
+	}
+
+	return c.JSON(models.ListChannelOverridesResponse{
+		Overrides: overrides,
+	})
 }

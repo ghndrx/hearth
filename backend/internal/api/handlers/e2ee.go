@@ -71,7 +71,10 @@ type PreKeyBundleResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /keys/upload [post]
 func (h *E2EEHandler) UploadKeys(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req KeyUploadRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -238,7 +241,10 @@ func (h *E2EEHandler) GetUserDevices(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /keys/{userId}/devices/{deviceId}/bundle [get]
 func (h *E2EEHandler) GetPreKeyBundle(c *fiber.Ctx) error {
-	requestingUserID := c.Locals("userID").(uuid.UUID)
+	requestingUserID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	targetUserIDStr := c.Params("userId")
 	targetUserID, err := uuid.Parse(targetUserIDStr)
@@ -310,7 +316,10 @@ func (h *E2EEHandler) GetPreKeyBundle(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /keys/{userId}/bundles [get]
 func (h *E2EEHandler) GetAllPreKeyBundles(c *fiber.Ctx) error {
-	requestingUserID := c.Locals("userID").(uuid.UUID)
+	requestingUserID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	targetUserIDStr := c.Params("userId")
 	targetUserID, err := uuid.Parse(targetUserIDStr)
@@ -364,7 +373,10 @@ func (h *E2EEHandler) GetAllPreKeyBundles(c *fiber.Ctx) error {
 // GetMyDevices handles GET /api/v1/keys/devices
 // Returns the current user's devices
 func (h *E2EEHandler) GetMyDevices(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	devices, err := h.service.GetUserDevices(c.Context(), userID)
 	if err != nil {
@@ -382,7 +394,10 @@ func (h *E2EEHandler) GetMyDevices(c *fiber.Ctx) error {
 // GetPreKeyCount handles GET /api/v1/keys/devices/:deviceId/count
 // Returns the count of available prekeys for the current user's device
 func (h *E2EEHandler) GetPreKeyCount(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	deviceID := c.Params("deviceId")
 
 	count, err := h.service.GetPreKeyCount(c.Context(), userID, deviceID)
@@ -405,7 +420,10 @@ func (h *E2EEHandler) GetPreKeyCount(c *fiber.Ctx) error {
 // UploadPreKeys handles POST /api/v1/keys/devices/:deviceId/prekeys
 // Uploads additional one-time prekeys
 func (h *E2EEHandler) UploadPreKeys(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	deviceID := c.Params("deviceId")
 
 	var req struct {
@@ -447,7 +465,7 @@ func (h *E2EEHandler) UploadPreKeys(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.service.UploadPreKeys(c.Context(), userID, deviceID, prekeys)
+	err = h.service.UploadPreKeys(c.Context(), userID, deviceID, prekeys)
 	if err != nil {
 		if errors.Is(err, services.ErrDeviceNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -469,10 +487,13 @@ func (h *E2EEHandler) UploadPreKeys(c *fiber.Ctx) error {
 // DeleteDevice handles DELETE /api/v1/keys/devices/:deviceId
 // Removes a device and all its keys
 func (h *E2EEHandler) DeleteDevice(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	deviceID := c.Params("deviceId")
 
-	err := h.service.DeleteDevice(c.Context(), userID, deviceID)
+	err = h.service.DeleteDevice(c.Context(), userID, deviceID)
 	if err != nil {
 		if errors.Is(err, services.ErrDeviceNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -536,7 +557,10 @@ type ClaimKeysResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /keys/claim [post]
 func (h *E2EEHandler) ClaimKeys(c *fiber.Ctx) error {
-	requestingUserID := c.Locals("userID").(uuid.UUID)
+	requestingUserID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req ClaimKeysRequest
 	if err := c.BodyParser(&req); err != nil {

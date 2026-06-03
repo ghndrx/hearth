@@ -76,41 +76,6 @@ func (m *mockScreenShareService) GetActiveStreamForChannel(ctx context.Context, 
 	return nil, nil
 }
 
-// mockChannelService for permission checking
-type mockScreenShareChannelService struct{}
-
-func (m *mockScreenShareChannelService) GetByID(ctx context.Context, id uuid.UUID) (*models.Channel, error) {
-	return nil, nil
-}
-
-// mockPermissionService for permission checking
-type mockScreenSharePermService struct{}
-
-func setupScreenShareTestApp(mockSvc *mockScreenShareService) *fiber.App {
-	app := fiber.New()
-
-	app.Use(func(c *fiber.Ctx) error {
-		userIDStr := c.Get("X-Test-User-ID")
-		if userIDStr != "" {
-			userID, err := uuid.Parse(userIDStr)
-			if err == nil {
-				c.Locals("userID", userID)
-			}
-		}
-		return c.Next()
-	})
-
-	handler := NewScreenShareHandler(
-		(*services.ScreenShareService)(nil), // We use mock instead
-		(*services.ChannelService)(nil),
-		(*services.PermissionService)(nil),
-	)
-	// Manually set our mock service since we can't inject it directly
-	handler.screenShareService = (*services.ScreenShareService)(nil) // placeholder
-
-	return app
-}
-
 // Helper to create test app with mock service
 func setupScreenShareTestAppWithMock(mockSvc *mockScreenShareService) *fiber.App {
 	app := fiber.New()

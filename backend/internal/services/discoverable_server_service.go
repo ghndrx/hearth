@@ -233,7 +233,7 @@ func (s *DiscoverableServerService) RegisterServer(ctx context.Context, serverID
 
 	// Validate category
 	if !models.IsValidCategory(string(req.Category)) {
-		return nil, errors.New("invalid category")
+		return nil, ErrInvalidCategory
 	}
 
 	// Check if already registered
@@ -292,7 +292,7 @@ func (s *DiscoverableServerService) UpdateRegisteredServer(ctx context.Context, 
 	}
 	if req.Category != nil {
 		if !models.IsValidCategory(string(*req.Category)) {
-			return nil, errors.New("invalid category")
+			return nil, ErrInvalidCategory
 		}
 		ds.Category = *req.Category
 	}

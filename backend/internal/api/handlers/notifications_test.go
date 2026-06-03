@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -571,6 +570,3 @@ func TestNotificationHandler_DeleteNotification_ServiceError(t *testing.T) {
 
 	th.notificationService.AssertExpectations(t)
 }
-
-// Suppress unused import warning
-var _ = bytes.Buffer{}

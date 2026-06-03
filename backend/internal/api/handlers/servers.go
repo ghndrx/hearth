@@ -30,6 +30,7 @@ type ServerHandler struct {
 	roleService    *services.RoleService
 }
 
+// NewServerHandler creates a new server handler
 func NewServerHandler(
 	serverService *services.ServerService,
 	channelService *services.ChannelService,
@@ -532,7 +533,11 @@ func (h *ServerHandler) CreateBan(c *fiber.Ctx) error {
 		DeleteMessageDays    int    `json:"delete_message_days"`
 		DeleteMessageSeconds int    `json:"delete_message_seconds"`
 	}
-	_ = c.BodyParser(&req)
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
 
 	// Convert delete days to actual days if seconds provided
 	deleteDays := req.DeleteMessageDays
@@ -623,7 +628,10 @@ func (h *ServerHandler) GetInvites(c *fiber.Ctx) error {
 
 // SetVanityURL sets a vanity invite URL for a server
 func (h *ServerHandler) SetVanityURL(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -643,7 +651,13 @@ func (h *ServerHandler) SetVanityURL(c *fiber.Ctx) error {
 
 	channelID := uuid.Nil
 	if req.ChannelID != "" {
-		channelID, _ = uuid.Parse(req.ChannelID)
+		var parseErr error
+		channelID, parseErr = uuid.Parse(req.ChannelID)
+		if parseErr != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid channel_id",
+			})
+		}
 	}
 
 	invite, err := h.serverService.CreateVanityInvite(c.Context(), serverID, channelID, userID, req.VanityCode)
@@ -664,7 +678,10 @@ func (h *ServerHandler) SetVanityURL(c *fiber.Ctx) error {
 
 // GetInviteAnalytics returns analytics for all invites in a server
 func (h *ServerHandler) GetInviteAnalytics(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -1104,7 +1121,11 @@ func (h *ServerHandler) CreateInvite(c *fiber.Ctx) error {
 		MaxUses int `json:"max_uses"` // 0 = unlimited
 	}
 
-	_ = c.BodyParser(&req)
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
 
 	// Get default channel for invite
 	channels, err := h.serverService.GetChannels(c.Context(), serverID)

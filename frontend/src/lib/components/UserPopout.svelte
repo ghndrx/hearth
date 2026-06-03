@@ -389,29 +389,29 @@
 			{/if}
 
 			<!-- Recent Activity -->
-			{#if recentActivity && (recentActivity.last_message_at || recentActivity.message_count_24h > 0)}
+			{#if recentActivity != null && (recentActivity?.last_message_at != null || (recentActivity?.message_count_24h ?? 0) > 0)}
 				<div class="section">
 					<h4 class="section-title">Recent Activity</h4>
 					<div class="activity-summary">
-						{#if recentActivity.last_message_at}
+						{#if recentActivity?.last_message_at}
 							<div class="activity-item">
 								<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" class="activity-icon">
 									<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
 								</svg>
 								<span class="activity-text">
-									Last active {formatRelativeTime(recentActivity.last_message_at)}
-									{#if recentActivity.server_name && recentActivity.channel_name}
-										in #{recentActivity.channel_name}
+									Last active {formatRelativeTime(recentActivity?.last_message_at)}
+									{#if recentActivity?.server_name && recentActivity?.channel_name}
+										in #{recentActivity?.channel_name}
 									{/if}
 								</span>
 							</div>
 						{/if}
-						{#if recentActivity.message_count_24h > 0}
+						{#if (recentActivity?.message_count_24h ?? 0) > 0}
 							<div class="activity-item">
 								<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" class="activity-icon">
 									<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
 								</svg>
-								<span class="activity-text">{recentActivity.message_count_24h} messages in the last 24h</span>
+								<span class="activity-text">{recentActivity?.message_count_24h ?? 0} messages in the last 24h</span>
 							</div>
 						{/if}
 					</div>

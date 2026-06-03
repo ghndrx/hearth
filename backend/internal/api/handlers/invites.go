@@ -58,7 +58,10 @@ type InviteResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channelID}/invites [post]
 func (h *InviteHandlers) CreateInvite(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -154,7 +157,10 @@ func (h *InviteHandlers) GetInvite(c *fiber.Ctx) error {
 // @Failure 401 {object} fiber.Map "Unauthorized"
 // @Router /invites/{code} [post]
 func (h *InviteHandlers) UseInvite(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	code := c.Params("code")
 	if code == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -183,7 +189,10 @@ func (h *InviteHandlers) UseInvite(c *fiber.Ctx) error {
 // @Failure 401 {object} fiber.Map "Unauthorized"
 // @Router /invites/{code} [delete]
 func (h *InviteHandlers) DeleteInvite(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	code := c.Params("code")
 	if code == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -191,7 +200,7 @@ func (h *InviteHandlers) DeleteInvite(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.inviteService.DeleteInvite(c.Context(), code, userID)
+	err = h.inviteService.DeleteInvite(c.Context(), code, userID)
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": err.Error(),
@@ -214,7 +223,10 @@ func (h *InviteHandlers) DeleteInvite(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /channels/{channelID}/invites [get]
 func (h *InviteHandlers) GetChannelInvites(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	channelID, err := uuid.Parse(c.Params("channelID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -277,7 +289,10 @@ func (h *InviteHandlers) GetChannelInvites(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{serverID}/invites [get]
 func (h *InviteHandlers) GetServerInvites(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

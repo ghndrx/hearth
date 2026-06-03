@@ -278,7 +278,11 @@ func (h *WelcomeHandler) RejectScreening(c *fiber.Ctx) error {
 	}
 
 	var req ScreeningDecisionRequest
-	_ = c.BodyParser(&req)
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
 
 	if err := h.welcomeService.RejectScreening(c.Context(), userID, serverID, moderatorID, req.Reason); err != nil {
 		return HandleServiceError(c, err)

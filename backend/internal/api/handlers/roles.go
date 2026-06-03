@@ -45,7 +45,10 @@ func NewRoleHandlers(roleService RoleServiceInterface) *RoleHandlers {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{serverID}/roles [post]
 func (h *RoleHandlers) CreateRole(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -87,7 +90,10 @@ func (h *RoleHandlers) CreateRole(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{serverID}/roles [get]
 func (h *RoleHandlers) GetRoles(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -118,7 +124,10 @@ func (h *RoleHandlers) GetRoles(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /roles/{roleID} [get]
 func (h *RoleHandlers) GetRole(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	roleID, err := uuid.Parse(c.Params("roleID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -159,7 +168,10 @@ func (h *RoleHandlers) GetRole(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /roles/{roleID} [patch]
 func (h *RoleHandlers) UpdateRole(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	roleID, err := uuid.Parse(c.Params("roleID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -210,7 +222,10 @@ func (h *RoleHandlers) UpdateRole(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /roles/{roleID} [delete]
 func (h *RoleHandlers) DeleteRole(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	roleID, err := uuid.Parse(c.Params("roleID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -241,7 +256,10 @@ func (h *RoleHandlers) DeleteRole(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{serverID}/roles [patch]
 func (h *RoleHandlers) BatchUpdateRolesPositions(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -307,7 +325,10 @@ func (h *RoleHandlers) BatchUpdateRolesPositions(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{serverID}/members/{memberID}/roles/{roleID} [put]
 func (h *RoleHandlers) AddMemberRole(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -349,7 +370,10 @@ func (h *RoleHandlers) AddMemberRole(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{serverID}/members/{memberID}/roles/{roleID} [delete]
 func (h *RoleHandlers) RemoveMemberRole(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("serverID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

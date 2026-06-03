@@ -292,16 +292,20 @@ func TestValidateContentType(t *testing.T) {
 		{"image/webp", true},
 		{"application/pdf", true},
 		{"text/plain", true},
-		{"text/html", true},
-		{"application/json", true},
 		{"audio/mpeg", true},
 		{"video/mp4", true},
+		{"audio/wav", true},
+		{"video/webm", true},
 
 		// Blocked types
+		{"text/html", false},
+		{"application/json", false},
 		{"application/x-msdownload", false},
 		{"application/x-msdos-program", false},
 		{"application/x-executable", false},
 		{"application/x-dosexec", false},
+		{"application/octet-stream", false},
+		{"application/zip", false},
 	}
 
 	for _, tt := range tests {

@@ -6,128 +6,14 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock browser/environment
-const mockIndexedDB = {
-  open: vi.fn(() => ({
-    onsuccess: null,
-    onerror: null,
-    onupgradeneeded: null,
-    result: {
-      objectStoreNames: { contains: () => false },
-      createObjectStore: vi.fn(),
-      transaction: vi.fn(),
-      close: vi.fn(),
-    },
-  })),
-};
-
-// Helper to create mock CryptoKey objects
-function createMockCryptoKey(): CryptoKey {
-  return {
-    type: 'public',
-    extractable: true,
-    algorithm: { name: 'ECDH', namedCurve: 'P-256' },
-    usages: ['deriveBits', 'deriveKey'],
-  } as CryptoKey;
-}
-
-function createMockCryptoKeyPair(): CryptoKeyPair {
-  return {
-    publicKey: createMockCryptoKey(),
-    privateKey: {
-      type: 'private',
-      extractable: true,
-      algorithm: { name: 'ECDH', namedCurve: 'P-256' },
-      usages: ['deriveBits', 'deriveKey'],
-    } as CryptoKey,
-  };
-}
-
-const mockCrypto = {
-  subtle: {
-    generateKey: vi.fn((alg: any, extractable: boolean, keyUsages: string[]) => {
-      // Return proper CryptoKeyPair for ECDH key generation
-      if (alg.name === 'ECDH' || alg.name === 'ECDSA') {
-        return Promise.resolve(createMockCryptoKeyPair());
-      }
-      return Promise.resolve(createMockCryptoKeyPair());
-    }),
-    importKey: vi.fn((format: string, keyData: any, alg?: any) => {
-      // For ECDH/EC DSA keys, validate that the key data has correct length
-      // P-256 public keys: 65 bytes (uncompressed) or 33 bytes (compressed)
-      if (format === 'raw' && alg && (alg.name === 'ECDH' || alg.name === 'ECDSA')) {
-        if (keyData instanceof ArrayBuffer || ArrayBuffer.isView(keyData)) {
-          const bytes = keyData instanceof ArrayBuffer ? new Uint8Array(keyData) : new Uint8Array(keyData.buffer);
-          // Reject if clearly invalid length for EC keys
-          if (bytes.length !== 65 && bytes.length !== 33) {
-            return Promise.reject(new DOMException('Invalid key data', 'InvalidAccessError'));
-          }
-        } else if (typeof keyData === 'string') {
-          // String input that can't be decoded to valid length is invalid
-          return Promise.reject(new DOMException('Invalid key data', 'InvalidAccessError'));
-        }
-      }
-      // For non-EC keys (like HKDF), just return a mock key
-      return Promise.resolve(createMockCryptoKey());
-    }),
-    exportKey: vi.fn(() => Promise.resolve(new Uint8Array(65))),
-    deriveBits: vi.fn(() => Promise.resolve(new Uint8Array(32))),
-    deriveKey: vi.fn(() => Promise.resolve(createMockCryptoKey())),
-    sign: vi.fn(() => Promise.resolve(new Uint8Array(64))),
-    verify: vi.fn(() => Promise.resolve(true)),
-    encrypt: vi.fn(() => Promise.resolve(new Uint8Array(16))),
-    decrypt: vi.fn(() => Promise.resolve(new Uint8Array(16))),
-  },
-  getRandomValues: vi.fn((arr: Uint8Array) => arr),
-};
-
-// Set up globals for testing
-const globalCrypto = globalThis.crypto;
-const globalIndexedDB = globalThis.indexedDB;
-
-// Check for WebCrypto support
-const hasFullWebCrypto = typeof crypto !== 'undefined' && 
-                         crypto.subtle && 
-                         typeof crypto.subtle.generateKey === 'function' &&
-                         typeof crypto.subtle.importKey === 'function' &&
-                         typeof crypto.subtle.deriveBits === 'function';
-
-// Mock IndexedDB for tests that need it
-vi.stubGlobal('indexedDB', mockIndexedDB);
-vi.stubGlobal('crypto', mockCrypto);
-
-describe('X3DH Key Exchange - Unit Tests', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('initiateX3DH', () => {
-    it.skipIf(!hasFullWebCrypto)('should throw error when no identity key exists', async () => {
-      // This test requires the key store to be properly initialized
-      // In a real test environment, we'd mock the key store
-    });
-  });
-
-  describe('processPreKeyMessage', () => {
-    it.skipIf(!hasFullWebCrypto)('should throw error when no identity key exists', async () => {
-      // This test requires the key store to be properly initialized
-    });
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 describe('X3DH Protocol Flow (Integration)', () => {
-  // These tests verify the full X3DH protocol flow
-  // They are skipped in jsdom environment which lacks full WebCrypto
-
-  const hasWebCrypto = typeof crypto !== 'undefined' && 
-                       crypto.subtle &&
-                       typeof crypto.subtle.generateKey === 'function' &&
-                       // jsdom has incomplete WebCrypto
-                       typeof navigator === 'undefined' || !navigator.userAgent?.includes('jsdom');
-
-  it.skipIf(!hasWebCrypto)('should perform complete X3DH sender-side agreement', async () => {
+  it('should perform complete X3DH sender-side agreement', async () => {
     // Import the crypto implementation
-    const { performX3DHSender, generateDeviceKeys, exportDeviceKeysForUpload, generateDeviceId, arrayBufferToBase64 } = 
+    const { performX3DHSender, generateDeviceKeys, exportDeviceKeysForUpload, generateDeviceId } = 
       await import('$lib/crypto/signal-protocol');
     
     // Bob generates his keys (recipient)
@@ -169,7 +55,7 @@ describe('X3DH Protocol Flow (Integration)', () => {
     expect(result.usedPreKeyId).toBe(bobBundle.preKeyId);
   });
 
-  it.skipIf(!hasWebCrypto)('should perform X3DH without one-time prekey when none available', async () => {
+  it('should perform X3DH without one-time prekey when none available', async () => {
     const { performX3DHSender, generateDeviceKeys, exportDeviceKeysForUpload, generateDeviceId } = 
       await import('$lib/crypto/signal-protocol');
     
@@ -206,8 +92,8 @@ describe('X3DH Protocol Flow (Integration)', () => {
     expect(result.usedPreKeyId).toBeUndefined();
   });
 
-  it.skipIf(!hasWebCrypto)('should derive consistent session keys from X3DH', async () => {
-    const { performX3DHSender, performX3DHRecipient, generateDeviceKeys, exportDeviceKeysForUpload, generateDeviceId, deriveMessageKeys } = 
+  it('should derive consistent session keys from X3DH', async () => {
+    const { performX3DHSender, generateDeviceKeys, exportDeviceKeysForUpload, generateDeviceId, deriveMessageKeys } = 
       await import('$lib/crypto/signal-protocol');
     
     // Bob generates keys
@@ -251,13 +137,7 @@ describe('X3DH Protocol Flow (Integration)', () => {
 });
 
 describe('X3DH Key Derivation', () => {
-  const hasFullWebCrypto = typeof crypto !== 'undefined' && 
-                       crypto.subtle &&
-                       typeof crypto.subtle.deriveBits === 'function' &&
-                       typeof crypto.subtle.deriveKey === 'function';
-
-  // Skip this test - WebCrypto environment issue in CI (expects Uint8Array but gets invalid buffer)
-  it.skip('should derive 256-bit shared secret via HKDF', async () => {
+  it('should derive 256-bit shared secret via HKDF', async () => {
     const { deriveMessageKeys } = await import('$lib/crypto/signal-protocol');
     
     // Create a mock shared secret

@@ -38,7 +38,10 @@ func NewSettingsHandler(settingsService SettingsServiceInterface) *SettingsHandl
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/settings [get]
 func (h *SettingsHandler) GetSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	settings, err := h.settingsService.GetSettings(c.Context(), userID)
 	if err != nil {
@@ -63,7 +66,10 @@ func (h *SettingsHandler) GetSettings(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/settings [patch]
 func (h *SettingsHandler) UpdateSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.UpdateUserSettingsRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -121,7 +127,10 @@ func (h *SettingsHandler) UpdateSettings(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/settings [delete]
 func (h *SettingsHandler) ResetSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	settings, err := h.settingsService.ResetSettings(c.Context(), userID)
 	if err != nil {

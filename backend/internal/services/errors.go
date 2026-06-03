@@ -97,8 +97,6 @@ var (
 	ErrGroupDMFull               = errors.New("group DM can have at most 50 members")
 	ErrCannotTransferToNonMember = errors.New("cannot transfer ownership to a non-member")
 
-	// Cache errors
-	ErrCacheNotFound = errors.New("key not found in cache")
 
 	// Generic permission errors
 	ErrForbidden = errors.New("forbidden")
@@ -122,4 +120,7 @@ var (
 	// Moderation errors
 	ErrModerationRuleNotFound = errors.New("moderation rule not found")
 	ErrModerationRateLimited  = errors.New("rate limit exceeded for moderation actions")
+
+	// Generic errors
+	ErrInvalidInput = errors.New("invalid input")
 )
