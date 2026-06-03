@@ -21,7 +21,7 @@ A Discord-compatible communication platform you own. Text channels, voice, DMs, 
 ```bash
 git clone https://github.com/ghndrx/hearth.git
 cd hearth
-cp .env.example .env
+cp deploy/docker-compose/.env.example .env  # or create your own
 docker compose up -d
 ```
 
@@ -38,7 +38,7 @@ Open `http://localhost:3000`
 | Layer | Tech |
 |-------|------|
 | Frontend | SvelteKit, Tailwind, TypeScript |
-| Backend | Go, Chi, WebSocket |
+| Backend | Go, Fiber, WebSocket |
 | Database | PostgreSQL |
 | Cache | Redis |
 

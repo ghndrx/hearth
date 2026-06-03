@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -447,4 +448,472 @@ func (r *ThreadRepository) GetMessagesWithAuthors(ctx context.Context, threadID 
 	}
 
 	return messages, err
+}
+
+// ThreadAutoArchiveRepository handles database operations for thread auto-archive
+type ThreadAutoArchiveRepository struct {
+	db *sqlx.DB
+}
+
+// NewThreadAutoArchiveRepository creates a new thread auto-archive repository
+func NewThreadAutoArchiveRepository(db *sqlx.DB) *ThreadAutoArchiveRepository {
+	return &ThreadAutoArchiveRepository{db: db}
+}
+
+// CreateServerSettings creates server-level auto-archive settings
+func (r *ThreadAutoArchiveRepository) CreateServerSettings(ctx context.Context, settings *models.ThreadAutoArchiveSettings) error {
+	query := `
+		INSERT INTO thread_auto_archive_settings (id, server_id, default_duration, allow_override, archive_duration_options, require_post_author, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		settings.ID, settings.ServerID, settings.DefaultDuration, settings.AllowOverride,
+		settings.ArchiveDurationOptions, settings.RequirePostAuthor, settings.CreatedAt, settings.UpdatedAt,
+	)
+	return err
+}
+
+// GetServerSettings retrieves auto-archive settings for a server
+func (r *ThreadAutoArchiveRepository) GetServerSettings(ctx context.Context, serverID uuid.UUID) (*models.ThreadAutoArchiveSettings, error) {
+	var settings models.ThreadAutoArchiveSettings
+	query := `
+		SELECT id, server_id, default_duration, allow_override, archive_duration_options, require_post_author, created_at, updated_at 
+		FROM thread_auto_archive_settings WHERE server_id = $1
+	`
+	err := r.db.GetContext(ctx, &settings, query, serverID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &settings, nil
+}
+
+// UpdateServerSettings updates server-level auto-archive settings
+func (r *ThreadAutoArchiveRepository) UpdateServerSettings(ctx context.Context, settings *models.ThreadAutoArchiveSettings) error {
+	query := `
+		UPDATE thread_auto_archive_settings SET
+			default_duration = $2, allow_override = $3, archive_duration_options = $4,
+			require_post_author = $5, updated_at = $6
+		WHERE server_id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		settings.ServerID, settings.DefaultDuration, settings.AllowOverride,
+		settings.ArchiveDurationOptions, settings.RequirePostAuthor, time.Now(),
+	)
+	return err
+}
+
+// DeleteServerSettings deletes server-level auto-archive settings
+func (r *ThreadAutoArchiveRepository) DeleteServerSettings(ctx context.Context, serverID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM thread_auto_archive_settings WHERE server_id = $1`, serverID)
+	return err
+}
+
+// SetChannelOverride creates or updates channel-level auto-archive override
+func (r *ThreadAutoArchiveRepository) SetChannelOverride(ctx context.Context, override *models.ChannelAutoArchiveOverride) error {
+	query := `
+		INSERT INTO channel_auto_archive_override (id, channel_id, auto_archive_duration, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (channel_id) DO UPDATE SET
+			auto_archive_duration = $3, updated_at = $5
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		override.ID, override.ChannelID, override.AutoArchiveDuration, override.CreatedAt, override.UpdatedAt,
+	)
+	return err
+}
+
+// GetChannelOverride retrieves channel-level auto-archive override
+func (r *ThreadAutoArchiveRepository) GetChannelOverride(ctx context.Context, channelID uuid.UUID) (*models.ChannelAutoArchiveOverride, error) {
+	var override models.ChannelAutoArchiveOverride
+	query := `
+		SELECT id, channel_id, auto_archive_duration, created_at, updated_at 
+		FROM channel_auto_archive_override WHERE channel_id = $1
+	`
+	err := r.db.GetContext(ctx, &override, query, channelID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &override, nil
+}
+
+// DeleteChannelOverride deletes channel-level auto-archive override
+func (r *ThreadAutoArchiveRepository) DeleteChannelOverride(ctx context.Context, channelID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM channel_auto_archive_override WHERE channel_id = $1`, channelID)
+	return err
+}
+
+// GetOrCreateThreadMeta retrieves or creates auto-archive metadata for a thread
+func (r *ThreadAutoArchiveRepository) GetOrCreateThreadMeta(ctx context.Context, threadID uuid.UUID) (*models.ThreadAutoArchiveMeta, error) {
+	var meta models.ThreadAutoArchiveMeta
+
+	// First try to get existing
+	query := `
+		SELECT thread_id, last_activity_at, last_activity_message_id, last_activity_user_id, 
+		       next_archive_at, archive_eligible, bumped_by_owner, created_at, updated_at 
+		FROM thread_auto_archive_meta WHERE thread_id = $1
+	`
+	err := r.db.GetContext(ctx, &meta, query, threadID)
+	if err == sql.ErrNoRows {
+		// Create new
+		now := time.Now()
+		insertQuery := `
+			INSERT INTO thread_auto_archive_meta (thread_id, last_activity_at, created_at, updated_at)
+			VALUES ($1, $2, $3, $4)
+			RETURNING thread_id, last_activity_at, last_activity_message_id, last_activity_user_id, 
+			          next_archive_at, archive_eligible, bumped_by_owner, created_at, updated_at
+		`
+		err = r.db.GetContext(ctx, &meta, insertQuery, threadID, now, now, now)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &meta, nil
+}
+
+// UpdateThreadMeta updates auto-archive metadata for a thread
+func (r *ThreadAutoArchiveRepository) UpdateThreadMeta(ctx context.Context, meta *models.ThreadAutoArchiveMeta) error {
+	query := `
+		UPDATE thread_auto_archive_meta SET
+			last_activity_at = $2, last_activity_message_id = $3, last_activity_user_id = $4,
+			next_archive_at = $5, archive_eligible = $6, bumped_by_owner = $7, updated_at = $8
+		WHERE thread_id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		meta.ThreadID, meta.LastActivityAt, meta.LastActivityMessageID, meta.LastActivityUserID,
+		meta.NextArchiveAt, meta.ArchiveEligible, meta.BumpedByOwner, time.Now(),
+	)
+	return err
+}
+
+// SetThreadNextArchive sets the next archive time for a thread
+func (r *ThreadAutoArchiveRepository) SetThreadNextArchive(ctx context.Context, threadID uuid.UUID, nextArchiveAt *time.Time) error {
+	query := `UPDATE thread_auto_archive_meta SET next_archive_at = $2, updated_at = $3 WHERE thread_id = $1`
+	_, err := r.db.ExecContext(ctx, query, threadID, nextArchiveAt, time.Now())
+	return err
+}
+
+// SetThreadArchiveEligible sets the archive eligibility for a thread
+func (r *ThreadAutoArchiveRepository) SetThreadArchiveEligible(ctx context.Context, threadID uuid.UUID, eligible bool) error {
+	query := `UPDATE thread_auto_archive_meta SET archive_eligible = $2, updated_at = $3 WHERE thread_id = $1`
+	_, err := r.db.ExecContext(ctx, query, threadID, eligible, time.Now())
+	return err
+}
+
+// BumpThreadOwnerActivity marks that the owner has posted in the thread
+func (r *ThreadAutoArchiveRepository) BumpThreadOwnerActivity(ctx context.Context, threadID uuid.UUID) error {
+	query := `UPDATE thread_auto_archive_meta SET bumped_by_owner = TRUE, updated_at = $2 WHERE thread_id = $1`
+	_, err := r.db.ExecContext(ctx, query, threadID, time.Now())
+	return err
+}
+
+// GetThreadsReadyForArchive retrieves threads ready to be archived
+func (r *ThreadAutoArchiveRepository) GetThreadsReadyForArchive(ctx context.Context, limit int) ([]*models.ThreadAutoArchiveMeta, error) {
+	var metas []*models.ThreadAutoArchiveMeta
+	query := `
+		SELECT tam.thread_id, tam.last_activity_at, tam.last_activity_message_id, tam.last_activity_user_id, 
+		       tam.next_archive_at, tam.archive_eligible, tam.bumped_by_owner, tam.created_at, tam.updated_at
+		FROM thread_auto_archive_meta tam
+		JOIN threads t ON t.id = tam.thread_id
+		WHERE tam.next_archive_at IS NOT NULL 
+		  AND tam.next_archive_at <= NOW() 
+		  AND tam.archive_eligible = TRUE
+		  AND t.archived = FALSE
+		ORDER BY tam.next_archive_at ASC
+		LIMIT $1
+	`
+	err := r.db.SelectContext(ctx, &metas, query, limit)
+	return metas, err
+}
+
+// GetThreadMeta retrieves auto-archive metadata for a thread
+func (r *ThreadAutoArchiveRepository) GetThreadMeta(ctx context.Context, threadID uuid.UUID) (*models.ThreadAutoArchiveMeta, error) {
+	var meta models.ThreadAutoArchiveMeta
+	query := `
+		SELECT thread_id, last_activity_at, last_activity_message_id, last_activity_user_id, 
+		       next_archive_at, archive_eligible, bumped_by_owner, created_at, updated_at 
+		FROM thread_auto_archive_meta WHERE thread_id = $1
+	`
+	err := r.db.GetContext(ctx, &meta, query, threadID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &meta, nil
+}
+
+// DeleteThreadMeta deletes auto-archive metadata for a thread
+func (r *ThreadAutoArchiveRepository) DeleteThreadMeta(ctx context.Context, threadID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM thread_auto_archive_meta WHERE thread_id = $1`, threadID)
+	return err
+}
+
+// GetServerStats retrieves auto-archive statistics for a server
+func (r *ThreadAutoArchiveRepository) GetServerStats(ctx context.Context, serverID uuid.UUID) (*models.ThreadAutoArchiveStats, error) {
+	var stats models.ThreadAutoArchiveStats
+	stats.ServerID = serverID
+
+	// Get total threads in server channels
+	query := `
+		SELECT COUNT(*) FROM threads t
+		JOIN channels c ON c.id = t.parent_channel_id
+		WHERE c.server_id = $1
+	`
+	err := r.db.GetContext(ctx, &stats.TotalThreads, query, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get archived threads
+	query = `
+		SELECT COUNT(*) FROM threads t
+		JOIN channels c ON c.id = t.parent_channel_id
+		WHERE c.server_id = $1 AND t.archived = TRUE
+	`
+	err = r.db.GetContext(ctx, &stats.ArchivedThreads, query, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get scheduled threads (have next_archive_at set and not archived)
+	query = `
+		SELECT COUNT(*) FROM thread_auto_archive_meta tam
+		JOIN threads t ON t.id = tam.thread_id
+		JOIN channels c ON c.id = t.parent_channel_id
+		WHERE c.server_id = $1 AND tam.next_archive_at IS NOT NULL AND t.archived = FALSE
+	`
+	err = r.db.GetContext(ctx, &stats.ScheduledThreads, query, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get threads ready to archive
+	query = `
+		SELECT COUNT(*) FROM thread_auto_archive_meta tam
+		JOIN threads t ON t.id = tam.thread_id
+		JOIN channels c ON c.id = t.parent_channel_id
+		WHERE c.server_id = $1 AND tam.next_archive_at IS NOT NULL 
+		  AND tam.next_archive_at <= NOW() AND tam.archive_eligible = TRUE AND t.archived = FALSE
+	`
+	err = r.db.GetContext(ctx, &stats.ReadyToArchiveThreads, query, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
+// GetChannelDuration gets the effective auto-archive duration for a channel
+func (r *ThreadAutoArchiveRepository) GetChannelDuration(ctx context.Context, channelID, serverID uuid.UUID) (int, error) {
+	// First check for channel override
+	var overrideDuration int
+	query := `SELECT auto_archive_duration FROM channel_auto_archive_override WHERE channel_id = $1`
+	err := r.db.GetContext(ctx, &overrideDuration, query, channelID)
+	if err == nil {
+		return overrideDuration, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+
+	// Fall back to server default
+	var settings models.ThreadAutoArchiveSettings
+	query = `SELECT default_duration FROM thread_auto_archive_settings WHERE server_id = $1`
+	err = r.db.GetContext(ctx, &settings, query, serverID)
+	if err == sql.ErrNoRows {
+		return 1440, nil // Default 24 hours
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	return settings.DefaultDuration, nil
+}
+
+// ForumTagRepository handles forum tag data access
+type ForumTagRepository struct {
+	db *sqlx.DB
+}
+
+// NewForumTagRepository creates a new forum tag repository
+func NewForumTagRepository(db *sqlx.DB) *ForumTagRepository {
+	return &ForumTagRepository{db: db}
+}
+
+// Create creates a new forum tag
+func (r *ForumTagRepository) Create(ctx context.Context, tag *models.ForumTag) error {
+	query := `
+		INSERT INTO forum_tags (id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		tag.ID, tag.ServerID, tag.ChannelID, tag.Name, tag.Color, tag.EmojiName, tag.Moderated, tag.Position, tag.CreatedAt,
+	)
+	return err
+}
+
+// GetByID retrieves a tag by ID
+func (r *ForumTagRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.ForumTag, error) {
+	var tag models.ForumTag
+	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at FROM forum_tags WHERE id = $1`
+	err := r.db.GetContext(ctx, &tag, query, id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &tag, err
+}
+
+// GetByChannel retrieves all tags for a channel
+func (r *ForumTagRepository) GetByChannel(ctx context.Context, channelID uuid.UUID) ([]models.ForumTag, error) {
+	var tags []models.ForumTag
+	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at FROM forum_tags WHERE channel_id = $1 ORDER BY position, name`
+	err := r.db.SelectContext(ctx, &tags, query, channelID)
+	if err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// GetByIDs retrieves tags by their IDs
+func (r *ForumTagRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]models.ForumTag, error) {
+	if len(ids) == 0 {
+		return []models.ForumTag{}, nil
+	}
+	var tags []models.ForumTag
+	query := `SELECT id, server_id, channel_id, name, color, emoji_name, moderated, position, created_at FROM forum_tags WHERE id = ANY($1) ORDER BY position, name`
+	err := r.db.SelectContext(ctx, &tags, query, ids)
+	if err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// Update updates a forum tag
+func (r *ForumTagRepository) Update(ctx context.Context, tag *models.ForumTag) error {
+	query := `
+		UPDATE forum_tags
+		SET name = $2, color = $3, emoji_name = $4, moderated = $5, position = $6
+		WHERE id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query, tag.ID, tag.Name, tag.Color, tag.EmojiName, tag.Moderated, tag.Position)
+	return err
+}
+
+// Delete deletes a forum tag
+func (r *ForumTagRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM forum_tags WHERE id = $1`, id)
+	return err
+}
+
+// ApplyTags applies tags to a thread
+func (r *ForumTagRepository) ApplyTags(ctx context.Context, threadID uuid.UUID, tagIDs []uuid.UUID) error {
+	query := `UPDATE threads SET applied_tags = $2 WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, threadID, tagIDs)
+	return err
+}
+
+// GetThreadTags retrieves tags applied to a thread
+func (r *ForumTagRepository) GetThreadTags(ctx context.Context, threadID uuid.UUID) ([]models.ForumTag, error) {
+	var tags []models.ForumTag
+	query := `
+		SELECT ft.id, ft.server_id, ft.channel_id, ft.name, ft.color, ft.emoji_name, ft.moderated, ft.position, ft.created_at
+		FROM forum_tags ft
+		JOIN threads t ON t.applied_tags @> ARRAY[ft.id]
+		WHERE t.id = $1
+		ORDER BY ft.position, ft.name
+	`
+	err := r.db.SelectContext(ctx, &tags, query, threadID)
+	if err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// FilterThreads filters threads with full ForumPostFilter support
+func (r *ForumTagRepository) FilterThreads(ctx context.Context, channelID uuid.UUID, filter *models.ForumPostFilter, limit, offset int) ([]models.Thread, int, error) {
+	var threads []models.Thread
+	var total int
+
+	countQuery := `SELECT COUNT(*) FROM threads WHERE parent_channel_id = $1`
+	threadQuery := `
+		SELECT id, parent_channel_id, parent_message_id, owner_id, name, message_count, member_count,
+		       archived, auto_archive, locked, created_at, archive_timestamp,
+		       applied_tags, is_pinned, pin_weight, is_solved, solved_by, solved_at, solved_message_id
+		FROM threads
+		WHERE parent_channel_id = $1
+	`
+
+	args := []interface{}{channelID}
+	argIndex := 2
+
+	// Filter by tags
+	if len(filter.TagIDs) > 0 {
+		countQuery += fmt.Sprintf(` AND applied_tags && $%d`, argIndex)
+		threadQuery += fmt.Sprintf(` AND applied_tags && $%d`, argIndex)
+		args = append(args, filter.TagIDs)
+		argIndex++
+	}
+
+	// Filter by author
+	if filter.AuthorID != nil {
+		countQuery += fmt.Sprintf(` AND owner_id = $%d`, argIndex)
+		threadQuery += fmt.Sprintf(` AND owner_id = $%d`, argIndex)
+		args = append(args, *filter.AuthorID)
+		argIndex++
+	}
+
+	// Filter by pinned only
+	if filter.PinnedOnly {
+		countQuery += ` AND is_pinned = TRUE`
+		threadQuery += ` AND is_pinned = TRUE`
+	}
+
+	// Filter by search query (searches in name)
+	if filter.SearchQuery != "" {
+		searchPattern := "%" + filter.SearchQuery + "%"
+		countQuery += fmt.Sprintf(` AND name ILIKE $%d`, argIndex)
+		threadQuery += fmt.Sprintf(` AND name ILIKE $%d`, argIndex)
+		args = append(args, searchPattern)
+		argIndex++
+	}
+
+	// Determine sort order
+	var orderClause string
+	switch filter.SortOrder {
+	case 1: // creation_date
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, created_at DESC`
+	case 2: // pin_weight
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
+	case 3: // most_reactions (would need join with reactions table - for now use message_count as proxy)
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, message_count DESC, created_at DESC`
+	case 4: // solved_first
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, is_solved DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
+	default: // latest_activity (0)
+		orderClause = ` ORDER BY is_pinned DESC, pin_weight DESC, archive_timestamp DESC NULLS LAST, created_at DESC`
+	}
+
+	threadQuery += orderClause + fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIndex, argIndex+1)
+
+	err := r.db.GetContext(ctx, &total, countQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	args = append(args, limit, offset)
+	err = r.db.SelectContext(ctx, &threads, threadQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return threads, total, nil
 }

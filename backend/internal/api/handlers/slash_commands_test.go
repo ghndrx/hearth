@@ -56,7 +56,7 @@ func setupSlashCommandApp() *fiber.App {
 		userID := c.Get("X-Test-User-ID")
 		if userID != "" {
 			c.Locals("userID", userID)
-			c.Locals("user_id", userID)
+			c.Locals("userID", userID)
 		}
 		return c.Next()
 	})
@@ -86,7 +86,7 @@ func TestRegisterCommand_Success(t *testing.T) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid app ID"})
 		}
 
-		userID, _ := c.Locals("user_id").(string)
+		userID, _ := c.Locals("userID").(string)
 		_ = userID
 
 		var body struct {

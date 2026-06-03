@@ -156,11 +156,8 @@ describe('Gateway', () => {
 			expect(states[states.length - 1]).toBe('disconnected');
 		});
 
-		// Skip: vi.advanceTimersByTime() hangs in vitest 4.x + happy-dom environment.
-		// The fake timer system blocks on pending async operations, causing 5s timeout.
-		// Heartbeat and reconnection logic is tested in integration tests and works in browser.
-		it.skip('should stop heartbeat', () => {
-			vi.useFakeTimers();
+		it('should stop heartbeat', () => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
 
 			gateway.connect('test-token');
 			mockWs.onopen?.();
@@ -170,7 +167,7 @@ describe('Gateway', () => {
 			const sendCountAfterDisconnect = mockWs.send.mock.calls.length;
 			vi.advanceTimersByTime(60000);
 			expect(mockWs.send.mock.calls.length).toBe(sendCountAfterDisconnect);
-			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
+			vi.useRealTimers();
 		});
 	});
 
@@ -226,10 +223,8 @@ describe('Gateway', () => {
 			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
 		});
 
-		// Skip: vi.advanceTimersByTime() hangs in vitest 4.x + happy-dom environment.
-		// Same fake timer issue as "should stop heartbeat" - reconnection logic works in browser.
-		it.skip('should not reconnect on normal close (1000)', () => {
-			vi.useFakeTimers();
+		it('should not reconnect on normal close (1000)', () => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
 			gateway.connect('test-token');
 			mockWs.onopen?.();
 
@@ -245,7 +240,7 @@ describe('Gateway', () => {
 			// Advance timer - no reconnection should happen
 			vi.advanceTimersByTime(5000);
 			expect((global.WebSocket as any).mock.calls.length).toBe(initialCallCount);
-			// Note: vi.useRealTimers() intentionally omitted - vitest restores automatically
+			vi.useRealTimers();
 		});
 	});
 

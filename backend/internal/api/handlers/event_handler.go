@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -17,6 +18,7 @@ type EventHandler struct {
 	permService   *services.PermissionService
 }
 
+// NewEventHandler creates a new event handler
 func NewEventHandler(
 	eventService *services.EventService,
 	serverService *services.ServerService,
@@ -42,7 +44,10 @@ func NewEventHandler(
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/events [get]
 func (h *EventHandler) ListServerEvents(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -91,7 +96,10 @@ func (h *EventHandler) ListServerEvents(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/events [post]
 func (h *EventHandler) CreateEvent(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -200,7 +208,10 @@ func (h *EventHandler) GetEvent(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /events/{id} [patch]
 func (h *EventHandler) UpdateEvent(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	eventID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -256,7 +267,10 @@ func (h *EventHandler) UpdateEvent(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /events/{id} [delete]
 func (h *EventHandler) DeleteEvent(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	eventID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -298,7 +312,10 @@ func (h *EventHandler) DeleteEvent(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /events/{id}/rsvp [post]
 func (h *EventHandler) RSVP(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	eventID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -340,7 +357,10 @@ func (h *EventHandler) RSVP(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /events/{id}/rsvp [delete]
 func (h *EventHandler) RemoveRSVP(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	eventID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -413,7 +433,10 @@ func (h *EventHandler) ListEventUsers(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /events/{id}/start [post]
 func (h *EventHandler) StartEvent(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	eventID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -496,7 +519,10 @@ func (h *EventHandler) ExportEventICal(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /servers/{id}/events/ical [get]
 func (h *EventHandler) ExportServerEventsICal(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -536,7 +562,10 @@ func (h *EventHandler) ExportServerEventsICal(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/me/events/ical [get]
 func (h *EventHandler) ExportUserEventsICal(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	events, err := h.eventService.GetUserRSVPEvents(c.Context(), userID)
 	if err != nil {
@@ -555,45 +584,45 @@ func (h *EventHandler) ExportUserEventsICal(c *fiber.Ctx) error {
 
 // generateICal generates an iCalendar string from a list of events
 func generateICal(events []*models.Event) string {
-	var ical string
-	ical = "BEGIN:VCALENDAR\r\n"
-	ical += "VERSION:2.0\r\n"
-	ical += "PRODID:-//Hearth//Hearth Events//EN\r\n"
-	ical += "CALSCALE:GREGORIAN\r\n"
-	ical += "METHOD:PUBLISH\r\n"
+	var ical strings.Builder
+	ical.WriteString("BEGIN:VCALENDAR\r\n")
+	ical.WriteString("VERSION:2.0\r\n")
+	ical.WriteString("PRODID:-//Hearth//Hearth Events//EN\r\n")
+	ical.WriteString("CALSCALE:GREGORIAN\r\n")
+	ical.WriteString("METHOD:PUBLISH\r\n")
 
 	for _, event := range events {
-		ical += "BEGIN:VEVENT\r\n"
-		ical += fmt.Sprintf("UID:%s@hearth\r\n", event.ID.String())
-		ical += fmt.Sprintf("DTSTAMP:%s\r\n", formatICalTime(time.Now()))
-		ical += fmt.Sprintf("DTSTART:%s\r\n", formatICalTime(event.ScheduledStart))
+		ical.WriteString("BEGIN:VEVENT\r\n")
+		fmt.Fprintf(&ical, "UID:%s@hearth\r\n", event.ID.String())
+		fmt.Fprintf(&ical, "DTSTAMP:%s\r\n", formatICalTime(time.Now()))
+		fmt.Fprintf(&ical, "DTSTART:%s\r\n", formatICalTime(event.ScheduledStart))
 		if event.ScheduledEnd != nil {
-			ical += fmt.Sprintf("DTEND:%s\r\n", formatICalTime(*event.ScheduledEnd))
+			fmt.Fprintf(&ical, "DTEND:%s\r\n", formatICalTime(*event.ScheduledEnd))
 		}
-		ical += fmt.Sprintf("SUMMARY:%s\r\n", escapeICalText(event.Name))
+		fmt.Fprintf(&ical, "SUMMARY:%s\r\n", escapeICalText(event.Name))
 		if event.Description != "" {
-			ical += fmt.Sprintf("DESCRIPTION:%s\r\n", escapeICalText(event.Description))
+			fmt.Fprintf(&ical, "DESCRIPTION:%s\r\n", escapeICalText(event.Description))
 		}
 		if event.Location != "" {
-			ical += fmt.Sprintf("LOCATION:%s\r\n", escapeICalText(event.Location))
+			fmt.Fprintf(&ical, "LOCATION:%s\r\n", escapeICalText(event.Location))
 		}
-		ical += fmt.Sprintf("ORGANIZER;CN=Event Creator:mailto:noreply@hearth.app\r\n")
-		ical += "STATUS:"
+		ical.WriteString("ORGANIZER;CN=Event Creator:mailto:noreply@hearth.app\r\n")
+		ical.WriteString("STATUS:")
 		switch event.Status {
 		case models.EventStatusScheduled:
-			ical += "CONFIRMED\r\n"
+			ical.WriteString("CONFIRMED\r\n")
 		case models.EventStatusCancelled:
-			ical += "CANCELLED\r\n"
+			ical.WriteString("CANCELLED\r\n")
 		case models.EventStatusCompleted:
-			ical += "COMPLETED\r\n"
+			ical.WriteString("COMPLETED\r\n")
 		default:
-			ical += "TENTATIVE\r\n"
+			ical.WriteString("TENTATIVE\r\n")
 		}
-		ical += fmt.Sprintf("END:VEVENT\r\n")
+		ical.WriteString("END:VEVENT\r\n")
 	}
 
-	ical += "END:VCALENDAR\r\n"
-	return ical
+	ical.WriteString("END:VCALENDAR\r\n")
+	return ical.String()
 }
 
 // formatICalTime formats a time as iCalendar datetime string

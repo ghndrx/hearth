@@ -29,7 +29,10 @@ func NewServerAudioSettingsHandler(service ServerAudioSettingsServiceInterface) 
 
 // GetSettings returns audio settings for the current user in a specific server
 func (h *ServerAudioSettingsHandler) GetSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -49,7 +52,10 @@ func (h *ServerAudioSettingsHandler) GetSettings(c *fiber.Ctx) error {
 
 // GetAllSettings returns audio settings for the current user across all servers
 func (h *ServerAudioSettingsHandler) GetAllSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	settings, err := h.service.GetAllForUser(c.Context(), userID)
 	if err != nil {
@@ -63,7 +69,10 @@ func (h *ServerAudioSettingsHandler) GetAllSettings(c *fiber.Ctx) error {
 
 // UpdateSettings updates audio settings for the current user in a specific server
 func (h *ServerAudioSettingsHandler) UpdateSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -102,7 +111,10 @@ func (h *ServerAudioSettingsHandler) UpdateSettings(c *fiber.Ctx) error {
 
 // DeleteSettings resets audio settings for the current user in a specific server
 func (h *ServerAudioSettingsHandler) DeleteSettings(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	serverID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

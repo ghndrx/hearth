@@ -18,11 +18,13 @@ type CustomEmoji struct {
 	Animated bool
 }
 
+// EmojiService handles custom emoji operations
 type EmojiService struct {
 	mu     sync.RWMutex
 	emojis map[uuid.UUID]*CustomEmoji
 }
 
+// NewEmojiService creates a new emoji service
 func NewEmojiService() *EmojiService {
 	return &EmojiService{emojis: make(map[uuid.UUID]*CustomEmoji)}
 }

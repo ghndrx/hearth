@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrReminderNotFound = errors.New("reminder not found")
-
 // Reminder represents a user reminder
 type Reminder struct {
 	ID        uuid.UUID

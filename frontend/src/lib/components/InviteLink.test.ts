@@ -157,16 +157,7 @@ describe('InviteLink', () => {
 		expect(getByText('Copied!')).toBeInTheDocument();
 	});
 
-	// Skip - needs Svelte 5 event prop migration
-	it.skip('dispatches generated event on successful generation', async () => {
-		// Svelte 5 uses event props instead of $on
-	});
-
-	// Skip - needs Svelte 5 event prop migration
-	it.skip('dispatches copied event on successful copy', async () => {
-		// Svelte 5 uses event props instead of $on
-	});
-
+	
 	it('uses custom baseUrl when provided', async () => {
 		const { container } = render(InviteLink, {
 			props: {
@@ -199,11 +190,7 @@ describe('InviteLink', () => {
 		});
 	});
 
-	// Skip - needs Svelte 5 event prop migration
-	it.skip('dispatches error event when API fails', async () => {
-		// Svelte 5 uses event props instead of $on
-	});
-
+	
 	it('shows error when clipboard copy fails', async () => {
 		mockClipboard.writeText.mockRejectedValueOnce(new Error('Clipboard error'));
 
@@ -285,57 +272,27 @@ describe('InviteLink', () => {
 		expect(select?.options.length).toBeGreaterThan(0);
 	});
 
-	// Skip: Svelte 5's bind_select_value doesn't respond to fireEvent.change/userEvent.selectOptions
-	// in happy-dom — the change event fires but bind:value doesn't update the Svelte state.
-	// The actual component works correctly; this is a known test-environment limitation.
-	// The generateInvite() integration is covered by "exposes generateInvite method" test.
-	it.skip('regenerates invite when expiration setting changes', async () => {
-		// Implementation same as failing test
-		const user = userEvent.setup();
-		const { container } = render(InviteLink, {
-			props: { channelId: 'channel-123', showSettings: true, autoGenerate: true }
+	it('uses custom expiration setting when generating invite', async () => {
+		render(InviteLink, {
+			props: { channelId: 'channel-123', autoGenerate: true, expiresIn: 3600 }
 		});
 
-		await waitFor(() => { expect(api.post).toHaveBeenCalledTimes(1); });
-
-		const details = container.querySelector('.settings-panel') as HTMLDetailsElement;
-		if (details) details.open = true;
-
-		await waitFor(() => { expect(container.querySelector('#invite-expires')).toBeInTheDocument(); });
-
-		const expiresSelect = container.querySelector('#invite-expires') as HTMLSelectElement;
-		await user.selectOptions(expiresSelect, '3600');
-
-		await waitFor(() => { expect(api.post).toHaveBeenCalledTimes(2); });
-		expect(api.post).toHaveBeenLastCalledWith('/channels/channel-123/invites', {
-			max_age: 3600, max_uses: 0, temporary: false
+		await waitFor(() => {
+			expect(api.post).toHaveBeenCalledWith('/channels/channel-123/invites', {
+				max_age: 3600, max_uses: 0, temporary: false
+			});
 		});
 	});
 
-	// Skip: Svelte 5's bind_select_value doesn't respond to fireEvent.change/userEvent.selectOptions
-	// in happy-dom — the change event fires but bind:value doesn't update the Svelte state.
-	// The actual component works correctly; this is a known test-environment limitation.
-	// The generateInvite() integration is covered by "exposes generateInvite method" test.
-	it.skip('regenerates invite when max uses setting changes', async () => {
-		// Implementation same as failing test
-		const user = userEvent.setup();
-		const { container } = render(InviteLink, {
-			props: { channelId: 'channel-123', showSettings: true, autoGenerate: true }
+	it('uses custom max uses setting when generating invite', async () => {
+		render(InviteLink, {
+			props: { channelId: 'channel-123', autoGenerate: true, maxUses: 10 }
 		});
 
-		await waitFor(() => { expect(api.post).toHaveBeenCalledTimes(1); });
-
-		const details = container.querySelector('.settings-panel') as HTMLDetailsElement;
-		if (details) details.open = true;
-
-		await waitFor(() => { expect(container.querySelector('#invite-max-uses')).toBeInTheDocument(); });
-
-		const maxUsesSelect = container.querySelector('#invite-max-uses') as HTMLSelectElement;
-		await user.selectOptions(maxUsesSelect, '10');
-
-		await waitFor(() => { expect(api.post).toHaveBeenCalledTimes(2); });
-		expect(api.post).toHaveBeenLastCalledWith('/channels/channel-123/invites', {
-			max_age: 604800, max_uses: 10, temporary: false
+		await waitFor(() => {
+			expect(api.post).toHaveBeenCalledWith('/channels/channel-123/invites', {
+				max_age: 604800, max_uses: 10, temporary: false
+			});
 		});
 	});
 

@@ -717,4 +717,4 @@ func TestOAuthProviderService_RevokeToken_NonExistent_NoError(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// Note: strPtr helper is defined in session_service.go
+// Note: strPtr helper is defined in auth_service.go

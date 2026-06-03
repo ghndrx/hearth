@@ -478,14 +478,14 @@ func TestHybridLimiter(t *testing.T) {
 	// Test HybridLimiter fallback behavior
 	t.Run("uses Redis when available", func(t *testing.T) {
 		// This is a unit test - we'd need actual Redis for integration test
-		hybrid := NewHybridLimiter(nil, nil)
+		hybrid := NewHybridRateLimiterAdapter(nil, nil)
 		if hybrid.IsAvailable() {
 			t.Error("should not be available with no limiters")
 		}
 	})
 
 	t.Run("IsRedisAvailable returns false with nil Redis", func(t *testing.T) {
-		hybrid := NewHybridLimiter(nil, nil)
+		hybrid := NewHybridRateLimiterAdapter(nil, nil)
 		if hybrid.IsRedisAvailable() {
 			t.Error("Redis should not be available when nil")
 		}

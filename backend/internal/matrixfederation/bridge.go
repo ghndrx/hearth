@@ -15,7 +15,7 @@ import (
 type FederationBridge struct {
 	queue          *TransactionQueue
 	store          FederationEventStore
-	state          *InMemoryStateStore
+	state          StateStore
 	keyStore       *KeyStore
 	roomAliasStore RoomAliasStore
 	userService    UserGetter
@@ -27,7 +27,7 @@ func NewFederationBridge(
 	serverName string,
 	queue *TransactionQueue,
 	store FederationEventStore,
-	state *InMemoryStateStore,
+	state StateStore,
 	keyStore *KeyStore,
 	roomAliasStore RoomAliasStore,
 	userService UserGetter,

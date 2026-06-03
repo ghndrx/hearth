@@ -247,12 +247,6 @@ func (a *HybridRateLimiterAdapter) IsAvailable() bool {
 	return false
 }
 
-// NewHybridLimiter is a convenience alias for NewHybridRateLimiterAdapter
-// for backward compatibility with existing tests
-func NewHybridLimiter(redisLimiter *ratelimit.RedisLimiter, memoryLimiter *ratelimit.Limiter) *HybridRateLimiterAdapter {
-	return NewHybridRateLimiterAdapter(redisLimiter, memoryLimiter)
-}
-
 // IsRedisAvailable returns whether Redis is currently available for rate limiting
 func (a *HybridRateLimiterAdapter) IsRedisAvailable() bool {
 	return a.useRedis && a.redisLimiter != nil && a.redisLimiter.IsAvailable()

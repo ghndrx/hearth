@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -187,6 +188,7 @@ func TestFederationMiddleware_VerifyXMatrix_ValidRequestSetsLocals(t *testing.T)
 	require.NoError(t, clientMiddleware.SignRequest(stdReq))
 
 	req.Header.Set("Authorization", stdReq.Header.Get("Authorization"))
+	req.Header.Set("X-Matrix-Origin-TS", stdReq.Header.Get("X-Matrix-Origin-TS"))
 
 	resp, err := app.Test(req)
 	require.NoError(t, err)
@@ -235,6 +237,7 @@ func TestFederationMiddleware_VerifyXMatrix_KeyNotFound(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPut, "/_matrix/federation/v1/send/txn123", bytes.NewReader([]byte(`{}`)))
 	req.Header.Set("Authorization", `X-Matrix origin="example.com",key="ed25519:missing",sig="testsig"`)
+	req.Header.Set("X-Matrix-Origin-TS", strconv.FormatInt(time.Now().UnixMilli(), 10))
 	resp, err := app.Test(req)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)

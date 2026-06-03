@@ -24,6 +24,26 @@ func NewSlashCommandHandler(slashCmdService *services.SlashCommandService, permS
 	}
 }
 
+// checkAppOwnership verifies the authenticated user owns the application
+func (h *SlashCommandHandler) checkAppOwnership(c *fiber.Ctx, appID uuid.UUID) (uuid.UUID, error) {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	app, err := h.slashCmdService.GetApplication(c.Context(), appID)
+	if err != nil || app == nil {
+		return uuid.Nil, c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "application not found",
+		})
+	}
+	if app.OwnerID != userID {
+		return uuid.Nil, c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "you do not own this application",
+		})
+	}
+	return userID, nil
+}
+
 // SlashCommandResponse represents a slash command in API responses
 type SlashCommandResponse struct {
 	ID          string                     `json:"id"`
@@ -85,7 +105,10 @@ func (h *SlashCommandHandler) RegisterCommand(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := h.checkAppOwnership(c, appID)
+	if err != nil {
+		return err
+	}
 
 	var req RegisterCommandRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -159,6 +182,11 @@ func (h *SlashCommandHandler) GetCommands(c *fiber.Ctx) error {
 		})
 	}
 
+	_, err = h.checkAppOwnership(c, appID)
+	if err != nil {
+		return err
+	}
+
 	// Optional: filter by server
 	var serverID *uuid.UUID
 	if serverIDStr := c.Query("guild_id"); serverIDStr != "" {
@@ -208,6 +236,11 @@ func (h *SlashCommandHandler) GetCommand(c *fiber.Ctx) error {
 		})
 	}
 
+	_, err = h.checkAppOwnership(c, appID)
+	if err != nil {
+		return err
+	}
+
 	cmd, err := h.slashCmdService.GetCommand(c.Context(), appID, commandID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -232,6 +265,11 @@ func (h *SlashCommandHandler) UpdateCommand(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid command ID",
 		})
+	}
+
+	_, err = h.checkAppOwnership(c, appID)
+	if err != nil {
+		return err
 	}
 
 	var req RegisterCommandRequest
@@ -578,7 +616,10 @@ func applicationToResponse(app *models.Application) ApplicationResponse {
 // CreateApplication creates a new application
 // POST /api/v1/applications
 func (h *SlashCommandHandler) CreateApplication(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req struct {
 		Name        string `json:"name"`
@@ -624,7 +665,10 @@ func (h *SlashCommandHandler) CreateApplication(c *fiber.Ctx) error {
 // GetApplications gets all applications for the current user
 // GET /api/v1/applications
 func (h *SlashCommandHandler) GetApplications(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	apps, err := h.slashCmdService.GetApplicationsByOwner(c.Context(), userID)
 	if err != nil {
@@ -652,10 +696,19 @@ func (h *SlashCommandHandler) GetApplication(c *fiber.Ctx) error {
 		})
 	}
 
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	app, err := h.slashCmdService.GetApplication(c.Context(), appID)
 	if err != nil || app == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "application not found",
+		})
+	}
+	if app.OwnerID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "you do not own this application",
 		})
 	}
 
@@ -670,6 +723,11 @@ func (h *SlashCommandHandler) UpdateApplication(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid application ID",
 		})
+	}
+
+	_, err = h.checkAppOwnership(c, appID)
+	if err != nil {
+		return err
 	}
 
 	var req struct {

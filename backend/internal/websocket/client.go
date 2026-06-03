@@ -38,6 +38,9 @@ type Client struct {
 	// Heartbeat
 	lastHeartbeat time.Time
 	sequence      int64
+
+	// Ensure send channel is closed only once
+	closeOnce sync.Once
 }
 
 // NewClient creates a new WebSocket client
@@ -140,8 +143,7 @@ func (c *Client) Send(msg *Message) {
 	select {
 	case c.send <- data:
 	default:
-		// Client buffer full, close connection
-		close(c.send)
+		// Client buffer full, unregister to trigger cleanup
 		c.hub.unregister <- c
 	}
 }

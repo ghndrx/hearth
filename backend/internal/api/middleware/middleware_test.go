@@ -154,69 +154,6 @@ func TestRequireAuth(t *testing.T) {
 	}
 }
 
-func TestCORS(t *testing.T) {
-	m := NewMiddleware("test-secret")
-
-	tests := []struct {
-		name           string
-		method         string
-		expectedStatus int
-		checkHeaders   bool
-	}{
-		{
-			name:           "GET request passes through with CORS headers",
-			method:         "GET",
-			expectedStatus: fiber.StatusOK,
-			checkHeaders:   true,
-		},
-		{
-			name:           "POST request passes through with CORS headers",
-			method:         "POST",
-			expectedStatus: fiber.StatusOK,
-			checkHeaders:   true,
-		},
-		{
-			name:           "OPTIONS request returns no content (preflight)",
-			method:         "OPTIONS",
-			expectedStatus: fiber.StatusNoContent,
-			checkHeaders:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			app := fiber.New()
-			t.Cleanup(func() { app.Shutdown() })
-			app.Use(m.CORS())
-			app.All("/test", func(c *fiber.Ctx) error {
-				return c.SendString("OK")
-			})
-
-			req := httptest.NewRequest(tt.method, "/test", nil)
-			resp, err := app.Test(req)
-			if err != nil {
-				t.Fatalf("app.Test failed: %v", err)
-			}
-
-			if resp.StatusCode != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
-			}
-
-			if tt.checkHeaders {
-				if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-					t.Error("expected Access-Control-Allow-Origin header to be '*'")
-				}
-				if resp.Header.Get("Access-Control-Allow-Methods") == "" {
-					t.Error("expected Access-Control-Allow-Methods header to be set")
-				}
-				if resp.Header.Get("Access-Control-Allow-Headers") == "" {
-					t.Error("expected Access-Control-Allow-Headers header to be set")
-				}
-			}
-		})
-	}
-}
-
 func TestRequestID(t *testing.T) {
 	m := NewMiddleware("test-secret")
 
@@ -452,7 +389,6 @@ func TestMiddlewareChaining(t *testing.T) {
 	t.Cleanup(func() { app.Shutdown() })
 	app.Use(m.Recover())
 	app.Use(m.RequestID())
-	app.Use(m.CORS())
 	app.Use(m.Logger())
 
 	// Protected route
@@ -480,9 +416,6 @@ func TestMiddlewareChaining(t *testing.T) {
 		// Check middleware effects
 		if resp.Header.Get("X-Request-ID") == "" {
 			t.Error("expected X-Request-ID header")
-		}
-		if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-			t.Error("expected CORS header")
 		}
 	})
 

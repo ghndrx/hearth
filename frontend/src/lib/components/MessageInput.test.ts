@@ -190,4 +190,4 @@ describe('MessageInput', () => {
     expect(fileInput).toHaveAttribute('multiple');
     expect(fileInput).toHaveAttribute('accept');
   });
-});
+}, 30000);

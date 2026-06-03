@@ -26,8 +26,8 @@
 	let copyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 	// Settings
-	let expiresIn = 604800; // 7 days in seconds (default)
-	let maxUses = 0; // 0 = unlimited
+	export let expiresIn = 604800; // 7 days in seconds (default)
+	export let maxUses = 0; // 0 = unlimited
 	let settingsExpanded = false;
 
 	const expirationOptions = [

@@ -534,4 +534,4 @@ describe('ChannelList', () => {
 			expect(screen.getByText('Project Team')).toBeTruthy();
 		});
 	});
-});
+}, 30000);

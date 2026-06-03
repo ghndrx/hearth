@@ -2,12 +2,17 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
+
 	"hearth/internal/models"
+	"hearth/internal/ratelimit"
 )
 
 var (
@@ -1007,4 +1012,1089 @@ func (s *ServerService) GetChannels(ctx context.Context, serverID uuid.UUID) ([]
 // GetRoles retrieves all roles for a server
 func (s *ServerService) GetRoles(ctx context.Context, serverID uuid.UUID) ([]*models.Role, error) {
 	return s.roleRepo.GetByServerID(ctx, serverID)
+}
+
+var (
+	ErrBanNotFound      = errors.New("ban not found")
+	ErrBanAlreadyExist  = errors.New("user is already banned in this guild")
+	ErrBanAlreadyActive = errors.New("ban is already active")
+)
+
+// BanManagementRepository defines the contract for ban persistence operations.
+// This is separate from the BanRepository in invite_service.go which has different needs.
+type BanManagementRepository interface {
+	FindByUserAndGuild(ctx context.Context, guildID, userID uuid.UUID) (*models.Ban, error)
+	Create(ctx context.Context, ban *models.Ban) error
+	GetByServerAndUser(ctx context.Context, serverID, userID uuid.UUID) (*models.Ban, error)
+	Delete(ctx context.Context, serverID, userID uuid.UUID) error
+}
+
+// BanService handles business logic related to banning users.
+type BanService struct {
+	repo BanManagementRepository
+}
+
+// NewBanService creates a new BanService instance.
+func NewBanService(repo BanManagementRepository) *BanService {
+	return &BanService{
+		repo: repo,
+	}
+}
+
+// CreateBan creates a new ban record.
+// It checks if the user is already banned before inserting.
+func (s *BanService) CreateBan(ctx context.Context, guildID, userID uuid.UUID, reason string, bannedBy uuid.UUID) (*models.Ban, error) {
+	// Check if user is currently banned
+	existingBan, err := s.repo.FindByUserAndGuild(ctx, guildID, userID)
+
+	// Handle database specific errors (should be wrapped externally, but checked here)
+	if err != nil && !errors.Is(err, ErrBanNotFound) {
+		return nil, fmt.Errorf("failed to check existing bans: %w", err)
+	}
+
+	if existingBan != nil {
+		// User is already banned
+		return nil, ErrBanAlreadyExist
+	}
+
+	newBan := &models.Ban{
+		ServerID: guildID,
+		UserID:   userID,
+		Reason:   &reason,
+		BannedBy: &bannedBy,
+	}
+
+	if err := s.repo.Create(ctx, newBan); err != nil {
+		return nil, fmt.Errorf("failed to create ban: %w", err)
+	}
+
+	return newBan, nil
+}
+
+// Unban removes a ban by server and user ID.
+func (s *BanService) Unban(ctx context.Context, serverID, userID uuid.UUID) error {
+	// Verify it exists
+	ban, err := s.repo.GetByServerAndUser(ctx, serverID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve ban: %w", err)
+	}
+
+	// Avoid unused variable error
+	_ = ban
+
+	if err := s.repo.Delete(ctx, serverID, userID); err != nil {
+		return fmt.Errorf("failed to delete ban: %w", err)
+	}
+
+	return nil
+}
+
+// GetBan retrieves a ban by server and user ID.
+func (s *BanService) GetBan(ctx context.Context, serverID, userID uuid.UUID) (*models.Ban, error) {
+	return s.repo.GetByServerAndUser(ctx, serverID, userID)
+}
+
+// CheckIfBanned checks if a user is currently banned in a guild.
+// It returns true if banned. It is the caller's responsibility to check context cancellation.
+func (s *BanService) CheckIfBanned(ctx context.Context, guildID, userID uuid.UUID) (bool, error) {
+	ban, err := s.repo.FindByUserAndGuild(ctx, guildID, userID)
+	if err != nil {
+		// If it's an "Not Found" error, the user is not banned.
+		if errors.Is(err, ErrBanNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Avoid unused variable error
+	_ = ban
+	return true, nil
+}
+
+// RoleService handles role-related business logic
+type RoleService struct {
+	roleRepo    RoleRepository
+	serverRepo  ServerRepository
+	cache       CacheService
+	eventBus    EventBus
+	permService *PermissionService
+}
+
+// NewRoleService creates a new role service
+func NewRoleService(
+	roleRepo RoleRepository,
+	serverRepo ServerRepository,
+	cache CacheService,
+	eventBus EventBus,
+	permService *PermissionService,
+) *RoleService {
+	return &RoleService{
+		roleRepo:    roleRepo,
+		serverRepo:  serverRepo,
+		cache:       cache,
+		eventBus:    eventBus,
+		permService: permService,
+	}
+}
+
+// checkManageRolesPermission verifies the requester has MANAGE_ROLES permission
+func (s *RoleService) checkManageRolesPermission(ctx context.Context, serverID, requesterID uuid.UUID) error {
+	// Use permService if available for consistent permission checking
+	if s.permService != nil {
+		return s.permService.RequirePermission(ctx, serverID, requesterID, models.PermManageRoles)
+	}
+	// Fallback to local permission check
+	perms, err := s.ComputeMemberPermissions(ctx, serverID, requesterID)
+	if err != nil {
+		return err
+	}
+	if perms&models.PermManageRoles == 0 && perms&models.PermAdministrator == 0 {
+		return ErrMissingManageRoles
+	}
+	return nil
+}
+
+// getHighestRolePosition returns the highest (lowest number = highest priority) role position for a member
+// Returns -1 for server owner (highest possible)
+func (s *RoleService) getHighestRolePosition(ctx context.Context, serverID, userID uuid.UUID) (int, error) {
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return 0, err
+	}
+	if server != nil && server.OwnerID == userID {
+		return -1, nil // Owner is above all roles
+	}
+
+	roles, err := s.roleRepo.GetMemberRoles(ctx, serverID, userID)
+	if err != nil {
+		return 0, err
+	}
+	if len(roles) == 0 {
+		return 999999, nil // No roles = lowest position
+	}
+
+	highest := roles[0].Position
+	for _, role := range roles[1:] {
+		if role.Position < highest {
+			highest = role.Position
+		}
+	}
+	return highest, nil
+}
+
+// checkRoleHierarchy ensures requester's highest role is above the target role
+func (s *RoleService) checkRoleHierarchy(ctx context.Context, serverID, requesterID uuid.UUID, targetRole *models.Role) error {
+	// Use permService if available
+	if s.permService != nil {
+		canManage, err := s.permService.CanManageRole(ctx, serverID, requesterID, targetRole)
+		if err != nil {
+			return err
+		}
+		if !canManage {
+			return ErrRoleHierarchy
+		}
+		return nil
+	}
+	// Fallback to local hierarchy check
+	requesterPos, err := s.getHighestRolePosition(ctx, serverID, requesterID)
+	if err != nil {
+		return err
+	}
+	// Lower position number = higher in hierarchy
+	if requesterPos >= targetRole.Position {
+		return ErrRoleHierarchy
+	}
+	return nil
+}
+
+// CreateRole creates a new role in a server
+func (s *RoleService) CreateRole(
+	ctx context.Context,
+	serverID uuid.UUID,
+	creatorID uuid.UUID,
+	name string,
+	color int,
+	permissions int64,
+) (*models.Role, error) {
+	// Verify creator is a member with permissions
+	member, err := s.serverRepo.GetMember(ctx, serverID, creatorID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+	if err := s.checkManageRolesPermission(ctx, serverID, creatorID); err != nil {
+		return nil, err
+	}
+
+	// Get existing roles to determine position
+	roles, err := s.roleRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	role := &models.Role{
+		ID:          uuid.New(),
+		ServerID:    serverID,
+		Name:        name,
+		Color:       color,
+		Position:    len(roles), // Add at end
+		Permissions: permissions,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := s.roleRepo.Create(ctx, role); err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish("role.created", &RoleCreatedEvent{
+		Role:     role,
+		ServerID: serverID,
+	})
+
+	return role, nil
+}
+
+// UpdateRole updates a role
+func (s *RoleService) UpdateRole(
+	ctx context.Context,
+	roleID uuid.UUID,
+	requesterID uuid.UUID,
+	updates *models.RoleUpdate,
+) (*models.Role, error) {
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return nil, err
+	}
+	if role == nil {
+		return nil, ErrRoleNotFound
+	}
+
+	// Check permissions
+	member, err := s.serverRepo.GetMember(ctx, role.ServerID, requesterID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+	if err := s.checkManageRolesPermission(ctx, role.ServerID, requesterID); err != nil {
+		return nil, err
+	}
+	if err := s.checkRoleHierarchy(ctx, role.ServerID, requesterID, role); err != nil {
+		return nil, err
+	}
+
+	// Apply updates
+	if updates.Name != nil {
+		role.Name = *updates.Name
+	}
+	if updates.Color != nil {
+		role.Color = *updates.Color
+	}
+	if updates.Permissions != nil {
+		role.Permissions = *updates.Permissions
+	}
+	if updates.Hoist != nil {
+		role.Hoist = *updates.Hoist
+	}
+	if updates.Mentionable != nil {
+		role.Mentionable = *updates.Mentionable
+	}
+
+	if err := s.roleRepo.Update(ctx, role); err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish("role.updated", &RoleUpdatedEvent{
+		Role: role,
+	})
+
+	return role, nil
+}
+
+// DeleteRole deletes a role
+func (s *RoleService) DeleteRole(ctx context.Context, roleID, requesterID uuid.UUID) error {
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	if role == nil {
+		return ErrRoleNotFound
+	}
+
+	// Can't delete @everyone role
+	if role.IsDefault {
+		return ErrCannotDeleteDefault
+	}
+
+	// Check permissions
+	member, err := s.serverRepo.GetMember(ctx, role.ServerID, requesterID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+	if err := s.checkManageRolesPermission(ctx, role.ServerID, requesterID); err != nil {
+		return err
+	}
+	if err := s.checkRoleHierarchy(ctx, role.ServerID, requesterID, role); err != nil {
+		return err
+	}
+
+	if err := s.roleRepo.Delete(ctx, roleID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("role.deleted", &RoleDeletedEvent{
+		RoleID:   roleID,
+		ServerID: role.ServerID,
+	})
+
+	return nil
+}
+
+// GetServerRoles gets all roles in a server
+func (s *RoleService) GetServerRoles(ctx context.Context, serverID, requesterID uuid.UUID) ([]*models.Role, error) {
+	// Verify requester is a member
+	member, err := s.serverRepo.GetMember(ctx, serverID, requesterID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+
+	return s.roleRepo.GetByServerID(ctx, serverID)
+}
+
+// GetRole retrieves a single role by ID
+func (s *RoleService) GetRole(ctx context.Context, roleID, requesterID uuid.UUID) (*models.Role, error) {
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return nil, ErrRoleNotFound
+	}
+	if role == nil {
+		return nil, ErrRoleNotFound
+	}
+
+	// Verify requester is a member of the server this role belongs to
+	member, err := s.serverRepo.GetMember(ctx, role.ServerID, requesterID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+
+	return role, nil
+}
+
+// UpdateRolePositions updates the positions of multiple roles
+func (s *RoleService) UpdateRolePositions(
+	ctx context.Context,
+	serverID uuid.UUID,
+	requesterID uuid.UUID,
+	positions map[uuid.UUID]int,
+) error {
+	// Check permissions
+	member, err := s.serverRepo.GetMember(ctx, serverID, requesterID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+	if err := s.checkManageRolesPermission(ctx, serverID, requesterID); err != nil {
+		return err
+	}
+
+	return s.roleRepo.UpdatePositions(ctx, serverID, positions)
+}
+
+// AddRoleToMember assigns a role to a member
+func (s *RoleService) AddRoleToMember(
+	ctx context.Context,
+	serverID, userID, roleID uuid.UUID,
+	requesterID uuid.UUID,
+) error {
+	// Check permissions
+	member, err := s.serverRepo.GetMember(ctx, serverID, requesterID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+	if err := s.checkManageRolesPermission(ctx, serverID, requesterID); err != nil {
+		return err
+	}
+
+	// Verify target is a member
+	target, err := s.serverRepo.GetMember(ctx, serverID, userID)
+	if err != nil || target == nil {
+		return ErrNotServerMember
+	}
+
+	// Verify role exists
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil || role == nil {
+		return ErrRoleNotFound
+	}
+	if role.ServerID != serverID {
+		return ErrRoleNotFound
+	}
+
+	// Verify requester can manage this role (hierarchy check)
+	if err := s.checkRoleHierarchy(ctx, serverID, requesterID, role); err != nil {
+		return err
+	}
+
+	if err := s.roleRepo.AddRoleToMember(ctx, serverID, userID, roleID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("member.role_added", &MemberRoleAddedEvent{
+		ServerID: serverID,
+		UserID:   userID,
+		RoleID:   roleID,
+	})
+
+	return nil
+}
+
+// RemoveRoleFromMember removes a role from a member
+func (s *RoleService) RemoveRoleFromMember(
+	ctx context.Context,
+	serverID, userID, roleID uuid.UUID,
+	requesterID uuid.UUID,
+) error {
+	// Check permissions
+	member, err := s.serverRepo.GetMember(ctx, serverID, requesterID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+	if err := s.checkManageRolesPermission(ctx, serverID, requesterID); err != nil {
+		return err
+	}
+
+	// Fetch role to check hierarchy
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	if role == nil || role.ServerID != serverID {
+		return ErrRoleNotFound
+	}
+	if err := s.checkRoleHierarchy(ctx, serverID, requesterID, role); err != nil {
+		return err
+	}
+
+	if err := s.roleRepo.RemoveRoleFromMember(ctx, serverID, userID, roleID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("member.role_removed", &MemberRoleRemovedEvent{
+		ServerID: serverID,
+		UserID:   userID,
+		RoleID:   roleID,
+	})
+
+	return nil
+}
+
+// GetMemberRoles gets all roles for a member
+func (s *RoleService) GetMemberRoles(ctx context.Context, serverID, userID uuid.UUID) ([]*models.Role, error) {
+	return s.roleRepo.GetMemberRoles(ctx, serverID, userID)
+}
+
+// ComputeMemberPermissions computes effective permissions for a member
+func (s *RoleService) ComputeMemberPermissions(ctx context.Context, serverID, userID uuid.UUID) (int64, error) {
+	// Get server to check ownership
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return 0, err
+	}
+	if server == nil {
+		return 0, ErrServerNotFound
+	}
+
+	// Owner has all permissions
+	if server.OwnerID == userID {
+		return models.PermissionAll, nil
+	}
+
+	// Get member's roles
+	roles, err := s.roleRepo.GetMemberRoles(ctx, serverID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Combine permissions from all roles
+	var permissions int64 = 0
+	for _, role := range roles {
+		permissions |= role.Permissions
+	}
+
+	// Administrator grants all permissions
+	if permissions&models.PermAdministrator != 0 {
+		return models.PermissionAll, nil
+	}
+
+	return permissions, nil
+}
+
+// Events
+
+type RoleCreatedEvent struct {
+	Role     *models.Role
+	ServerID uuid.UUID
+}
+
+type RoleUpdatedEvent struct {
+	Role *models.Role
+}
+
+type RoleDeletedEvent struct {
+	RoleID   uuid.UUID
+	ServerID uuid.UUID
+}
+
+type MemberRoleAddedEvent struct {
+	ServerID uuid.UUID
+	UserID   uuid.UUID
+	RoleID   uuid.UUID
+}
+
+type MemberRoleRemovedEvent struct {
+	ServerID uuid.UUID
+	UserID   uuid.UUID
+	RoleID   uuid.UUID
+}
+
+// InviteRepository defines invite data operations
+type InviteRepository interface {
+	Create(ctx context.Context, invite *models.Invite) error
+	GetByCode(ctx context.Context, code string) (*models.Invite, error)
+	GetByServerID(ctx context.Context, serverID uuid.UUID) ([]*models.Invite, error)
+	IncrementUses(ctx context.Context, code string) error
+	Delete(ctx context.Context, code string) error
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
+// BanRepository defines ban data operations
+type BanRepository interface {
+	Create(ctx context.Context, ban *models.Ban) error
+	GetByServerAndUser(ctx context.Context, serverID, userID uuid.UUID) (*models.Ban, error)
+	GetByServerID(ctx context.Context, serverID uuid.UUID) ([]*models.Ban, error)
+	Delete(ctx context.Context, serverID, userID uuid.UUID) error
+}
+
+// InviteService handles invite-related business logic
+type InviteService struct {
+	inviteRepo    InviteRepository
+	banRepo       BanRepository
+	serverRepo    ServerRepository
+	permService   *PermissionService
+	cache         CacheService
+	eventBus      EventBus
+	rateLimiter   InviteRateLimiter
+}
+
+// NewInviteService creates a new invite service
+func NewInviteService(
+	inviteRepo InviteRepository,
+	banRepo BanRepository,
+	serverRepo ServerRepository,
+	permService *PermissionService,
+	cache CacheService,
+	eventBus EventBus,
+) *InviteService {
+	return &InviteService{
+		inviteRepo:  inviteRepo,
+		banRepo:     banRepo,
+		serverRepo:  serverRepo,
+		permService: permService,
+		cache:       cache,
+		eventBus:    eventBus,
+	}
+}
+
+// SetInviteRateLimiter sets the rate limiter for invite creation
+func (s *InviteService) SetInviteRateLimiter(rateLimiter InviteRateLimiter) {
+	s.rateLimiter = rateLimiter
+}
+
+// CreateInviteRequest represents an invite creation request
+type CreateInviteRequest struct {
+	ServerID  uuid.UUID
+	ChannelID uuid.UUID
+	CreatorID uuid.UUID
+	MaxUses   int           // 0 = unlimited
+	MaxAge    time.Duration // 0 = never expires
+	Temporary bool
+}
+
+// CreateInvite creates a new server invite
+func (s *InviteService) CreateInvite(ctx context.Context, req *CreateInviteRequest) (*models.Invite, error) {
+	// Verify creator is a member
+	member, err := s.serverRepo.GetMember(ctx, req.ServerID, req.CreatorID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+
+	// Check CREATE_INVITE permission
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, req.ServerID, req.CreatorID, models.PermCreateInvite); err != nil {
+			return nil, err
+		}
+	}
+
+	// Check invite creation rate limit
+	if s.rateLimiter != nil {
+		if err := s.rateLimiter.CheckInviteCreation(ctx, req.CreatorID); err != nil {
+			return nil, err
+		}
+	}
+
+	// Generate unique code
+	code, err := generateInviteCode()
+	if err != nil {
+		return nil, err
+	}
+
+	var expiresAt *time.Time
+	if req.MaxAge > 0 {
+		t := time.Now().Add(req.MaxAge)
+		expiresAt = &t
+	}
+
+	invite := &models.Invite{
+		Code:      code,
+		ServerID:  req.ServerID,
+		ChannelID: req.ChannelID,
+		CreatorID: req.CreatorID,
+		MaxUses:   req.MaxUses,
+		Uses:      0,
+		ExpiresAt: expiresAt,
+		Temporary: req.Temporary,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.inviteRepo.Create(ctx, invite); err != nil {
+		return nil, err
+	}
+
+	return invite, nil
+}
+
+// GetInvite retrieves an invite by code
+func (s *InviteService) GetInvite(ctx context.Context, code string) (*models.Invite, error) {
+	invite, err := s.inviteRepo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if invite == nil {
+		return nil, ErrInviteNotFound
+	}
+
+	// Load server info
+	server, _ := s.serverRepo.GetByID(ctx, invite.ServerID)
+	invite.Server = server
+
+	return invite, nil
+}
+
+// UseInvite joins a user to a server via invite
+func (s *InviteService) UseInvite(ctx context.Context, code string, userID uuid.UUID) (*models.Server, error) {
+	invite, err := s.inviteRepo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if invite == nil {
+		return nil, ErrInviteNotFound
+	}
+
+	// Check if invite is valid
+	if invite.IsExpired() {
+		return nil, ErrInviteExpired
+	}
+	if invite.IsMaxUsesReached() {
+		return nil, ErrInviteMaxUses
+	}
+
+	// Check if user is banned
+	ban, _ := s.banRepo.GetByServerAndUser(ctx, invite.ServerID, userID)
+	if ban != nil {
+		return nil, ErrBannedFromServer
+	}
+
+	// Check if already a member
+	existing, _ := s.serverRepo.GetMember(ctx, invite.ServerID, userID)
+	if existing != nil {
+		return nil, ErrAlreadyMember
+	}
+
+	// Add member
+	member := &models.Member{
+		ServerID: invite.ServerID,
+		UserID:   userID,
+		JoinedAt: time.Now(),
+		Pending:  invite.Temporary, // Temporary invites create pending members
+	}
+
+	if err := s.serverRepo.AddMember(ctx, member); err != nil {
+		return nil, err
+	}
+
+	// Increment invite uses
+	_ = s.inviteRepo.IncrementUses(ctx, code)
+
+	// Get server to return
+	server, err := s.serverRepo.GetByID(ctx, invite.ServerID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish("server.member_joined", &MemberJoinedEvent{
+		ServerID:   invite.ServerID,
+		UserID:     userID,
+		InviteCode: code,
+	})
+
+	return server, nil
+}
+
+// DeleteInvite deletes an invite
+func (s *InviteService) DeleteInvite(ctx context.Context, code string, requesterID uuid.UUID) error {
+	invite, err := s.inviteRepo.GetByCode(ctx, code)
+	if err != nil {
+		return err
+	}
+	if invite == nil {
+		return ErrInviteNotFound
+	}
+
+	// Check permissions (creator or MANAGE_SERVER)
+	if invite.CreatorID != requesterID {
+		member, err := s.serverRepo.GetMember(ctx, invite.ServerID, requesterID)
+		if err != nil || member == nil {
+			return ErrNotServerMember
+		}
+		// Require MANAGE_SERVER permission to delete others' invites
+		if s.permService != nil {
+			if err := s.permService.RequirePermission(ctx, invite.ServerID, requesterID, models.PermManageServer); err != nil {
+				return err
+			}
+		}
+	}
+
+	return s.inviteRepo.Delete(ctx, code)
+}
+
+// GetServerInvites gets all invites for a server
+func (s *InviteService) GetServerInvites(ctx context.Context, serverID, requesterID uuid.UUID) ([]*models.Invite, error) {
+	// Verify requester is a member
+	member, err := s.serverRepo.GetMember(ctx, serverID, requesterID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+
+	// Require MANAGE_SERVER permission to view all invites
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, serverID, requesterID, models.PermManageServer); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.inviteRepo.GetByServerID(ctx, serverID)
+}
+
+// CleanupExpiredInvites removes expired invites
+func (s *InviteService) CleanupExpiredInvites(ctx context.Context) (int64, error) {
+	return s.inviteRepo.DeleteExpired(ctx)
+}
+
+// Ban operations
+
+// BanMember bans a user from a server
+func (s *InviteService) BanMember(ctx context.Context, serverID, userID, moderatorID uuid.UUID, reason string) error {
+	// Check moderator permissions
+	member, err := s.serverRepo.GetMember(ctx, serverID, moderatorID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+
+	// Require BAN_MEMBERS permission
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, serverID, moderatorID, models.PermBanMembers); err != nil {
+			return err
+		}
+		// Check role hierarchy - can't ban members with higher/equal roles
+		canManage, err := s.permService.CanManageMember(ctx, serverID, moderatorID, userID)
+		if err != nil {
+			return err
+		}
+		if !canManage {
+			return ErrCannotManageMember
+		}
+	}
+
+	// Can't ban yourself
+	if userID == moderatorID {
+		return errors.New("cannot ban yourself")
+	}
+
+	// Remove from server first
+	_ = s.serverRepo.RemoveMember(ctx, serverID, userID)
+
+	// Create ban
+	ban := &models.Ban{
+		ServerID:  serverID,
+		UserID:    userID,
+		Reason:    &reason,
+		BannedBy:  &moderatorID,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.banRepo.Create(ctx, ban); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("server.member_banned", &MemberBannedEvent{
+		ServerID:    serverID,
+		UserID:      userID,
+		ModeratorID: moderatorID,
+		Reason:      reason,
+	})
+
+	return nil
+}
+
+// UnbanMember removes a ban
+func (s *InviteService) UnbanMember(ctx context.Context, serverID, userID, moderatorID uuid.UUID) error {
+	// Check moderator permissions
+	member, err := s.serverRepo.GetMember(ctx, serverID, moderatorID)
+	if err != nil || member == nil {
+		return ErrNotServerMember
+	}
+
+	// Require BAN_MEMBERS permission
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, serverID, moderatorID, models.PermBanMembers); err != nil {
+			return err
+		}
+	}
+
+	if err := s.banRepo.Delete(ctx, serverID, userID); err != nil {
+		return err
+	}
+
+	s.eventBus.Publish("server.member_unbanned", &MemberUnbannedEvent{
+		ServerID:    serverID,
+		UserID:      userID,
+		ModeratorID: moderatorID,
+	})
+
+	return nil
+}
+
+// GetServerBans gets all bans for a server
+func (s *InviteService) GetServerBans(ctx context.Context, serverID, requesterID uuid.UUID) ([]*models.Ban, error) {
+	member, err := s.serverRepo.GetMember(ctx, serverID, requesterID)
+	if err != nil || member == nil {
+		return nil, ErrNotServerMember
+	}
+
+	// Require BAN_MEMBERS permission to view bans
+	if s.permService != nil {
+		if err := s.permService.RequirePermission(ctx, serverID, requesterID, models.PermBanMembers); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.banRepo.GetByServerID(ctx, serverID)
+}
+
+// Helper functions
+
+func generateInviteCode() (string, error) {
+	bytes := make([]byte, 6)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+// Events
+
+type MemberJoinedEvent struct {
+	ServerID   uuid.UUID
+	UserID     uuid.UUID
+	InviteCode string
+}
+
+type MemberBannedEvent struct {
+	ServerID    uuid.UUID
+	UserID      uuid.UUID
+	ModeratorID uuid.UUID
+	Reason      string
+}
+
+type MemberUnbannedEvent struct {
+	ServerID    uuid.UUID
+	UserID      uuid.UUID
+	ModeratorID uuid.UUID
+}
+
+// DefaultInviteRateLimit is the default maximum invites per user per hour
+const DefaultInviteRateLimit = 5
+
+// DefaultInviteRateWindow is the default time window for invite rate limiting
+const DefaultInviteRateWindow = 1 * time.Hour
+
+// InviteRateLimiterConfig holds configuration for invite rate limiting
+type InviteRateLimiterConfig struct {
+	// MaxInvites is the maximum number of invites allowed per window
+	MaxInvites int
+	// Window is the duration of the rate limit window
+	Window time.Duration
+}
+
+// DefaultInviteRateLimiterConfig returns the default configuration
+func DefaultInviteRateLimiterConfig() InviteRateLimiterConfig {
+	return InviteRateLimiterConfig{
+		MaxInvites: DefaultInviteRateLimit,
+		Window:     DefaultInviteRateWindow,
+	}
+}
+
+// RedisInviteRateLimiter implements InviteRateLimiter using Redis
+type RedisInviteRateLimiter struct {
+	redisLimiter *ratelimit.RedisLimiter
+	config       InviteRateLimiterConfig
+}
+
+// NewRedisInviteRateLimiter creates a new Redis-backed invite rate limiter
+func NewRedisInviteRateLimiter(redisLimiter *ratelimit.RedisLimiter, config InviteRateLimiterConfig) *RedisInviteRateLimiter {
+	if config.MaxInvites == 0 {
+		config.MaxInvites = DefaultInviteRateLimit
+	}
+	if config.Window == 0 {
+		config.Window = DefaultInviteRateWindow
+	}
+	return &RedisInviteRateLimiter{
+		redisLimiter: redisLimiter,
+		config:       config,
+	}
+}
+
+// CheckInviteCreation checks if the user can create an invite
+func (r *RedisInviteRateLimiter) CheckInviteCreation(ctx context.Context, userID uuid.UUID) error {
+	result, err := r.redisLimiter.CheckUser(ctx, userID, "invite", r.config.MaxInvites, r.config.Window)
+	if err != nil {
+		// On error, allow the request (fail open)
+		return nil
+	}
+
+	if !result.Allowed {
+		return ErrInviteRateLimited
+	}
+
+	return nil
+}
+
+// MemoryInviteRateLimiter implements InviteRateLimiter using in-memory storage
+type MemoryInviteRateLimiter struct {
+	config InviteRateLimiterConfig
+	// userWindows stores the start time of each user's current window
+	userWindows map[uuid.UUID]windowState
+}
+
+type windowState struct {
+	start     time.Time
+	count     int
+	windowEnd time.Time
+}
+
+// NewMemoryInviteRateLimiter creates a new in-memory invite rate limiter
+func NewMemoryInviteRateLimiter(config InviteRateLimiterConfig) *MemoryInviteRateLimiter {
+	if config.MaxInvites == 0 {
+		config.MaxInvites = DefaultInviteRateLimit
+	}
+	if config.Window == 0 {
+		config.Window = DefaultInviteRateWindow
+	}
+	return &MemoryInviteRateLimiter{
+		config:     config,
+		userWindows: make(map[uuid.UUID]windowState),
+	}
+}
+
+// CheckInviteCreation checks if the user can create an invite
+func (r *MemoryInviteRateLimiter) CheckInviteCreation(ctx context.Context, userID uuid.UUID) error {
+	now := time.Now()
+
+	state, exists := r.userWindows[userID]
+	if !exists || now.After(state.windowEnd) {
+		// Start a new window
+		r.userWindows[userID] = windowState{
+			start:     now,
+			count:     1,
+			windowEnd: now.Add(r.config.Window),
+		}
+		return nil
+	}
+
+	// Within window, check count
+	if state.count >= r.config.MaxInvites {
+		return ErrInviteRateLimited
+	}
+
+	// Increment count
+	state.count++
+	r.userWindows[userID] = state
+	return nil
+}
+
+// CacheInviteRateLimiter implements InviteRateLimiter using the cache service
+// This provides persistence across service restarts
+type CacheInviteRateLimiter struct {
+	cache   CacheService
+	config  InviteRateLimiterConfig
+}
+
+// NewCacheInviteRateLimiter creates a new cache-backed invite rate limiter
+func NewCacheInviteRateLimiter(cache CacheService, config InviteRateLimiterConfig) *CacheInviteRateLimiter {
+	if config.MaxInvites == 0 {
+		config.MaxInvites = DefaultInviteRateLimit
+	}
+	if config.Window == 0 {
+		config.Window = DefaultInviteRateWindow
+	}
+	return &CacheInviteRateLimiter{
+		cache:  cache,
+		config: config,
+	}
+}
+
+// cacheKey returns the cache key for a user's invite rate limit
+func (r *CacheInviteRateLimiter) cacheKey(userID uuid.UUID) string {
+	return fmt.Sprintf("invite_ratelimit:%s", userID.String())
+}
+
+// CheckInviteCreation checks if the user can create an invite
+func (r *CacheInviteRateLimiter) CheckInviteCreation(ctx context.Context, userID uuid.UUID) error {
+	key := r.cacheKey(userID)
+
+	// Try to get existing count
+	data, err := r.cache.Get(ctx, key)
+	if err != nil || len(data) == 0 {
+		// No existing entry, allow and set initial count
+		err := r.cache.Set(ctx, key, []byte("1"), r.config.Window)
+		if err != nil {
+			// Cache error, allow the request
+			return nil
+		}
+		return nil
+	}
+
+	// Parse existing count - data is a byte slice
+	var count int
+	_, parseErr := fmt.Sscanf(string(data), "%d", &count)
+	if parseErr != nil {
+		// Invalid data, reset
+		r.cache.Set(ctx, key, []byte("1"), r.config.Window)
+		return nil
+	}
+
+	if count >= r.config.MaxInvites {
+		return ErrInviteRateLimited
+	}
+
+	// Increment count - note: this is not atomic, but for rate limiting it's acceptable
+	newCount := count + 1
+	r.cache.Set(ctx, key, []byte(fmt.Sprintf("%d", newCount)), r.config.Window)
+	return nil
 }

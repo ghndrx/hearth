@@ -16,12 +16,12 @@ import (
 // FederationEventHandler handles event query endpoints.
 type FederationEventHandler struct {
 	eventStore FederationEventStore
-	stateStore *InMemoryStateStore
+	stateStore StateStore
 	serverName string
 }
 
 // NewFederationEventHandler creates a new federation event handler.
-func NewFederationEventHandler(serverName string, store FederationEventStore, state *InMemoryStateStore) *FederationEventHandler {
+func NewFederationEventHandler(serverName string, store FederationEventStore, state StateStore) *FederationEventHandler {
 	return &FederationEventHandler{
 		eventStore: store,
 		stateStore: state,

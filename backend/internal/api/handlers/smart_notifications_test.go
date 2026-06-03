@@ -123,7 +123,7 @@ func (m *MockSmartNotificationService) RouteNotification(ctx context.Context, us
 
 // --- Helper ---
 
-func setupSmartNotifTestApp(handler *SmartNotificationHandler) (*fiber.App, uuid.UUID) {
+func setupSmartNotifTestApp(handler *NotificationHandler) (*fiber.App, uuid.UUID) {
 	app := fiber.New()
 	userID := uuid.New()
 
@@ -144,8 +144,8 @@ func setupSmartNotifTestApp(handler *SmartNotificationHandler) (*fiber.App, uuid
 	notif.Post("/:id/click", handler.TrackClick)
 	notif.Post("/:id/dismiss", handler.DismissNotification)
 	notif.Get("/engagement", handler.GetEngagement)
-	notif.Get("/preferences", handler.GetPreferences)
-	notif.Patch("/preferences", handler.UpdatePreferences)
+	notif.Get("/preferences", handler.GetSmartNotificationPreferences)
+	notif.Patch("/preferences", handler.UpdateSmartNotificationPreferences)
 	notif.Get("/digests", handler.ListDigests)
 	notif.Get("/digests/:id", handler.GetDigest)
 	notif.Post("/digests/:id/read", handler.MarkDigestRead)
@@ -157,7 +157,7 @@ func setupSmartNotifTestApp(handler *SmartNotificationHandler) (*fiber.App, uuid
 
 func TestSmartNotificationHandler_ScoreNotification(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, _ := setupSmartNotifTestApp(handler)
 
 	mockService.On("ScoreNotification", mock.Anything, mock.AnythingOfType("*models.PriorityScoringInput")).Return(&models.SmartNotification{
@@ -183,7 +183,7 @@ func TestSmartNotificationHandler_ScoreNotification(t *testing.T) {
 
 func TestSmartNotificationHandler_ScoreNotification_BadRequest(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, _ := setupSmartNotifTestApp(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/users/@me/notifications/score", bytes.NewReader([]byte("invalid json")))
@@ -197,7 +197,7 @@ func TestSmartNotificationHandler_ScoreNotification_BadRequest(t *testing.T) {
 
 func TestSmartNotificationHandler_SnoozeNotifications(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	until := time.Now().Add(30 * time.Minute)
@@ -219,7 +219,7 @@ func TestSmartNotificationHandler_SnoozeNotifications(t *testing.T) {
 
 func TestSmartNotificationHandler_SnoozeNotifications_InvalidDuration(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, _ := setupSmartNotifTestApp(handler)
 
 	body, _ := json.Marshal(models.SnoozeRequest{DurationMins: 0})
@@ -234,7 +234,7 @@ func TestSmartNotificationHandler_SnoozeNotifications_InvalidDuration(t *testing
 
 func TestSmartNotificationHandler_UnsnoozeNotifications(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("UnsnoozeNotifications", mock.Anything, userID, (*uuid.UUID)(nil), (*uuid.UUID)(nil)).Return(nil)
@@ -248,7 +248,7 @@ func TestSmartNotificationHandler_UnsnoozeNotifications(t *testing.T) {
 
 func TestSmartNotificationHandler_GetSnoozeStatus(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	until := time.Now().Add(30 * time.Minute)
@@ -267,7 +267,7 @@ func TestSmartNotificationHandler_GetSnoozeStatus(t *testing.T) {
 
 func TestSmartNotificationHandler_MuteNotifications(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("MuteNotifications", mock.Anything, userID, mock.AnythingOfType("*models.MuteRequest")).Return(&models.MuteConfig{
@@ -287,7 +287,7 @@ func TestSmartNotificationHandler_MuteNotifications(t *testing.T) {
 
 func TestSmartNotificationHandler_GetMuteStatus(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("IsNotificationMuted", mock.Anything, userID, (*uuid.UUID)(nil), (*uuid.UUID)(nil)).Return(false, nil)
@@ -305,7 +305,7 @@ func TestSmartNotificationHandler_GetMuteStatus(t *testing.T) {
 
 func TestSmartNotificationHandler_TrackClick(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	notifID := uuid.New()
@@ -320,7 +320,7 @@ func TestSmartNotificationHandler_TrackClick(t *testing.T) {
 
 func TestSmartNotificationHandler_TrackClick_BadID(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, _ := setupSmartNotifTestApp(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/users/@me/notifications/invalid-id/click", nil)
@@ -332,7 +332,7 @@ func TestSmartNotificationHandler_TrackClick_BadID(t *testing.T) {
 
 func TestSmartNotificationHandler_DismissNotification(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("TrackNotificationDismissed", mock.Anything, userID).Return(nil)
@@ -347,7 +347,7 @@ func TestSmartNotificationHandler_DismissNotification(t *testing.T) {
 
 func TestSmartNotificationHandler_GetEngagement(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("GetUserEngagement", mock.Anything, userID).Return(&models.UserEngagement{
@@ -368,7 +368,7 @@ func TestSmartNotificationHandler_GetEngagement(t *testing.T) {
 
 func TestSmartNotificationHandler_GetPreferences(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("GetUserPreferences", mock.Anything, userID).Return(&models.SmartNotificationPreferences{
@@ -387,7 +387,7 @@ func TestSmartNotificationHandler_GetPreferences(t *testing.T) {
 
 func TestSmartNotificationHandler_UpdatePreferences(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("UpdateUserPreferences", mock.Anything, userID, mock.AnythingOfType("*models.SmartNotificationPreferences")).Return(nil)
@@ -408,7 +408,7 @@ func TestSmartNotificationHandler_UpdatePreferences(t *testing.T) {
 
 func TestSmartNotificationHandler_UpdatePreferences_ClampsInterval(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("UpdateUserPreferences", mock.Anything, userID, mock.MatchedBy(func(p *models.SmartNotificationPreferences) bool {
@@ -429,7 +429,7 @@ func TestSmartNotificationHandler_UpdatePreferences_ClampsInterval(t *testing.T)
 
 func TestSmartNotificationHandler_ListDigests(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	digests := []models.NotificationDigest{
@@ -453,7 +453,7 @@ func TestSmartNotificationHandler_ListDigests(t *testing.T) {
 
 func TestSmartNotificationHandler_ListDigests_Empty(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	mockService.On("ListDigests", mock.Anything, userID, models.DigestListOptions{Limit: 20, Offset: 0}).Return(nil, nil)
@@ -472,7 +472,7 @@ func TestSmartNotificationHandler_ListDigests_Empty(t *testing.T) {
 
 func TestSmartNotificationHandler_GetDigest(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	digestID := uuid.New()
@@ -492,7 +492,7 @@ func TestSmartNotificationHandler_GetDigest(t *testing.T) {
 
 func TestSmartNotificationHandler_GetDigest_NotFound(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	digestID := uuid.New()
@@ -507,7 +507,7 @@ func TestSmartNotificationHandler_GetDigest_NotFound(t *testing.T) {
 
 func TestSmartNotificationHandler_MarkDigestRead(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, userID := setupSmartNotifTestApp(handler)
 
 	digestID := uuid.New()
@@ -522,7 +522,7 @@ func TestSmartNotificationHandler_MarkDigestRead(t *testing.T) {
 
 func TestSmartNotificationHandler_MarkDigestRead_BadID(t *testing.T) {
 	mockService := new(MockSmartNotificationService)
-	handler := NewSmartNotificationHandler(mockService)
+	handler := &NotificationHandler{smartNotifService: mockService}
 	app, _ := setupSmartNotifTestApp(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/users/@me/notifications/digests/bad-id/read", nil)

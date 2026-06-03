@@ -252,12 +252,9 @@ func (dm *DrainManager) ForceCloseClients(clients []*Client, closeCode int, reas
 			}
 		}
 		// Close the send channel to stop writePump
-		select {
-		case <-client.send:
-			// Already closed
-		default:
+		client.closeOnce.Do(func() {
 			close(client.send)
-		}
+		})
 	}
 	return closed
 }

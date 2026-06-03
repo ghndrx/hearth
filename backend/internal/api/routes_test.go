@@ -26,7 +26,7 @@ func createMinimalHandlers() *handlers.Handlers {
 		Voice:     &handlers.VoiceHandler{},
 		Gateway:   &handlers.GatewayHandler{},
 		Search:    &handlers.SearchHandler{},
-		ForumTags: &handlers.ForumTagsHandler{},
+
 	}
 }
 
@@ -207,9 +207,7 @@ func TestSetupRoutes_OptionalHandlersNil(t *testing.T) {
 	// All optional handlers are nil - should not panic
 	h.Sessions = nil
 	h.Settings = nil
-	h.ReadState = nil
 	h.Notifications = nil
-	h.Mentions = nil
 	h.SavedMessages = nil
 	h.DMs = nil
 	h.AuditLog = nil
@@ -227,9 +225,6 @@ func TestSetupRoutes_OptionalHandlersNil(t *testing.T) {
 	h.AIChat = nil
 	h.Discovery = nil
 	h.Templates = nil
-	h.ScreenShare = nil
-	h.Stream = nil
-	h.LiveKitVoice = nil
 	h.SlashCommands = nil
 	h.Interactions = nil
 	h.ServerAudioSettings = nil
@@ -271,9 +266,8 @@ func TestSetupRoutes_WithAllOptionalHandlers(t *testing.T) {
 	// Set all optional handlers
 	h.Sessions = &handlers.SessionHandler{}
 	h.Settings = &handlers.SettingsHandler{}
-	h.ReadState = &handlers.ReadStateHandler{}
 	h.Notifications = &handlers.NotificationHandler{}
-	h.Mentions = &handlers.MentionsHandler{}
+	h.NotificationPreferences = &handlers.NotificationPreferenceHandler{}
 	h.SavedMessages = &handlers.SavedMessagesHandler{}
 	h.DMs = &handlers.DMHandler{}
 	h.AuditLog = &handlers.AuditLogHandler{}
@@ -291,9 +285,7 @@ func TestSetupRoutes_WithAllOptionalHandlers(t *testing.T) {
 	h.AIChat = &handlers.AIChatHandler{}
 	h.Discovery = &handlers.DiscoveryHandler{}
 	h.Templates = &handlers.TemplateHandler{}
-	h.ScreenShare = &handlers.ScreenShareHandler{}
-	h.Stream = &handlers.StreamHandler{}
-	h.LiveKitVoice = &handlers.LiveKitVoiceHandler{}
+
 	h.SlashCommands = &handlers.SlashCommandHandler{}
 	h.Interactions = &handlers.InteractionHandler{}
 	h.ServerAudioSettings = &handlers.ServerAudioSettingsHandler{}

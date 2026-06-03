@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -659,4 +662,367 @@ type GroupDMUpdatedEvent struct {
 type GroupDMUpdate struct {
 	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
 	Icon *string `json:"icon,omitempty" validate:"omitempty,max=100"`
+}
+
+// MuteRepository defines the interface for Mute data access operations.
+type MuteRepository interface {
+	// Create creates a new Mute record in the database.
+	Create(ctx context.Context, mute *models.Mute) error
+
+	// GetByID retrieves a mute by its UUID.
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Mute, error)
+
+	// GetByChannelAndUser retrieves mute status for a specific channel and user.
+	GetByChannelAndUser(ctx context.Context, channelID, userID uuid.UUID) (*models.Mute, error)
+
+	// Update modifies an existing mute record (e.g., ending the mute).
+	Update(ctx context.Context, mute *models.Mute) error
+
+	// SoftDelete marks a mute as ended logic-wise (optional but good for data integrity)
+	// or relies on the `EndedAt` timestamp field.
+}
+
+// MuteService handles business logic related to muting users in voice/text channels.
+type MuteService struct {
+	repo MuteRepository
+}
+
+// NewMuteService creates a new MuteService instance.
+func NewMuteService(repo MuteRepository) *MuteService {
+	return &MuteService{
+		repo: repo,
+	}
+}
+
+// MuteUser creates a new mute record for a user in a specific channel.
+func (s *MuteService) MuteUser(ctx context.Context, channelID, userID uuid.UUID, durationMinutes int) (*models.Mute, error) {
+	if durationMinutes < 0 {
+		return nil, errors.New("duration minutes cannot be negative")
+	}
+
+	// Calculate end time
+	var endsAt *time.Time
+	if durationMinutes > 0 {
+		endTime := time.Now().Add(time.Duration(durationMinutes) * time.Minute)
+		endsAt = &endTime
+	}
+
+	mute := &models.Mute{
+		ID:         uuid.New(),
+		ChannelID:  channelID,
+		UserID:     userID,
+		MutedBy:    nil, // Could be populated from context if a bot/superuser ID is passed
+		RoleID:     nil, // Could be populated if using roles
+		Reason:     "",  // Could be added via params
+		StartedAt:  time.Now(),
+		EndedAt:    endsAt,
+		RestoredAt: nil,
+	}
+
+	if err := s.repo.Create(ctx, mute); err != nil {
+		return nil, fmt.Errorf("failed to create mute: %w", err)
+	}
+
+	return mute, nil
+}
+
+// UnmuteUser removes a mute for a user in a specific channel.
+func (s *MuteService) UnmuteUser(ctx context.Context, channelID, userID uuid.UUID) error {
+	// 1. Find the active mute
+	mute, err := s.repo.GetByChannelAndUser(ctx, channelID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve mute: %w", err)
+	}
+
+	if mute == nil {
+		return ErrUserNotMuted
+	}
+
+	// 2. Update the mute record
+	currentTime := time.Now()
+
+	mute.EndedAt = &currentTime
+	mute.RestoredAt = &currentTime
+
+	if err := s.repo.Update(ctx, mute); err != nil {
+		return fmt.Errorf("failed to update mute: %w", err)
+	}
+
+	return nil
+}
+
+// IsUserMuted checks if a user is currently muted in a specific channel.
+func (s *MuteService) IsUserMuted(ctx context.Context, channelID, userID uuid.UUID) (bool, error) {
+	mute, err := s.repo.GetByChannelAndUser(ctx, channelID, userID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check mute status: %w", err)
+	}
+
+	// If mute is nil, user is not muted.
+	if mute == nil {
+		return false, nil
+	}
+
+	// If EndedAt is nil (never ended) or EndedAt is in the future, user is currently muted.
+	now := time.Now()
+
+	return mute.EndedAt == nil || mute.EndedAt.After(now), nil
+}
+
+var ErrUserNotMuted = errors.New("user is not muted in this channel")
+
+const (
+	// TypingTTL is how long a typing indicator lasts
+	TypingTTL = 10 * time.Second
+)
+
+// TypingService manages typing indicators
+type TypingService struct {
+	mu       sync.RWMutex
+	typing   map[uuid.UUID]map[uuid.UUID]time.Time // channelID -> userID -> timestamp
+	eventBus EventBus
+}
+
+// NewTypingService creates a new typing service
+func NewTypingService(eventBus EventBus) *TypingService {
+	svc := &TypingService{
+		typing:   make(map[uuid.UUID]map[uuid.UUID]time.Time),
+		eventBus: eventBus,
+	}
+
+	// Start background cleanup goroutine
+	go svc.cleanupLoop()
+
+	return svc
+}
+
+// StartTyping records that a user started typing in a channel
+func (s *TypingService) StartTyping(ctx context.Context, channelID, userID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.typing[channelID] == nil {
+		s.typing[channelID] = make(map[uuid.UUID]time.Time)
+	}
+
+	now := time.Now()
+	s.typing[channelID][userID] = now
+
+	// Publish typing event for WebSocket broadcast
+	if s.eventBus != nil {
+		indicator := &models.TypingIndicator{
+			ChannelID: channelID,
+			UserID:    userID,
+			Timestamp: now,
+		}
+		s.eventBus.Publish(events.TypingStarted, indicator)
+	}
+
+	return nil
+}
+
+// StopTyping removes a user's typing indicator (e.g., when they send a message)
+func (s *TypingService) StopTyping(ctx context.Context, channelID, userID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.typing[channelID] != nil {
+		delete(s.typing[channelID], userID)
+		if len(s.typing[channelID]) == 0 {
+			delete(s.typing, channelID)
+		}
+	}
+
+	return nil
+}
+
+// GetTypingUsers returns a list of users currently typing in a channel
+func (s *TypingService) GetTypingUsers(ctx context.Context, channelID uuid.UUID) ([]models.TypingIndicator, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var indicators []models.TypingIndicator
+	now := time.Now()
+
+	if channelUsers, ok := s.typing[channelID]; ok {
+		for userID, ts := range channelUsers {
+			if now.Sub(ts) < TypingTTL {
+				indicators = append(indicators, models.TypingIndicator{
+					ChannelID: channelID,
+					UserID:    userID,
+					Timestamp: ts,
+				})
+			}
+		}
+	}
+
+	return indicators, nil
+}
+
+// IsTyping checks if a specific user is currently typing in a channel
+func (s *TypingService) IsTyping(ctx context.Context, channelID, userID uuid.UUID) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if channelUsers, ok := s.typing[channelID]; ok {
+		if ts, exists := channelUsers[userID]; exists {
+			return time.Since(ts) < TypingTTL, nil
+		}
+	}
+
+	return false, nil
+}
+
+// cleanupLoop periodically cleans up expired typing indicators
+func (s *TypingService) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.cleanup()
+	}
+}
+
+// cleanup removes expired typing indicators
+func (s *TypingService) cleanup() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+
+	for channelID, channelUsers := range s.typing {
+		for userID, ts := range channelUsers {
+			if now.Sub(ts) >= TypingTTL {
+				delete(channelUsers, userID)
+			}
+		}
+		if len(channelUsers) == 0 {
+			delete(s.typing, channelID)
+		}
+	}
+}
+
+// GetTypingUserIDs returns just the user IDs currently typing (convenience method)
+func (s *TypingService) GetTypingUserIDs(ctx context.Context, channelID uuid.UUID) ([]uuid.UUID, error) {
+	indicators, err := s.GetTypingUsers(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	userIDs := make([]uuid.UUID, len(indicators))
+	for i, ind := range indicators {
+		userIDs[i] = ind.UserID
+	}
+
+	return userIDs, nil
+}
+
+// ClearChannel removes all typing indicators for a channel (e.g., when channel is deleted)
+func (s *TypingService) ClearChannel(ctx context.Context, channelID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.typing, channelID)
+	return nil
+}
+
+var (
+	ErrAlreadyFollowing = errors.New("already following this channel")
+	ErrNotFollowing     = errors.New("not following this channel")
+	ErrCannotFollowSelf = errors.New("a channel cannot follow itself")
+)
+
+// FollowRepositoryInterface defines follow data access
+type FollowRepositoryInterface interface {
+	Create(ctx context.Context, follow *models.FollowedChannel) error
+	Delete(ctx context.Context, channelID, followerChannelID uuid.UUID) error
+	GetByChannelAndFollower(ctx context.Context, channelID, followerChannelID uuid.UUID) (*models.FollowedChannel, error)
+	GetFollowers(ctx context.Context, channelID uuid.UUID) ([]models.FollowedChannel, error)
+}
+
+// FollowService handles channel follow business logic
+type FollowService struct {
+	followRepo  FollowRepositoryInterface
+	channelRepo ChannelRepository
+}
+
+// NewFollowService creates a new follow service
+func NewFollowService(followRepo FollowRepositoryInterface, channelRepo ChannelRepository) *FollowService {
+	return &FollowService{
+		followRepo:  followRepo,
+		channelRepo: channelRepo,
+	}
+}
+
+// FollowChannel creates a follow relationship between channels
+func (s *FollowService) FollowChannel(ctx context.Context, channelID, followerChannelID uuid.UUID) (*models.FollowedChannel, error) {
+	if channelID == followerChannelID {
+		return nil, ErrCannotFollowSelf
+	}
+
+	// Verify target channel exists
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Verify follower channel exists
+	follower, err := s.channelRepo.GetByID(ctx, followerChannelID)
+	if err != nil {
+		return nil, err
+	}
+	if follower == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	// Check if already following
+	existing, err := s.followRepo.GetByChannelAndFollower(ctx, channelID, followerChannelID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrAlreadyFollowing
+	}
+
+	follow := &models.FollowedChannel{
+		ChannelID:         channelID,
+		FollowerChannelID: followerChannelID,
+		CreatedAt:         time.Now().UTC(),
+	}
+
+	if err := s.followRepo.Create(ctx, follow); err != nil {
+		return nil, err
+	}
+
+	return follow, nil
+}
+
+// UnfollowChannel removes a follow relationship
+func (s *FollowService) UnfollowChannel(ctx context.Context, channelID, followerChannelID uuid.UUID) error {
+	existing, err := s.followRepo.GetByChannelAndFollower(ctx, channelID, followerChannelID)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		return ErrNotFollowing
+	}
+
+	return s.followRepo.Delete(ctx, channelID, followerChannelID)
+}
+
+// GetFollowers retrieves all followers of a channel
+func (s *FollowService) GetFollowers(ctx context.Context, channelID uuid.UUID) ([]models.FollowedChannel, error) {
+	// Verify channel exists
+	channel, err := s.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	if channel == nil {
+		return nil, ErrChannelNotFound
+	}
+
+	return s.followRepo.GetFollowers(ctx, channelID)
 }

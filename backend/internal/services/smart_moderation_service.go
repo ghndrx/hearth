@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -261,7 +263,14 @@ func (s *SmartModerationService) UpdateKeywordRule(ctx context.Context, ruleID u
 
 // DeleteKeywordRule deletes a keyword rule
 func (s *SmartModerationService) DeleteKeywordRule(ctx context.Context, ruleID uuid.UUID) error {
-	return s.repo.DeleteKeywordRule(ctx, ruleID)
+	err := s.repo.DeleteKeywordRule(ctx, ruleID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrModerationRuleNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 // GetKeywordRules gets all keyword rules for a server

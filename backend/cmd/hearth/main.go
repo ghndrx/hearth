@@ -390,9 +390,10 @@ func main() {
 			if e, ok := err.(*fiber.Error); ok {
 				code = e.Code
 			}
+			log.Printf("Unhandled error: %v", err)
 			return c.Status(code).JSON(fiber.Map{
 				"error":   "internal_error",
-				"message": err.Error(),
+				"message": "Internal Server Error",
 			})
 		},
 	})
@@ -471,7 +472,9 @@ func main() {
 	log.Printf("✅ DM service initialized")
 
 	// Wire up Call handler for video/audio calls
-	h.SetCallHandler(callService, channelService)
+	if h.Voice != nil {
+		h.Voice.SetCallService(callService, channelService)
+	}
 	log.Printf("✅ Call handler initialized")
 
 	// Wire up OAuth service if available
@@ -560,7 +563,9 @@ func main() {
 
 	// Initialize Voice Activity service and handler (Poker, Chess, Watch Together)
 	voiceActivityService := services.NewVoiceActivityService(repos.VoiceActivities, serviceBus)
-	h.SetVoiceActivityHandler(voiceActivityService, channelService, permService)
+	if h.Voice != nil {
+		h.Voice.SetVoiceActivityService(voiceActivityService, channelService, permService)
+	}
 	activitySignaling := websocket.NewActivitySignalingService(wsHub, voiceActivityService)
 	wsGateway.SetActivityService(activitySignaling)
 	log.Printf("✅ Voice Activity service initialized")
@@ -574,9 +579,6 @@ func main() {
 		permService,
 		serviceBus,
 	)
-	h.SetDiscoveryHandler(discoveryService, serverService)
-	log.Printf("✅ Discovery service initialized")
-
 	// Initialize Enhanced Server Discovery (DiscoverableServer) service with Redis caching
 	discoverableServerRepo := postgres.NewDiscoverableServerRepository(db)
 	discoverableServerService := services.NewDiscoverableServerService(
@@ -586,10 +588,10 @@ func main() {
 	)
 	if redisCache != nil {
 		cachedDiscoverableService := services.NewCachedDiscoverableServerService(discoverableServerService, redisCache)
-		h.SetDiscoverableServerHandler(cachedDiscoverableService.DiscoverableServerService, serverService)
+		h.SetDiscoveryHandler(discoveryService, cachedDiscoverableService.DiscoverableServerService, serverService)
 		log.Printf("✅ Enhanced Server Discovery service initialized (with Redis caching)")
 	} else {
-		h.SetDiscoverableServerHandler(discoverableServerService, serverService)
+		h.SetDiscoveryHandler(discoveryService, discoverableServerService, serverService)
 		log.Printf("✅ Enhanced Server Discovery service initialized (without caching)")
 	}
 
@@ -601,7 +603,7 @@ func main() {
 
 	// Initialize Forum Tags service and handler
 	forumTagService := services.NewForumTagService(repos.ForumTags, repos.Threads, repos.Channels, repos.Servers, permService, serviceBus)
-	h.SetForumTagsHandler(forumTagService, threadService, wsGateway)
+	h.Threads.SetForumTagService(forumTagService, wsGateway)
 	log.Printf("✅ Forum tags service initialized")
 
 	// Initialize Server Audio Settings service and handler
@@ -632,7 +634,7 @@ func main() {
 	log.Printf("✅ Interaction service initialized")
 
 	// Initialize Premium & Billing services
-	billingService := services.NewBillingService(repos.Premium, cfg.StripeSecretKey, cfg.IsProduction)
+	billingService := services.NewBillingService(repos.Premium, cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.StripePriceBasic, cfg.StripePricePremium)
 	premiumService := services.NewPremiumService(repos.Premium, repos.Users, repos.Servers, billingService)
 	premiumService.SetEventBus(serviceBus)
 	h.SetPremiumHandler(premiumService, billingService)
@@ -651,7 +653,7 @@ func main() {
 		repos.ChannelNotificationOverrides,
 		serviceBus,
 	)
-	h.SetChannelNotificationOverrideHandler(notificationService)
+	h.Channels.SetNotificationOverrideService(notificationService)
 	log.Printf("✅ Channel notification override service initialized")
 
 	m := middleware.NewMiddleware(cfg.SecretKey)
@@ -695,6 +697,7 @@ func main() {
 
 	// Matrix Federation routes (mounted at root, before API routes)
 	var keyStore *matrixfederation.KeyStore
+	var txQueue *matrixfederation.TransactionQueue
 	if cfg.FederationEnabled {
 		log.Printf("🌐 Matrix federation enabled for server: %s", cfg.FederationServerName)
 
@@ -709,8 +712,8 @@ func main() {
 
 		// Wire federation routes with dependencies
 		// HRT-3: Wire Phase 3 federation infrastructure (EventStore, StateStore, AuthChecker)
-		eventStore := matrixfederation.NewInMemoryFederationEventStore()
-		stateStore := matrixfederation.NewInMemoryStateStore()
+		eventStore := matrixfederation.NewPostgresFederationEventStore(repos.Federation)
+		stateStore := matrixfederation.NewPostgresStateStore(repos.Federation)
 		authChecker := matrixfederation.NewAuthChecker(cfg.FederationServerName)
 
 		// Create federation client for outbound transactions
@@ -721,8 +724,14 @@ func main() {
 		fedClient := matrixfederation.NewFederationClient(keyStore, hsCfg, nil)
 
 		// HRT-2: Create FederationBridge for outgoing message federation
-		roomAliasStore := matrixfederation.NewInMemoryRoomAliasStore()
-		txQueue := matrixfederation.NewTransactionQueue(fedClient, keyStore, cfg.FederationServerName)
+		roomAliasStore := matrixfederation.NewPostgresRoomAliasStore(repos.Federation)
+		txQueue = matrixfederation.NewTransactionQueue(fedClient, keyStore, cfg.FederationServerName)
+		txQueue.SetStateStore(stateStore)
+		if err := txQueue.Start(ctx); err != nil {
+			log.Fatalf("Failed to start federation transaction queue: %v", err)
+		}
+		log.Printf("✅ Federation transaction queue started")
+
 		fedBridge := matrixfederation.NewFederationBridge(
 			cfg.FederationServerName,
 			txQueue,
@@ -744,8 +753,19 @@ func main() {
 			EventStore:      eventStore,
 			StateStore:      stateStore,
 			AuthChecker:     authChecker,
+			RoomAliasStore:  roomAliasStore,
 		})
 		log.Printf("✅ Federation Phase 3 wired: EventStore, StateStore, AuthChecker")
+
+		// Wire federation dependencies into channel handler
+		if h.Channels != nil {
+			h.Channels.SetServerService(serverService)
+			h.Channels.SetRoomAliasStore(roomAliasStore)
+			h.Channels.SetHomeserverConfig(hsCfg)
+			h.Channels.SetFederationEventStore(eventStore)
+			h.Channels.SetFederationStateStore(stateStore)
+			log.Printf("✅ Channel federation handler wired")
+		}
 	}
 
 	// Setup routes
@@ -784,6 +804,12 @@ func main() {
 
 		// Step 3: Cancel the main context to stop background goroutines
 		log.Println("🔄 Step 3/3: Stopping background services...")
+		if txQueue != nil {
+			if err := txQueue.Stop(); err != nil {
+				log.Printf("⚠️  Transaction queue stop error: %v", err)
+			}
+			log.Println("✅ Federation transaction queue stopped")
+		}
 		cancel()
 
 		close(shutdownComplete)

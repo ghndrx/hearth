@@ -2,6 +2,65 @@
 
 All notable changes to Hearth will be documented in this file.
 
+## [Unreleased]
+
+### Features
+* feat(federation): implement Matrix Federation with Postgres-backed stores and transaction queue
+* feat(federation): add channel federation endpoint (`POST /channels/:id/federate`)
+* feat(federation): add federation rate limiting per remote server
+* feat(billing): implement Stripe integration with mock-mode fallback
+* feat(billing): add `DELETE /api/v1/premium/payment-methods/:id` endpoint
+
+### Bug Fixes
+* fix(auth): fix `senderMXID` to use username instead of UUID
+* fix(frontend): fix Svelte 5 null-safety in `UserPopout.svelte`
+* fix(frontend): fix timezone-sensitive time utility tests
+* fix(frontend): add `localStorage` mock for API tests
+* fix(backend): fix SQL placeholder bug (`rune('0'+i)` → `strconv.Itoa`)
+* fix(backend): fix missing error handling in discovery search params
+* fix(backend): replace inefficient string concatenation with `strings.Builder`
+* fix(ci): update all workflows for Go 1.26 and Bun (remove npm/pnpm references)
+
+### Security
+* security(webhooks): stop returning webhook tokens in API responses (only on creation)
+* security(discovery): add admin verification to discovery admin endpoints
+* security(errors): fix global error handler to return generic messages instead of raw `err.Error()`
+* security(errors): fix app directory handlers to use `HandleServiceError` instead of returning raw errors
+* security(attachments): replace content-type blocklist with allowlist
+* security(attachments): sanitize download `Content-Type` to safe types only
+* security(federation): implement Matrix federation replay protection (5-minute window)
+* security(middleware): remove dead CORS middleware with wildcard origin
+
+### Backend Consolidation
+* chore(handlers): consolidate 127 → 47 handler files (merge voice/RTC, discovery, notifications, preferences)
+* chore(repos): consolidate 57 → 44 repo files (merge channel settings, message embeds, notifications, threads, server roles, user sessions)
+* chore(services): consolidate orphaned service test files into `auth_service_test.go`, `user_service_test.go`, `message_service_test.go`
+* chore(dead-code): remove `internal/entitlements/`, `internal/middleware/`, `internal/payment/`, `comprehensive_service.go`, `local_compat.go`
+* chore(dead-code): remove unused helpers (`timePtr`, `httpErrWithCode`, `discoveryDirectoryKey`, `NewHybridLimiter`)
+* chore(dead-code): remove unused error variables (`ErrCacheNotFound`, `ErrReminderNotFound`)
+
+### Testing
+* test(handlers): add 36 auth extended tests (registration edge cases, MFA, SQL injection)
+* test(handlers): add 28 oauth provider handler tests
+* test(handlers): add 21 onboarding handler tests
+* test(handlers): add 18 interaction handler tests
+* test(handlers): add 24 premium handler tests
+* test(handlers): add 18 embed handler tests
+* test(handlers): add 17 smart moderation handler tests
+* test(handlers): add 6 channel federation tests
+* test(services): add 52 billing service tests
+* test(integration): add 5 API integration test flows (auth, server, channel, DM, premium)
+* test(frontend): fix all skipped tests → **0 skipped**, 101 test files, 2022 tests
+
+### Infrastructure
+* chore(docker): fix Dockerfiles for Go 1.26 and `oven/bun:1-alpine`
+* chore(docker): add `.dockerignore` files for root, backend, and frontend
+* chore(make): update Makefile to use `bun` and `docker compose`
+* chore(docs): fix README, AGENTS.md, CONTRIBUTING.md (Go 1.26, Fiber, bun commands)
+* chore(docs): create `docs/DEPLOYMENT.md`, `docs/SELF_HOSTING.md`, root `.env.example`
+* chore(git): rewrite all 237 commits to uniform attribution (`greg@gregh.dev`)
+* chore(git): delete 14 stale branches and 10 broken worktrees
+
 ## [2026-04-06](https://github.com/ghndrx/hearth/compare/2026-04-05...HEAD)
 
 ### Features

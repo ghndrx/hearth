@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -240,7 +239,3 @@ func (r *ComponentRepository) GetInteractionByID(ctx context.Context, id uuid.UU
 	return &i, nil
 }
 
-// timePtr helper
-func timePtr(t time.Time) *time.Time {
-	return &t
-}

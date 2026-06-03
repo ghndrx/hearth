@@ -12,19 +12,19 @@ all: build
 setup:
 	@echo "Setting up development environment..."
 	cd backend && go mod download
-	cd frontend && npm install
+	cd frontend && bun install
 
 # Run development servers
 dev:
 	@echo "Starting development servers..."
-	docker-compose -f docker-compose.dev.yml up -d db redis
+	docker compose -f docker-compose.dev.yml up -d db redis
 	make -j2 dev-backend dev-frontend
 
 dev-backend:
 	cd backend && go run ./cmd/hearth
 
 dev-frontend:
-	cd frontend && npm run dev
+	cd frontend && bun run dev
 
 # Build
 build: build-backend build-frontend
@@ -33,7 +33,7 @@ build-backend:
 	cd backend && go build $(LDFLAGS) -o ../bin/$(BINARY_NAME) ./cmd/hearth
 
 build-frontend:
-	cd frontend && npm run build
+	cd frontend && bun run build
 
 # Testing
 test: test-backend test-frontend
@@ -42,7 +42,7 @@ test-backend:
 	cd backend && go test -v ./...
 
 test-frontend:
-	cd frontend && npm test
+	cd frontend && bun test
 
 test-coverage:
 	cd backend && go test -coverprofile=coverage.out ./...
@@ -55,7 +55,7 @@ lint-backend:
 	cd backend && golangci-lint run
 
 lint-frontend:
-	cd frontend && npm run lint
+	cd frontend && bun run lint
 
 # Docker
 docker:
@@ -68,15 +68,9 @@ docker-push:
 	docker push ghcr.io/ghndrx/hearth:latest
 
 # Database
-migrate-up:
-	cd backend && go run ./cmd/migrate up
-
-migrate-down:
-	cd backend && go run ./cmd/migrate down
-
-migrate-new:
-	@read -p "Migration name: " name; \
-	cd backend && go run ./cmd/migrate new $$name
+migrate-status:
+	@echo "Migrations run automatically on startup via backend/cmd/hearth"
+	@echo "See backend/internal/database/postgres/migrations/"
 
 # Cleanup
 clean:

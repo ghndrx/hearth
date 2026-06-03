@@ -17,6 +17,7 @@ type AuthHandler struct {
 	oauthService *services.OAuthService
 }
 
+// NewAuthHandler creates a new auth handler
 func NewAuthHandler(authService services.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
@@ -452,7 +453,10 @@ func (h *AuthHandler) OAuthLinkRedirect(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	// Generate link authorization URL
 	authURL, err := h.oauthService.GetLinkAuthorizationURL(c.Context(), userID, oauthProvider)
@@ -484,7 +488,10 @@ func (h *AuthHandler) GetLinkedProviders(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	providers, err := h.oauthService.GetLinkedProviders(c.Context(), userID)
 	if err != nil {
@@ -544,9 +551,12 @@ func (h *AuthHandler) OAuthUnlink(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := c.Locals("user_id").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
-	err := h.oauthService.UnlinkProvider(c.Context(), userID, oauthProvider)
+	err = h.oauthService.UnlinkProvider(c.Context(), userID, oauthProvider)
 	if err != nil {
 		return handleOAuthError(c, err)
 	}

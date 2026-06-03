@@ -9,10 +9,12 @@ import (
 )
 
 // ServerFolderHandler handles server folder HTTP requests
+// ServerFolderHandler handles server folder operations
 type ServerFolderHandler struct {
 	folderService *services.ServerFolderService
 }
 
+// NewServerFolderHandler creates a new server folder handler
 func NewServerFolderHandler(
 	folderService *services.ServerFolderService,
 ) *ServerFolderHandler {

@@ -50,7 +50,7 @@ func (h *AppDirectoryHandler) ListApps(c *fiber.Ctx) error {
 
 	apps, err := h.appService.ListApps(c.Context(), req)
 	if err != nil {
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	return c.JSON(fiber.Map{
@@ -81,7 +81,7 @@ func (h *AppDirectoryHandler) GetApp(c *fiber.Ctx) error {
 		if err == services.ErrAppNotFound {
 			return fiber.NewError(fiber.StatusNotFound, "app not found")
 		}
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	return c.JSON(app)
@@ -126,7 +126,7 @@ func (h *AppDirectoryHandler) CreateApp(c *fiber.Ctx) error {
 		if err == services.ErrInvalidAppCategory {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid category")
 		}
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(app)
@@ -173,7 +173,7 @@ func (h *AppDirectoryHandler) UpdateApp(c *fiber.Ctx) error {
 		case services.ErrInvalidAppCategory:
 			return fiber.NewError(fiber.StatusBadRequest, "invalid category")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -213,7 +213,7 @@ func (h *AppDirectoryHandler) DeleteApp(c *fiber.Ctx) error {
 		case services.ErrCannotDeleteApp:
 			return fiber.NewError(fiber.StatusConflict, "cannot delete app with active installations")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -259,7 +259,7 @@ func (h *AppDirectoryHandler) InstallApp(c *fiber.Ctx) error {
 		case services.ErrAlreadyInstalled:
 			return fiber.NewError(fiber.StatusConflict, "app is already installed")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -295,7 +295,7 @@ func (h *AppDirectoryHandler) UninstallApp(c *fiber.Ctx) error {
 		case services.ErrNotInstalled:
 			return fiber.NewError(fiber.StatusNotFound, "app is not installed on this server")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -325,7 +325,7 @@ func (h *AppDirectoryHandler) ListAppReviews(c *fiber.Ctx) error {
 
 	reviews, err := h.appService.ListAppReviews(c.Context(), appID, limit, offset)
 	if err != nil {
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	return c.JSON(fiber.Map{
@@ -380,7 +380,7 @@ func (h *AppDirectoryHandler) CreateReview(c *fiber.Ctx) error {
 		case services.ErrAlreadyReviewed:
 			return fiber.NewError(fiber.StatusConflict, "you have already reviewed this app")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -431,7 +431,7 @@ func (h *AppDirectoryHandler) UpdateReview(c *fiber.Ctx) error {
 		case services.ErrNotAppDeveloper:
 			return fiber.NewError(fiber.StatusForbidden, "you can only update your own reviews")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -473,7 +473,7 @@ func (h *AppDirectoryHandler) DeleteReview(c *fiber.Ctx) error {
 		case services.ErrNotAppDeveloper:
 			return fiber.NewError(fiber.StatusForbidden, "you can only delete your own reviews")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -497,7 +497,7 @@ func (h *AppDirectoryHandler) ListDeveloperApps(c *fiber.Ctx) error {
 
 	apps, err := h.appService.ListDeveloperApps(c.Context(), userID)
 	if err != nil {
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	return c.JSON(fiber.Map{"apps": apps})
@@ -520,7 +520,7 @@ func (h *AppDirectoryHandler) GetDeveloperAnalytics(c *fiber.Ctx) error {
 
 	analytics, err := h.appService.GetDeveloperAnalytics(c.Context(), userID)
 	if err != nil {
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	return c.JSON(analytics)
@@ -560,7 +560,7 @@ func (h *AppDirectoryHandler) GetMyReviewForApp(c *fiber.Ctx) error {
 
 	review, err := h.appService.GetUserReviewForApp(c.Context(), appID, userID)
 	if err != nil {
-		return err
+		return HandleServiceError(c, err)
 	}
 
 	if review == nil {
@@ -594,7 +594,7 @@ func (h *AppDirectoryHandler) ApproveApp(c *fiber.Ctx) error {
 		case services.ErrInvalidStatus:
 			return fiber.NewError(fiber.StatusBadRequest, "app is not in pending status")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -625,7 +625,7 @@ func (h *AppDirectoryHandler) RejectApp(c *fiber.Ctx) error {
 		case services.ErrInvalidStatus:
 			return fiber.NewError(fiber.StatusBadRequest, "app is not in pending status")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 
@@ -656,7 +656,7 @@ func (h *AppDirectoryHandler) SuspendApp(c *fiber.Ctx) error {
 		case services.ErrInvalidStatus:
 			return fiber.NewError(fiber.StatusBadRequest, "app is not in approved status")
 		default:
-			return err
+			return HandleServiceError(c, err)
 		}
 	}
 

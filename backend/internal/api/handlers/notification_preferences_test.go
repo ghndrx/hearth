@@ -56,8 +56,8 @@ func (m *MockNotificationCoordinator) UpdateServerPreference(ctx context.Context
 
 // testNotificationPrefsHandler creates a test notification preferences handler with mocks
 type testNotificationPrefsHandler struct {
-	channelHandler *ChannelNotificationPreferenceHandler
-	serverHandler  *ServerNotificationPreferenceHandler
+	channelHandler *NotificationPreferenceHandler
+	serverHandler  *NotificationPreferenceHandler
 	coordinator    *MockNotificationCoordinator
 	app            *fiber.App
 	userID         uuid.UUID
@@ -65,8 +65,8 @@ type testNotificationPrefsHandler struct {
 
 func newTestNotificationPrefsHandler(tb testing.TB) *testNotificationPrefsHandler {
 	coordinator := new(MockNotificationCoordinator)
-	channelHandler := NewChannelNotificationPreferenceHandler(coordinator)
-	serverHandler := NewServerNotificationPreferenceHandler(coordinator)
+	channelHandler := &NotificationPreferenceHandler{coordinator: coordinator}
+	serverHandler := &NotificationPreferenceHandler{coordinator: coordinator}
 
 	app := fiber.New()
 	tb.Cleanup(func() { _ = app.Shutdown() })

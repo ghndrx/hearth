@@ -12,13 +12,13 @@ import (
 
 // FederationStateHandler handles Matrix federation state query endpoints.
 type FederationStateHandler struct {
-	stateStore *InMemoryStateStore
+	stateStore StateStore
 	eventStore FederationEventStore
 	serverName string
 }
 
 // NewFederationStateHandler creates a new FederationStateHandler.
-func NewFederationStateHandler(serverName string, state *InMemoryStateStore, store FederationEventStore) *FederationStateHandler {
+func NewFederationStateHandler(serverName string, state StateStore, store FederationEventStore) *FederationStateHandler {
 	return &FederationStateHandler{
 		stateStore: state,
 		eventStore: store,

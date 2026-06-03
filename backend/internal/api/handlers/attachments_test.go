@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -49,7 +50,11 @@ func createMultipartRequest(url, filename, contentType string, content []byte) (
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	part, err := writer.CreateFormFile("file", filename)
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", `form-data; name="file"; filename="`+filename+`"`)
+	h.Set("Content-Type", contentType)
+
+	part, err := writer.CreatePart(h)
 	if err != nil {
 		return nil, err
 	}

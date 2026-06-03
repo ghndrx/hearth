@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,14 +10,37 @@ import (
 	"hearth/internal/services"
 )
 
+// SmartModerationServiceInterface defines the interface for smart moderation services
+type SmartModerationServiceInterface interface {
+	GetOrCreateSettings(ctx context.Context, serverID uuid.UUID) (*models.ModerationSettings, error)
+	UpdateSettings(ctx context.Context, serverID uuid.UUID, req *models.UpdateModerationSettingsRequest) (*models.ModerationSettings, error)
+	GetKeywordRules(ctx context.Context, serverID uuid.UUID) ([]*models.KeywordRule, error)
+	CreateKeywordRule(ctx context.Context, serverID, createdBy uuid.UUID, req *models.CreateKeywordRuleRequest) (*models.KeywordRule, error)
+	UpdateKeywordRule(ctx context.Context, ruleID uuid.UUID, req *models.UpdateKeywordRuleRequest) (*models.KeywordRule, error)
+	DeleteKeywordRule(ctx context.Context, ruleID uuid.UUID) error
+	AnalyzeContent(ctx context.Context, req *models.AnalyzeContentRequest) (*models.AnalyzeContentResult, error)
+	GetModerationLogs(ctx context.Context, serverID uuid.UUID, limit, offset int) ([]*models.ModerationLogSummary, error)
+	GetMemberModerationHistory(ctx context.Context, serverID, memberID uuid.UUID, limit, offset int) ([]*models.ModerationLog, error)
+	TakeModerationAction(ctx context.Context, serverID, moderatorID uuid.UUID, req *models.ModerationActionRequest) (*models.ModerationLog, error)
+	ResolveModerationLog(ctx context.Context, logID, resolvedBy uuid.UUID) error
+	GetDashboardStats(ctx context.Context, serverID uuid.UUID, days int) (*models.ModerationDashboardStats, error)
+	GetUserViolationSummary(ctx context.Context, serverID, userID uuid.UUID) (*models.UserViolationSummary, error)
+	ResetMemberViolations(ctx context.Context, serverID, memberID uuid.UUID) error
+}
+
+// SmartModerationServerService defines the interface for server services used by smart moderation
+type SmartModerationServerService interface {
+	GetMember(ctx context.Context, serverID, userID uuid.UUID) (*models.Member, error)
+}
+
 // SmartModerationHandler handles smart moderation API endpoints
 type SmartModerationHandler struct {
-	modService     *services.SmartModerationService
-	serverService  *services.ServerService
+	modService    SmartModerationServiceInterface
+	serverService SmartModerationServerService
 }
 
 // NewSmartModerationHandler creates a new smart moderation handler
-func NewSmartModerationHandler(modService *services.SmartModerationService, serverService *services.ServerService) *SmartModerationHandler {
+func NewSmartModerationHandler(modService SmartModerationServiceInterface, serverService SmartModerationServerService) *SmartModerationHandler {
 	return &SmartModerationHandler{
 		modService:    modService,
 		serverService: serverService,

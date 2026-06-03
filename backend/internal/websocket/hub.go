@@ -128,7 +128,9 @@ func (h *Hub) unregisterClient(client *Client) {
 	}
 	h.serversMux.Unlock()
 
-	close(client.send)
+	client.closeOnce.Do(func() {
+		close(client.send)
+	})
 }
 
 func (h *Hub) handleBroadcast(event *Event) {

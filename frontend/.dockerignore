@@ -1,0 +1,11 @@
+node_modules
+build
+.svelte-kit
+test-results
+playwright-report
+.env
+.env.*
+!.env.example
+README.md
+Dockerfile
+docker-compose*.yml

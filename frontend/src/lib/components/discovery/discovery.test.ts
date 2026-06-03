@@ -125,25 +125,7 @@ describe('CategoryFilter Component', () => {
 		expect(gamingButton.className).toContain('active');
 	});
 
-	// Skip this test - Svelte 5 uses callback props instead of createEventDispatcher/$on
-	// The component needs to be updated to use onselect callback prop for Svelte 5 compatibility
-	it.skip('emits select event on category click', async () => {
-		const selectHandler = vi.fn();
-		const { component } = render(CategoryFilter, { 
-			props: { 
-				categories: mockCategories,
-				selectedCategory: 'all'
-			} 
-		});
-		
-		// @ts-expect-error - Svelte 5 event handling compatibility
-		component.$on('select', selectHandler);
-		
-		const gamingButton = screen.getByRole('button', { name: /gaming/i });
-		await fireEvent.click(gamingButton);
-		
-		expect(selectHandler).not.toHaveBeenCalled();
-	});
+
 
 	it('displays server counts when showCounts is true', () => {
 		render(CategoryFilter, { 

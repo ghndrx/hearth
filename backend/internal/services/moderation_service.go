@@ -19,11 +19,13 @@ type ModerationAction struct {
 	CreatedAt time.Time
 }
 
+// ModerationService handles moderation actions
 type ModerationService struct {
 	mu      sync.RWMutex
 	actions []ModerationAction
 }
 
+// NewModerationService creates a new moderation service
 func NewModerationService() *ModerationService {
 	return &ModerationService{}
 }

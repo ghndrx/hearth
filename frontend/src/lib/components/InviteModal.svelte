@@ -17,8 +17,8 @@
 	}>();
 
 	// Invite settings
-	let expiresIn = 604800; // 7 days in seconds (default)
-	let maxUses = 0; // 0 = unlimited
+	export let expiresIn = 604800; // 7 days in seconds (default)
+	export let maxUses = 0; // 0 = unlimited
 	let inviteCode = '';
 	let inviteLink = '';
 	let isGenerating = false;

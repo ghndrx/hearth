@@ -19,6 +19,7 @@ type Claims struct {
 	UserID   uuid.UUID `json:"uid"`
 	Username string    `json:"usr"`
 	Type     string    `json:"typ"` // "access" or "refresh"
+	IsAdmin  bool      `json:"adm"`
 }
 
 // JWTService handles JWT operations
@@ -41,6 +42,11 @@ func NewJWTService(secretKey string, accessExpiry, refreshExpiry time.Duration) 
 
 // GenerateAccessToken creates an access token
 func (s *JWTService) GenerateAccessToken(userID uuid.UUID, username string) (string, error) {
+	return s.GenerateAccessTokenWithAdmin(userID, username, false)
+}
+
+// GenerateAccessTokenWithAdmin creates an access token with admin flag
+func (s *JWTService) GenerateAccessTokenWithAdmin(userID uuid.UUID, username string, isAdmin bool) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -54,6 +60,7 @@ func (s *JWTService) GenerateAccessToken(userID uuid.UUID, username string) (str
 		UserID:   userID,
 		Username: username,
 		Type:     "access",
+		IsAdmin:  isAdmin,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -82,7 +89,12 @@ func (s *JWTService) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 
 // GenerateTokenPair creates both access and refresh tokens
 func (s *JWTService) GenerateTokenPair(userID uuid.UUID, username string) (accessToken, refreshToken string, err error) {
-	accessToken, err = s.GenerateAccessToken(userID, username)
+	return s.GenerateTokenPairWithAdmin(userID, username, false)
+}
+
+// GenerateTokenPairWithAdmin creates both access and refresh tokens with admin flag
+func (s *JWTService) GenerateTokenPairWithAdmin(userID uuid.UUID, username string, isAdmin bool) (accessToken, refreshToken string, err error) {
+	accessToken, err = s.GenerateAccessTokenWithAdmin(userID, username, isAdmin)
 	if err != nil {
 		return "", "", err
 	}

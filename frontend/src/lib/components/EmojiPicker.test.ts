@@ -151,10 +151,7 @@ describe('EmojiPicker', () => {
       expect(emojiButtons.length).toBeGreaterThan(10);
     });
 
-    // Skip - needs Svelte 5 event prop migration
-    it.skip('dispatches select event when clicking emoji', async () => {
-      // Svelte 5 uses event props instead of $on
-    });
+
   });
 
   describe('recent emojis', () => {
@@ -188,17 +185,7 @@ describe('EmojiPicker', () => {
     });
   });
 
-  describe('keyboard navigation', () => {
-    // Skip - needs Svelte 5 event prop migration  
-    it.skip('closes picker on Escape key', async () => {
-      // Svelte 5 uses event props instead of $on
-    });
 
-    // Skip - needs Svelte 5 event prop migration
-    it.skip('closes skin tone picker first on Escape', async () => {
-      // Svelte 5 uses event props instead of $on
-    });
-  });
 
   describe('footer preview', () => {
     it('renders footer with preview emoji', () => {

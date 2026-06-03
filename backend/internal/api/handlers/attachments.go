@@ -3,6 +3,9 @@ package handlers
 import (
 	"io"
 	"log"
+	"path"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +13,14 @@ import (
 
 	"hearth/internal/services"
 )
+
+// sanitizeFilename removes dangerous characters to prevent HTTP header injection
+func sanitizeFilename(name string) string {
+	name = path.Base(name)
+	// Remove control characters, quotes, backslashes, and newlines
+	re := regexp.MustCompile(`[\x00-\x1f\"\\\r\n]`)
+	return re.ReplaceAllString(name, "")
+}
 
 // AttachmentHandler handles attachment endpoints
 type AttachmentHandler struct {
@@ -170,8 +181,16 @@ func (h *AttachmentHandler) Download(c *fiber.Ctx) error {
 	}()
 
 	// Set headers
-	c.Set("Content-Type", attachment.ContentType)
-	c.Set("Content-Disposition", "attachment; filename=\""+attachment.Filename+"\"")
+	// Sanitize Content-Type: only use stored value for known safe types
+	safeContentType := "application/octet-stream"
+	ct := strings.ToLower(attachment.ContentType)
+	if strings.HasPrefix(ct, "image/") || strings.HasPrefix(ct, "video/") || strings.HasPrefix(ct, "audio/") || ct == "application/pdf" {
+		safeContentType = attachment.ContentType
+	}
+	c.Set("Content-Type", safeContentType)
+	// Sanitize filename to prevent HTTP header injection
+	safeFilename := sanitizeFilename(attachment.Filename)
+	c.Set("Content-Disposition", "attachment; filename=\""+safeFilename+"\"")
 
 	// Stream the file
 	data, err := io.ReadAll(reader)

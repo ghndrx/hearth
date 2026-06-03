@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"path/filepath"
 	"strings"
@@ -96,7 +97,7 @@ func (s *AttachmentService) UploadWithAltText(
 		if s.storageRepo != nil {
 			if err := s.storageRepo.UpdateUserStorage(ctx, uploaderID, nil, fileInfo.Size, 1); err != nil {
 				// Log error but don't fail the upload - storage tracking is eventually consistent
-				fmt.Printf("Warning: failed to update storage usage: %v\n", err)
+				log.Printf("Warning: failed to update storage usage: %v", err)
 			}
 		}
 
@@ -239,7 +240,7 @@ func (s *AttachmentService) Delete(ctx context.Context, attachmentID uuid.UUID, 
 	if s.storageRepo != nil {
 		if err := s.storageRepo.DecrementUserStorage(ctx, a.UploaderID, nil, size, 1); err != nil {
 			// Log error but don't fail the delete - storage tracking is eventually consistent
-			fmt.Printf("Warning: failed to update storage usage on delete: %v\n", err)
+			log.Printf("Warning: failed to update storage usage on delete: %v", err)
 		}
 	}
 
@@ -283,7 +284,7 @@ func (s *AttachmentService) DeleteByMessage(ctx context.Context, messageID uuid.
 		// Decrement storage for each uploader
 		for uploaderID, size := range uploaderSizes {
 			if err := s.storageRepo.DecrementUserStorage(ctx, uploaderID, nil, size, 1); err != nil {
-				fmt.Printf("Warning: failed to update storage usage on delete: %v\n", err)
+				log.Printf("Warning: failed to update storage usage on delete: %v", err)
 			}
 		}
 	}
@@ -307,14 +308,24 @@ func (s *AttachmentService) GetSignedURL(ctx context.Context, attachmentID uuid.
 
 // ValidateContentType checks if a content type is allowed
 func ValidateContentType(contentType string) bool {
-	// Block dangerous content types
-	blockedTypes := map[string]bool{
-		"application/x-msdownload":    true,
-		"application/x-msdos-program": true,
-		"application/x-executable":    true,
-		"application/x-dosexec":       true,
+	contentType = strings.ToLower(contentType)
+
+	allowedPrefixes := []string{
+		"image/",
+		"video/",
+		"audio/",
 	}
-	return !blockedTypes[strings.ToLower(contentType)]
+	for _, prefix := range allowedPrefixes {
+		if strings.HasPrefix(contentType, prefix) {
+			return true
+		}
+	}
+
+	allowedExact := map[string]bool{
+		"application/pdf": true,
+		"text/plain":      true,
+	}
+	return allowedExact[contentType]
 }
 
 // ValidateFileExtension checks if a file extension is allowed

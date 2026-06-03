@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import InviteModal from './InviteModal.svelte';
 
+// Mock custom transitions so Modal elements are removed immediately from DOM in tests
+vi.mock('$lib/utils/transitions', () => ({
+	backdropFade: () => ({ duration: 0 }),
+	modalPop: () => ({ duration: 0 })
+}));
+
 type InviteModalComponent = { onInviteGenerated: (code: string) => void };
 
 describe('InviteModal', () => {
@@ -65,10 +71,7 @@ describe('InviteModal', () => {
     expect(container.querySelector('.channel-info')).not.toBeInTheDocument();
   });
 
-  // Skip - Svelte 5 custom events cannot be captured via addEventListener on DOM
-  it.skip('dispatches generateInvite event when opened', async () => {
-    // Svelte 5 event handling requires different testing approach
-  });
+
 
   it('displays invite link when onInviteGenerated is called', async () => {
     const { container, component } = render(InviteModal, {
@@ -164,10 +167,7 @@ describe('InviteModal', () => {
     expect(copyButton?.disabled).toBe(true);
   });
 
-  // Skip: Svelte 5 event handling with createEventDispatcher cannot be captured via addEventListener
-  // in the test environment. The close button exists and is clickable, and the actual
-  // close functionality works in browser. This is a known test-environment limitation.
-  it.skip('dispatches close event when clicking close button', async () => {
+  it('closes modal when clicking close button', async () => {
     const { container } = render(InviteModal, {
       props: {
         open: true,
@@ -191,10 +191,7 @@ describe('InviteModal', () => {
     });
   });
 
-  // Skip - Svelte 5 custom events cannot be captured via addEventListener on DOM
-  it.skip('dispatches generateInvite event with correct settings', async () => {
-    // Svelte 5 event handling requires different testing approach
-  });
+
 
   it('has expiration options', () => {
     const { container } = render(InviteModal, {
@@ -235,35 +232,17 @@ describe('InviteModal', () => {
     expect(expiryNote?.textContent).toContain('expires in');
   });
 
-  // Skip: Svelte 5's bind:value doesn't respond to fireEvent.change in happy-dom.
-  // The change event fires but Svelte's reactive state doesn't update.
-  // The actual component works correctly in browser; this is a known test-environment limitation.
-  // This behavior is covered by the component's own unit tests and manual testing.
-  it.skip('shows never expire note when expiresIn is 0', async () => {
+  it('shows never expire note when expiresIn is 0', () => {
     const { container } = render(InviteModal, {
       props: {
         open: true,
-        serverName: 'Test Server'
+        serverName: 'Test Server',
+        expiresIn: 0
       }
     });
 
-    // Open advanced settings
-    const details = container.querySelector('.advanced-settings') as HTMLDetailsElement;
-    if (details) {
-      details.open = true;
-    }
-
-    // Select "Never" option
-    const expiresSelect = container.querySelector('#expires') as HTMLSelectElement;
-    if (expiresSelect) {
-      expiresSelect.value = '0';
-      await fireEvent.change(expiresSelect);
-    }
-
-    await waitFor(() => {
-      const expiryNote = container.querySelector('.expiry-note');
-      expect(expiryNote?.textContent).toContain('never expire');
-    });
+    const expiryNote = container.querySelector('.expiry-note');
+    expect(expiryNote?.textContent).toContain('never expire');
   });
 
   it('shows error message when invite generation fails', async () => {

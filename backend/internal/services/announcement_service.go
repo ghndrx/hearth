@@ -105,7 +105,7 @@ func (s *AnnouncementService) FollowChannel(ctx context.Context, sourceChannelID
 
 	for _, f := range followers {
 		if f.SourceChannelID != nil && *f.SourceChannelID == targetChannelID {
-			return nil, errors.New("already following this channel")
+			return nil, ErrAlreadyFollowing
 		}
 	}
 

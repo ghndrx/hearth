@@ -1,0 +1,14 @@
+# Global dockerignore for root Dockerfile
+node_modules
+*/node_modules
+build
+*/build
+.git
+.github
+.vscode
+*.md
+Dockerfile
+docker-compose*.yml
+.env
+.env.*
+!.env.example

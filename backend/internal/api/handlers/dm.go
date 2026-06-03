@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -50,7 +51,10 @@ func NewDMHandler(
 
 // GetUserDMs returns the current user's DM channels
 func (h *DMHandler) GetUserDMs(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channels, err := h.channelService.GetUserDMs(c.Context(), userID)
 	if err != nil {
@@ -76,7 +80,10 @@ func (h *DMHandler) GetUserDMs(c *fiber.Ctx) error {
 
 // CreateDM creates or retrieves a 1:1 DM channel
 func (h *DMHandler) CreateDM(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.CreateDMRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -117,7 +124,10 @@ func (h *DMHandler) CreateDM(c *fiber.Ctx) error {
 
 // CreateGroupDM creates a new group DM
 func (h *DMHandler) CreateGroupDM(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.CreateGroupDMRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -174,7 +184,10 @@ func (h *DMHandler) CreateGroupDM(c *fiber.Ctx) error {
 
 // CreateDMWithUser creates a DM with a user by their user ID (convenience route)
 func (h *DMHandler) CreateDMWithUser(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	targetIDStr := c.Params("userId")
 	targetID, err := uuid.Parse(targetIDStr)
@@ -207,7 +220,10 @@ func (h *DMHandler) CreateDMWithUser(c *fiber.Ctx) error {
 
 // GetDMMessages returns messages in a DM channel
 func (h *DMHandler) GetDMMessages(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -258,7 +274,10 @@ func (h *DMHandler) GetDMMessages(c *fiber.Ctx) error {
 
 // SendDMMessage sends a message to a DM channel
 func (h *DMHandler) SendDMMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -320,7 +339,10 @@ func (h *DMHandler) SendDMMessage(c *fiber.Ctx) error {
 
 // AddParticipant adds a user to a group DM
 func (h *DMHandler) AddParticipant(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -363,7 +385,10 @@ func (h *DMHandler) AddParticipant(c *fiber.Ctx) error {
 
 // RemoveParticipant removes a user from a group DM
 func (h *DMHandler) RemoveParticipant(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -401,7 +426,10 @@ func (h *DMHandler) RemoveParticipant(c *fiber.Ctx) error {
 
 // UpdateGroupDM updates a group DM's name
 func (h *DMHandler) UpdateGroupDM(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -454,7 +482,10 @@ func (h *DMHandler) UpdateGroupDM(c *fiber.Ctx) error {
 
 // LeaveDM removes the current user from a DM
 func (h *DMHandler) LeaveDM(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -471,7 +502,10 @@ func (h *DMHandler) LeaveDM(c *fiber.Ctx) error {
 
 // TransferOwnership transfers ownership of a group DM to another member
 func (h *DMHandler) TransferOwnership(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channelIDStr := c.Params("channelId")
 	channelID, err := uuid.Parse(channelIDStr)
@@ -570,17 +604,18 @@ func (h *DMHandler) generateGroupDMName(ctx context.Context, ownerID uuid.UUID, 
 	}
 
 	// Build name like "User1, User2, User3"
-	result := names[0]
+	var result strings.Builder
+	result.WriteString(names[0])
 	for i := 1; i < len(names); i++ {
 		if i == 3 {
 			// Truncate with "+N more" if too many
 			remaining := len(allIDs) - 3
 			if remaining > 0 {
-				result += fmt.Sprintf(" +%d", remaining)
+				fmt.Fprintf(&result, " +%d", remaining)
 			}
 			break
 		}
-		result += ", " + names[i]
+		result.WriteString(", " + names[i])
 	}
-	return result
+	return result.String()
 }

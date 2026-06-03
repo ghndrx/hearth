@@ -14,20 +14,17 @@ type Handlers struct {
 	Settings                     *SettingsHandler
 	SavedMessages                *SavedMessagesHandler
 	Notifications                *NotificationHandler
-	Mentions                     *MentionsHandler
 	Servers                      *ServerHandler
 	Channels                     *ChannelHandler
 	DMs                          *DMHandler
 	Threads                      *ThreadHandler
 	Invites                      *InviteHandler
 	Voice                        *VoiceHandler
-	LiveKitVoice                 *LiveKitVoiceHandler
 	Gateway                      *GatewayHandler
 	Search                       *SearchHandler
 	Attachments                  *AttachmentHandler
 	Polls                        *PollHandler
 	AuditLog                     *AuditLogHandler
-	ReadState                    *ReadStateHandler
 	AI                           *AIHandler
 	AIChat                       *AIChatHandler
 	Webhooks                     *WebhookHandlers
@@ -36,14 +33,9 @@ type Handlers struct {
 	Announcements                *AnnouncementHandler
 	Components                   *ComponentHandler
 	Events                       *EventHandler
-	ScreenShare                  *ScreenShareHandler
 	AutoMod                      *AutoModHandler
 	Discovery                    *DiscoveryHandler
-	Forward                      *ForwardHandlers
-	DiscoverableServer           *DiscoverableServerHandler
 	Templates                    *TemplateHandler
-	Stream                       *StreamHandler
-	ForumTags                    *ForumTagsHandler
 	SlashCommands                *SlashCommandHandler
 	Interactions                 *InteractionHandler
 	ServerAudioSettings          *ServerAudioSettingsHandler
@@ -51,18 +43,10 @@ type Handlers struct {
 	Welcome                      *WelcomeHandler
 	Soundboard                   *SoundboardHandler
 	Premium                      *PremiumHandler
-	ThreadAutoArchive            *ThreadAutoArchiveHandler
-	SmartNotifications           *SmartNotificationHandler
-	Push                         *PushHandler
-	Digest                       *DigestHandler
-	ChannelNotificationPrefs     *ChannelNotificationPreferenceHandler
-	ServerNotificationPrefs      *ServerNotificationPreferenceHandler
-	ChannelNotificationOverrides *ChannelNotificationOverrideHandler
-	ContentSafety                *ContentSafetyHandler
+	NotificationPreferences  *NotificationPreferenceHandler
+	ContentSafety            *ContentSafetyHandler
 	ServerFolders                *ServerFolderHandler
 	SmartModeration              *SmartModerationHandler
-	VoiceActivities              *VoiceActivityHandler
-	Calls                        *CallHandler
 	Embed                        *EmbedHandler
 
 	// Matrix Federation (optional)
@@ -151,33 +135,10 @@ func (h *Handlers) SetTemplateHandler(
 // SetDiscoveryHandler sets the discovery handler
 func (h *Handlers) SetDiscoveryHandler(
 	discoveryService *services.DiscoveryService,
-	serverService *services.ServerService,
-) {
-	h.Discovery = NewDiscoveryHandler(discoveryService, serverService)
-}
-
-// SetDiscoverableServerHandler sets the discoverable server handler
-func (h *Handlers) SetDiscoverableServerHandler(
 	discoverableServerService *services.DiscoverableServerService,
 	serverService *services.ServerService,
 ) {
-	h.DiscoverableServer = NewDiscoverableServerHandler(discoverableServerService, serverService)
-}
-
-// SetForwardHandler sets the message forwarding handler
-func (h *Handlers) SetForwardHandler(
-	forwardService *services.ForwardService,
-) {
-	h.Forward = NewForwardHandlers(forwardService)
-}
-
-// SetForumTagsHandler sets the forum tags handler
-func (h *Handlers) SetForumTagsHandler(
-	forumTagService *services.ForumTagService,
-	threadService *services.ThreadService,
-	gateway *websocket.Gateway,
-) {
-	h.ForumTags = NewForumTagsHandler(forumTagService, threadService, gateway)
+	h.Discovery = NewDiscoveryHandler(discoveryService, discoverableServerService, serverService)
 }
 
 // SetServerAudioSettingsHandler sets the server audio settings handler
@@ -280,15 +241,6 @@ func NewHandlersWithTyping(
 	}
 }
 
-// SetScreenShareHandler sets the screen share handler
-func (h *Handlers) SetScreenShareHandler(
-	screenShareService *services.ScreenShareService,
-	channelService *services.ChannelService,
-	permService *services.PermissionService,
-) {
-	h.ScreenShare = NewScreenShareHandler(screenShareService, channelService, permService)
-}
-
 // SetDMHandler sets the DM handler
 func (h *Handlers) SetDMHandler(
 	dmService *services.DMService,
@@ -297,15 +249,6 @@ func (h *Handlers) SetDMHandler(
 	messageService MessageServiceInterface,
 ) {
 	h.DMs = NewDMHandler(dmService, channelService, userService, messageService)
-}
-
-// SetStreamHandler sets the live stream handler
-func (h *Handlers) SetStreamHandler(
-	streamService *services.LiveStreamService,
-	channelService *services.ChannelService,
-	permService *services.PermissionService,
-) {
-	h.Stream = NewStreamHandler(streamService, channelService, permService)
 }
 
 // SetSlashCommandHandler sets the slash command handler
@@ -340,47 +283,12 @@ func (h *Handlers) SetSoundboardHandler(
 	h.Soundboard = NewSoundboardHandler(soundboardService, serverService, permService)
 }
 
-// SetThreadAutoArchiveHandler sets the thread auto-archive handler
-func (h *Handlers) SetThreadAutoArchiveHandler(
-	autoArchiveService *services.ThreadAutoArchiveService,
-) {
-	h.ThreadAutoArchive = NewThreadAutoArchiveHandler(autoArchiveService)
-}
-
-// SetSmartNotificationHandler sets the smart notification handler
-func (h *Handlers) SetSmartNotificationHandler(
-	smartNotifService *services.SmartNotificationService,
-) {
-	h.SmartNotifications = NewSmartNotificationHandler(smartNotifService)
-}
-
-// SetPushHandler sets the push notification handler
-func (h *Handlers) SetPushHandler(
-	pushService *services.PushDeliveryService,
-) {
-	h.Push = NewPushHandler(pushService)
-}
-
-// SetDigestHandler sets the digest handler
-func (h *Handlers) SetDigestHandler(
+// SetNotificationPreferenceHandler sets notification preference handlers
+func (h *Handlers) SetNotificationPreferenceHandler(
+	coordinator *services.NotificationCoordinator,
 	digestService *services.DigestService,
 ) {
-	h.Digest = NewDigestHandler(digestService)
-}
-
-// SetNotificationCoordinatorHandler sets notification coordinator handlers
-func (h *Handlers) SetNotificationCoordinatorHandler(
-	coordinator *services.NotificationCoordinator,
-) {
-	h.ChannelNotificationPrefs = NewChannelNotificationPreferenceHandler(coordinator)
-	h.ServerNotificationPrefs = NewServerNotificationPreferenceHandler(coordinator)
-}
-
-// SetChannelNotificationOverrideHandler sets the channel notification override handler
-func (h *Handlers) SetChannelNotificationOverrideHandler(
-	service ChannelNotificationOverrideService,
-) {
-	h.ChannelNotificationOverrides = NewChannelNotificationOverrideHandler(service)
+	h.NotificationPreferences = NewNotificationPreferenceHandler(coordinator, digestService)
 }
 
 // SetContentSafetyHandler sets the content safety handler
@@ -400,24 +308,10 @@ func (h *Handlers) SetServerFolderHandler(
 
 // SetSmartModerationHandler sets the smart moderation handler
 func (h *Handlers) SetSmartModerationHandler(
-	smartModService *services.SmartModerationService,
-	serverService *services.ServerService,
+	smartModService SmartModerationServiceInterface,
+	serverService SmartModerationServerService,
 ) {
 	h.SmartModeration = NewSmartModerationHandler(smartModService, serverService)
-}
-
-// SetVoiceActivityHandler sets the voice activity handler
-func (h *Handlers) SetVoiceActivityHandler(
-	activityService *services.VoiceActivityService,
-	channelService services.ChannelServiceInterface,
-	permService services.PermissionServiceInterface,
-) {
-	h.VoiceActivities = NewVoiceActivityHandler(activityService, channelService, permService)
-}
-
-// SetCallHandler sets the call handler
-func (h *Handlers) SetCallHandler(callService *services.CallService, channelService CallChannelServiceInterface) {
-	h.Calls = NewCallHandler(callService, channelService)
 }
 
 // SetEmbedHandler sets the embed handler

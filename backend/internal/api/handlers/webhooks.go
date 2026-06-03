@@ -51,14 +51,16 @@ type WebhookResponse struct {
 	Type      int     `json:"type"`
 }
 
-func webhookToResponse(webhook *models.Webhook) WebhookResponse {
+func webhookToResponse(webhook *models.Webhook, includeToken bool) WebhookResponse {
 	resp := WebhookResponse{
 		ID:        webhook.ID.String(),
 		Name:      webhook.Name,
 		ChannelID: webhook.ChannelID.String(),
-		Token:     webhook.Token,
 		AvatarURL: webhook.Avatar,
 		Type:      int(webhook.Type),
+	}
+	if includeToken {
+		resp.Token = webhook.Token
 	}
 	if webhook.ServerID != nil {
 		resp.ServerID = webhook.ServerID.String()
@@ -89,7 +91,10 @@ func (h *WebhookHandlers) CreateWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req struct {
 		Name   string  `json:"name"`
@@ -134,7 +139,7 @@ func (h *WebhookHandlers) CreateWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(webhookToResponse(webhook))
+	return c.Status(fiber.StatusCreated).JSON(webhookToResponse(webhook, true))
 }
 
 // GetChannelWebhooks returns all webhooks for a channel
@@ -157,7 +162,10 @@ func (h *WebhookHandlers) GetChannelWebhooks(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	webhooks, err := h.webhookService.GetChannelWebhooks(c.Context(), channelID, userID)
 	if err != nil {
@@ -179,7 +187,7 @@ func (h *WebhookHandlers) GetChannelWebhooks(c *fiber.Ctx) error {
 
 	response := make([]WebhookResponse, len(webhooks))
 	for i, w := range webhooks {
-		response[i] = webhookToResponse(w)
+		response[i] = webhookToResponse(w, false)
 	}
 	return c.JSON(response)
 }
@@ -203,7 +211,10 @@ func (h *WebhookHandlers) GetServerWebhooks(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	webhooks, err := h.webhookService.GetServerWebhooks(c.Context(), serverID, userID)
 	if err != nil {
@@ -225,7 +236,7 @@ func (h *WebhookHandlers) GetServerWebhooks(c *fiber.Ctx) error {
 
 	response := make([]WebhookResponse, len(webhooks))
 	for i, w := range webhooks {
-		response[i] = webhookToResponse(w)
+		response[i] = webhookToResponse(w, false)
 	}
 	return c.JSON(response)
 }
@@ -250,7 +261,10 @@ func (h *WebhookHandlers) GetWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	webhook, err := h.webhookService.GetWebhook(c.Context(), webhookID, userID)
 	if err != nil {
@@ -275,7 +289,7 @@ func (h *WebhookHandlers) GetWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(webhookToResponse(webhook))
+	return c.JSON(webhookToResponse(webhook, false))
 }
 
 // UpdateWebhook updates a webhook
@@ -300,7 +314,10 @@ func (h *WebhookHandlers) UpdateWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req struct {
 		Name      *string `json:"name,omitempty"`
@@ -368,7 +385,7 @@ func (h *WebhookHandlers) UpdateWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(webhookToResponse(webhook))
+	return c.JSON(webhookToResponse(webhook, false))
 }
 
 // DeleteWebhook deletes a webhook
@@ -390,7 +407,10 @@ func (h *WebhookHandlers) DeleteWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	err = h.webhookService.DeleteWebhook(c.Context(), webhookID, userID)
 	if err != nil {
@@ -562,7 +582,10 @@ func (h *WebhookHandlers) GetWebhookStats(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	stats, err := h.webhookService.GetWebhookStats(c.Context(), webhookID, userID)
 	if err != nil {
@@ -612,7 +635,10 @@ func (h *WebhookHandlers) GetWebhookDeliveries(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	limit := 50
 	if l := c.Query("limit"); l != "" {
@@ -674,7 +700,10 @@ func (h *WebhookHandlers) TestWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	message, err := h.webhookService.TestWebhook(c.Context(), webhookID, userID)
 	if err != nil {

@@ -48,7 +48,10 @@ func NewSavedMessagesHandler(service SavedMessagesServiceInterface) *SavedMessag
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages [post]
 func (h *SavedMessagesHandler) SaveMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.SaveMessageRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -105,7 +108,10 @@ func (h *SavedMessagesHandler) SaveMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages [get]
 func (h *SavedMessagesHandler) GetSavedMessages(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	opts := &models.SavedMessagesQueryOptions{
 		Limit: 50,
@@ -150,7 +156,10 @@ func (h *SavedMessagesHandler) GetSavedMessages(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages/{id} [get]
 func (h *SavedMessagesHandler) GetSavedMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	savedID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -195,7 +204,10 @@ func (h *SavedMessagesHandler) GetSavedMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages/{id} [patch]
 func (h *SavedMessagesHandler) UpdateSavedMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	savedID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -251,7 +263,10 @@ func (h *SavedMessagesHandler) UpdateSavedMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages/{id} [delete]
 func (h *SavedMessagesHandler) RemoveSavedMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	savedID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -292,7 +307,10 @@ func (h *SavedMessagesHandler) RemoveSavedMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages/message/{messageId} [delete]
 func (h *SavedMessagesHandler) RemoveSavedMessageByMessage(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
@@ -328,7 +346,10 @@ func (h *SavedMessagesHandler) RemoveSavedMessageByMessage(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages/check/{messageId} [get]
 func (h *SavedMessagesHandler) IsSaved(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	messageID, err := uuid.Parse(c.Params("messageId"))
 	if err != nil {
@@ -359,7 +380,10 @@ func (h *SavedMessagesHandler) IsSaved(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/saved-messages/count [get]
 func (h *SavedMessagesHandler) GetSavedCount(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	count, err := h.service.GetSavedCount(c.Context(), userID)
 	if err != nil {

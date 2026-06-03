@@ -230,3 +230,9 @@ func (s *PostgresRoomAliasStore) RemoveAlias(ctx context.Context, alias Alias) e
 	// Not implemented
 	return nil
 }
+
+// RemoveMapping removes a room mapping and all its aliases.
+func (s *PostgresRoomAliasStore) RemoveMapping(ctx context.Context, roomID RoomID) error {
+	// Would need a dedicated delete query - not implemented
+	return nil
+}

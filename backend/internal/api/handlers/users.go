@@ -97,6 +97,7 @@ type UserHandler struct {
 	premiumService PremiumServiceForUsersInterface
 }
 
+// NewUserHandler creates a new user handler
 func NewUserHandler(
 	userService UserServiceInterface,
 	serverService ServerServiceForUsersInterface,
@@ -151,7 +152,10 @@ func NewUserHandlerWithPremium(
 // @Failure 404 {object} fiber.Map "User not found"
 // @Router /users/@me [get]
 func (h *UserHandler) GetMe(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	user, err := h.userService.GetUser(c.Context(), userID)
 	if err != nil {
@@ -190,7 +194,10 @@ func (h *UserHandler) GetMe(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me [patch]
 func (h *UserHandler) UpdateMe(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req struct {
 		Username     *string `json:"username"`
@@ -295,7 +302,10 @@ var staticAvatarTypes = map[string]bool{
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/avatar [patch]
 func (h *UserHandler) UpdateAvatar(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	if h.storageService == nil {
 		return NotImplemented(c, "file storage not configured")
@@ -382,7 +392,10 @@ func (h *UserHandler) UpdateAvatar(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/avatar [delete]
 func (h *UserHandler) DeleteAvatar(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var nilAvatar *string = nil
 	updates := &models.UserUpdate{
@@ -429,7 +442,10 @@ const maxBannerSize = 8 * 1024 * 1024
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/banner [patch]
 func (h *UserHandler) UpdateBanner(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	if h.storageService == nil {
 		return NotImplemented(c, "file storage not configured")
@@ -492,7 +508,10 @@ func (h *UserHandler) UpdateBanner(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/banner [delete]
 func (h *UserHandler) DeleteBanner(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var nilBanner *string = nil
 	updates := &models.UserUpdate{
@@ -544,7 +563,10 @@ type ServerResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/guilds [get]
 func (h *UserHandler) GetMyServers(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	servers, err := h.serverService.GetUserServers(c.Context(), userID)
 	if err != nil {
@@ -593,7 +615,10 @@ type DMChannelResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/channels [get]
 func (h *UserHandler) GetMyDMs(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	channels, err := h.channelService.GetUserDMs(c.Context(), userID)
 	if err != nil {
@@ -638,7 +663,10 @@ func (h *UserHandler) GetMyDMs(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/channels [post]
 func (h *UserHandler) CreateDM(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.CreateDMRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -690,7 +718,10 @@ func (h *UserHandler) CreateDM(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/channels/group [post]
 func (h *UserHandler) CreateGroupDM(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.CreateGroupDMRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -845,7 +876,10 @@ type UserProfileResponse struct {
 // @Failure 404 {object} fiber.Map "User not found"
 // @Router /users/{id}/profile [get]
 func (h *UserHandler) GetUserProfile(c *fiber.Ctx) error {
-	requesterID := c.Locals("userID").(uuid.UUID)
+	requesterID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	idParam := c.Params("id")
 	targetID, err := uuid.Parse(idParam)
@@ -975,7 +1009,10 @@ type RelationshipResponse struct {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/relationships [get]
 func (h *UserHandler) GetRelationships(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	friends, err := h.userService.GetFriends(c.Context(), userID)
 	if err != nil {
@@ -1055,7 +1092,10 @@ func (h *UserHandler) GetRelationships(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/relationships [post]
 func (h *UserHandler) CreateRelationship(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req struct {
 		UserID   uuid.UUID        `json:"user_id"`
@@ -1121,7 +1161,10 @@ func (h *UserHandler) CreateRelationship(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/relationships/{id} [put]
 func (h *UserHandler) AcceptFriendRequest(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	senderParam := c.Params("id")
 	senderID, err := uuid.Parse(senderParam)
@@ -1140,7 +1183,10 @@ func (h *UserHandler) AcceptFriendRequest(c *fiber.Ctx) error {
 }
 
 func (h *UserHandler) DeclineFriendRequest(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	otherParam := c.Params("id")
 	otherID, err := uuid.Parse(otherParam)
@@ -1168,7 +1214,10 @@ func (h *UserHandler) DeclineFriendRequest(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/friends [get]
 func (h *UserHandler) GetFriends(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	friends, err := h.userService.GetFriends(c.Context(), userID)
 	if err != nil {
@@ -1200,7 +1249,10 @@ func (h *UserHandler) GetFriends(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/relationships/pending [get]
 func (h *UserHandler) GetPendingFriendRequests(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	incoming, err := h.userService.GetIncomingFriendRequests(c.Context(), userID)
 	if err != nil {
@@ -1251,7 +1303,10 @@ func (h *UserHandler) GetPendingFriendRequests(c *fiber.Ctx) error {
 // @Failure 500 {object} fiber.Map "Internal server error"
 // @Router /users/@me/relationships/{id} [delete]
 func (h *UserHandler) DeleteRelationship(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	targetParam := c.Params("id")
 	targetID, err := uuid.Parse(targetParam)
@@ -1278,7 +1333,10 @@ func (h *UserHandler) DeleteRelationship(c *fiber.Ctx) error {
 // @Failure 401 {object} fiber.Map "Unauthorized"
 // @Router /users/@me/status [get]
 func (h *UserHandler) GetMyStatus(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	status, err := h.userService.GetCustomStatus(c.Context(), userID)
 	if err != nil {
@@ -1310,7 +1368,10 @@ func (h *UserHandler) GetMyStatus(c *fiber.Ctx) error {
 // @Failure 401 {object} fiber.Map "Unauthorized"
 // @Router /users/@me/status [put]
 func (h *UserHandler) UpdateMyStatus(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	var req models.UpdateStatusRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -1351,7 +1412,10 @@ func (h *UserHandler) UpdateMyStatus(c *fiber.Ctx) error {
 // @Failure 401 {object} fiber.Map "Unauthorized"
 // @Router /users/@me/status [delete]
 func (h *UserHandler) DeleteMyStatus(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 
 	if err := h.userService.ClearCustomStatus(c.Context(), userID); err != nil {
 		return InternalError(c, "failed to clear status")

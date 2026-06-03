@@ -19,11 +19,13 @@ type Report struct {
 	CreatedAt  time.Time
 }
 
+// ReportService handles report operations
 type ReportService struct {
 	mu      sync.RWMutex
 	reports []Report
 }
 
+// NewReportService creates a new report service
 func NewReportService() *ReportService {
 	return &ReportService{}
 }

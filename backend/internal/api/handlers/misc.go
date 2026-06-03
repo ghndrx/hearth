@@ -10,10 +10,12 @@ import (
 )
 
 // InviteHandler handles invite operations
+// InviteHandler handles invite operations
 type InviteHandler struct {
 	serverService *services.ServerService
 }
 
+// NewInviteHandler creates a new invite handler
 func NewInviteHandler(serverService *services.ServerService) *InviteHandler {
 	return &InviteHandler{serverService: serverService}
 }
@@ -44,7 +46,10 @@ func (h *InviteHandler) Get(c *fiber.Ctx) error {
 
 // Accept accepts an invite (supports both regular codes and vanity codes)
 func (h *InviteHandler) Accept(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	code := c.Params("code")
 
 	// Try regular code first
@@ -67,7 +72,10 @@ func (h *InviteHandler) Accept(c *fiber.Ctx) error {
 
 // Delete deletes an invite
 func (h *InviteHandler) Delete(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	code := c.Params("code")
 	if code == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -75,7 +83,7 @@ func (h *InviteHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
-	err := h.serverService.DeleteInvite(c.Context(), code, userID)
+	err = h.serverService.DeleteInvite(c.Context(), code, userID)
 	if err != nil {
 		if err == services.ErrInviteNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -97,7 +105,10 @@ func (h *InviteHandler) Delete(c *fiber.Ctx) error {
 
 // GetAnalytics returns analytics for a specific invite
 func (h *InviteHandler) GetAnalytics(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		return err
+	}
 	code := c.Params("code")
 	serverID, err := uuid.Parse(c.Query("server_id"))
 	if err != nil {
@@ -116,78 +127,12 @@ func (h *InviteHandler) GetAnalytics(c *fiber.Ctx) error {
 	return c.JSON(analytics)
 }
 
-// VoiceHandler handles voice operations
-type VoiceHandler struct {
-	voiceService *ws.VoiceSignalingService
-}
-
-func NewVoiceHandler(voiceService *ws.VoiceSignalingService) *VoiceHandler {
-	return &VoiceHandler{voiceService: voiceService}
-}
-
-// GetRegions returns available voice regions
-func (h *VoiceHandler) GetRegions(c *fiber.Ctx) error {
-	return c.JSON([]fiber.Map{
-		{"id": "us-west", "name": "US West", "optimal": true},
-		{"id": "us-east", "name": "US East", "optimal": false},
-		{"id": "eu-west", "name": "EU West", "optimal": false},
-		{"id": "eu-central", "name": "EU Central", "optimal": false},
-		{"id": "singapore", "name": "Singapore", "optimal": false},
-		{"id": "sydney", "name": "Sydney", "optimal": false},
-	})
-}
-
-// GetChannelVoiceStates returns all users in a voice channel
-func (h *VoiceHandler) GetChannelVoiceStates(c *fiber.Ctx) error {
-	channelID, err := uuid.Parse(c.Params("channelId"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid channel id",
-		})
-	}
-
-	if h.voiceService == nil {
-		return c.JSON([]fiber.Map{})
-	}
-
-	states, err := h.voiceService.GetChannelVoiceStates(c.Context(), channelID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(states)
-}
-
-// GetServerVoiceStates returns all users in voice channels in a server
-func (h *VoiceHandler) GetServerVoiceStates(c *fiber.Ctx) error {
-	serverID, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid server id",
-		})
-	}
-
-	if h.voiceService == nil {
-		return c.JSON([]fiber.Map{})
-	}
-
-	states, err := h.voiceService.GetServerVoiceStates(c.Context(), serverID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(states)
-}
-
 // GatewayHandler handles WebSocket gateway connections
 type GatewayHandler struct {
 	gateway *ws.Gateway
 }
 
+// NewGatewayHandler creates a new gateway handler
 func NewGatewayHandler(gateway *ws.Gateway) *GatewayHandler {
 	return &GatewayHandler{
 		gateway: gateway,

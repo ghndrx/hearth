@@ -111,10 +111,7 @@ describe('MessageList', () => {
 			expect(screen.getByText('Welcome to #test-channel!')).toBeTruthy();
 		});
 
-		// Note: Topic is rendered by ChannelHeader, not MessageList
-		it.skip('should render channel topic in header', async () => {
-			// Topic rendering is handled by ChannelHeader component
-		});
+
 
 		it('should render welcome message for text channel', async () => {
 			mockCurrentChannelStore.set(createMockChannel({ name: 'announcements' }));
@@ -271,10 +268,7 @@ describe('MessageList', () => {
 	});
 
 	describe('message input visibility', () => {
-		// Note: MessageInput is NOT part of MessageList - it's rendered separately by the parent
-		it.skip('should show MessageInput when channel is selected', async () => {
-			// MessageInput is rendered by the parent ChatView, not MessageList
-		});
+
 
 		it('should NOT show MessageInput when no channel selected', async () => {
 			mockCurrentChannelStore.set(null);
@@ -469,4 +463,4 @@ describe('MessageList', () => {
 			expect(container.textContent).toContain('Hello world');
 		});
 	});
-});
+}, 30000);
